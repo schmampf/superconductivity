@@ -44,7 +44,7 @@ from utilities.constants import G_0_muS
 from utilities.functions import bin_y_over_x
 from utilities.functions import oversample
 
-from models.bcs import get_I_nA as get_I_bcs_nA
+from models.bcs_np import get_I_bcs_jnp_nA as get_I_bcs_nA
 from models.fcs_pbar import get_I_nA as get_I_fcs_nA
 from models.tg import get_I_pat_nA_from_I0 as get_I_pat_nA
 from models.utg import get_I_nA as get_I_utg_nA

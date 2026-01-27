@@ -18,7 +18,7 @@ from utilities.functions_jax import get_dydx
 from utilities.functions_jax import jnp_interp_y_of_x
 
 
-def get_I_nA(
+def get_I_pat_nA(
     V_mV: NDArray64,  # (Nv,)
     I_nA: NDArray64,  # (Nv,)
     A_mV: NDArray64,  # (Na,)

@@ -1,19 +1,17 @@
 import numpy as np
 
-from utilities.types import NDArray64
+from ..utilities.types import NDArray64
+from ..utilities.functions import bin_y_over_x
+from ..utilities.constants import G_0_muS
 
-from utilities.functions import bin_y_over_x
-
-from utilities.constants import G_0_muS
-
-from models.bcs import Delta_meV_of_T, f_of_E
+from .bcs_np import get_Delta_meV, get_f
 
 
-def Z_of_tau(tau: float) -> float:
+def get_Z_btk(tau: float) -> float:
     return np.sqrt(1.0 / tau - 1.0)
 
 
-def AB_of_E(
+def get_AB_btk(
     E_meV: NDArray64,
     Delta_meV: float,
     Z: float,
@@ -48,7 +46,7 @@ def AB_of_E(
     )
 
 
-def get_I_nA(
+def get_I_btk_nA(
     V_mV: NDArray64,
     Delta_meV: float = 0.18,
     tau: float = 0.5,
@@ -60,7 +58,7 @@ def get_I_nA(
     G_N_muS = tau * G_0_muS
     I_NN_nA = V_mV * G_N_muS
 
-    Delta_meV_T = Delta_meV_of_T(Delta_meV=Delta_meV, T_K=T_K)
+    Delta_meV_T = get_Delta_meV(Delta_meV=Delta_meV, T_K=T_K)
 
     if Delta_meV_T == 0.0:
         return np.vstack((I_NN_nA, I_NN_nA, np.zeros_like(I_NN_nA)))
@@ -78,9 +76,9 @@ def get_I_nA(
     V_mV_temp = np.arange(0.0, V_max_mV + dV_mV, dV_mV, dtype="float64")
     E_meV = np.arange(-E_max_meV, E_max_meV + dE_meV, dE_meV, dtype="float64")
 
-    f1 = f_of_E(E_meV=E_meV, T_K=T_K)
-    Z = Z_of_tau(tau)
-    A, B = AB_of_E(
+    f1 = get_f(E_meV=E_meV, T_K=T_K)
+    Z = get_Z_btk(tau)
+    A, B = get_AB_btk(
         E_meV=E_meV,
         Delta_meV=Delta_meV_T,
         Z=Z,
@@ -90,7 +88,7 @@ def get_I_nA(
     I_2e_mV = np.empty_like(V_mV_temp)
     I_1e_mV = np.empty_like(V_mV_temp)
     for i, meV in enumerate(V_mV_temp):
-        f2 = f_of_E(E_meV=E_meV - meV, T_K=T_K)
+        f2 = get_f(E_meV=E_meV - meV, T_K=T_K)
         df = f2 - f1
         I_2e_mV[i] = np.trapezoid((2 * A) * df, E_meV)
         I_1e_mV[i] = np.trapezoid((1 - B - A) * df, E_meV)

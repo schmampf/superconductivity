@@ -10,3 +10,7 @@ NDArray64: TypeAlias = NDArray[np.float64]
 JNDArray: TypeAlias = jnp.ndarray
 
 JInterpolator: TypeAlias = Callable[[JNDArray], JNDArray]
+ModelFunction: TypeAlias = Callable[..., NDArray64]
+
+ModelType: TypeAlias = tuple[ModelFunction, NDArray[np.bool]]
+ParameterType: TypeAlias = tuple[float, tuple[float, float], bool]

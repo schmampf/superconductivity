@@ -7,7 +7,7 @@ from contextlib import contextmanager
 
 import models.carlosha.ha_sym as ha_sym
 
-from models.bcs import Delta_meV_of_T
+from models.bcs_np import Delta_meV_of_T
 
 from utilities.types import NDArray64
 
@@ -37,7 +37,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 
-def get_I_nA(
+def get_I_ha_sym_nA(
     V_mV: NDArray64,
     tau: float = 0.5,
     T_K: float = 0.0,

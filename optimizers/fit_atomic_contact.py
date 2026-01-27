@@ -25,13 +25,13 @@ from scipy.optimize import curve_fit
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures import as_completed
 
-from theory.utilities.constants import G_0_muS
-from theory.utilities.types import NDArray64
+from utilities.constants import G_0_muS
+from utilities.types import NDArray64
 
-from theory.models.ha_sym import get_I_nA
-from theory.models.ha_sym import ha_sym_nonuniform_worker
+from models.ha_sym import get_I_nA
+from models.ha_sym import ha_sym_nonuniform_worker
 
-from theory.optimizers.fit_atomic_contacts_helper import (
+from optimizers.fit_atomic_contacts_helper import (
     remap_to_nonuniform_centers,
     generate_constrained_pincodes,
     chi2_for_all,

@@ -2,7 +2,7 @@
 document sting
 """
 
-from typing import Optional, TypeAlias, Callable
+from typing import Optional
 
 import jax
 import jax.numpy as jnp
@@ -10,14 +10,13 @@ import numpy as np
 from jax import Array, jit
 from numpy.typing import NDArray
 
-from theory.models.tg import get_I_pat_nA_from_I0_A0
-from theory.models.bcs_jnp import G_0_muS_jax, currents, thermal_energy_gap
+from models.tg import get_I_pat_nA_from_I0_A0
+from models.bcs_jnp import G_0_muS_jax, currents, thermal_energy_gap
+
+from utilities.types import NDArray64
+from utilities.types import ModelType
 
 jax.config.update("jax_enable_x64", True)
-
-NDArray64: TypeAlias = NDArray[np.float64]
-ModelFunction: TypeAlias = Callable[..., NDArray64]
-ModelType: TypeAlias = tuple[ModelFunction, NDArray[np.bool]]
 
 
 def get_model(

@@ -36,5 +36,6 @@ utilities/__pycache__/
 # specific files
 *MCBJ_seeblau_ultra.png
 
+# specific directories
 sonst/
 models/old/

@@ -97,8 +97,9 @@ peach100: NDArray64 = np.array([255, 142, 123], dtype=np.float64) / 255
 seegrau20: NDArray64 = np.array([225, 226, 229], dtype=np.float64) / 255
 seegrau35: NDArray64 = np.array([184, 188, 193], dtype=np.float64) / 255
 seegrau65: NDArray64 = np.array([154, 160, 167], dtype=np.float64) / 255
-seegrau80: NDArray64 = np.array([115, 120, 126], dtype=np.float64) / 255
-seegrau100: NDArray64 = np.array([77, 80, 84], dtype=np.float64) / 255
+seegrau80: NDArray64 = np.array([137, 143, 149], dtype=np.float64) / 255
+seegrau100: NDArray64 = np.array([115, 120, 126], dtype=np.float64) / 255
+seegrau120: NDArray64 = np.array([77, 80, 84], dtype=np.float64) / 255
 
 # petrol
 petrol20: NDArray64 = np.array([156, 198, 207], dtype=np.float64) / 255

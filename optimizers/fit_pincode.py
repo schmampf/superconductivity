@@ -13,12 +13,12 @@ from jax import jit
 
 from jax import Array
 
-from theory.utilities.functions import NDArray64, bin_y_over_x
-from theory.utilities.constants import G_0_muS
+from utilities.functions import NDArray64, bin_y_over_x
+from utilities.constants import G_0_muS
 
-from theory.models.bcs_jnp import bin_y_over_x as bin_y_over_x_jax
+from models.bcs_jnp import bin_y_over_x as bin_y_over_x_jax
 
-from theory.optimizers.fit_pincode_helper import (
+from optimizers.fit_pincode_helper import (
     normalize_V,
     normalize_I,
     chi2_for_all,
@@ -30,7 +30,7 @@ from theory.optimizers.fit_pincode_helper import (
 
 # GLOBAL IMPORT
 
-with open("./pincode_database.pickle", "rb") as file:
+with open("optimizers/database/pincode_database.pickle", "rb") as file:
     THEO: Dict[str, NDArray64] = pickle_load(file)
 
 V_THEO: NDArray64 = np.array(THEO["voltage"], dtype=np.float64)

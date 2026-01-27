@@ -4,9 +4,9 @@ from numpy.typing import NDArray
 from jax import Array, jit, jacfwd
 from jaxfit import CurveFit
 
-from theory.models.bcs_jnp import G_0_muS_jax, currents, thermal_energy_gap
+from models.bcs_jnp import G_0_muS_jax, currents, thermal_energy_gap
 
-importlib.reload(sys.modules["theory.models.dynes_jnp"])
+# importlib.reload(sys.modules["theory.models.dynes_jnp"])
 
 
 E_mV_jax: Array = jnp.array(E_mV, dtype="float64")

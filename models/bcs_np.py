@@ -27,7 +27,7 @@ from utilities.constants import G_0_muS
 from utilities.functions import bin_y_over_x
 
 
-def T_C_K_of_Delta_meV(Delta_meV: float = 0.18) -> float:
+def get_T_c_K(Delta_meV: float = 0.18) -> float:
     """Estimate the BCS critical temperature from the zero-temperature gap.
 
     Uses the weak-coupling relation Δ(0) = 1.764 k_B T_c.
@@ -42,11 +42,11 @@ def T_C_K_of_Delta_meV(Delta_meV: float = 0.18) -> float:
     float
         Critical temperature T_c in kelvin.
     """
-    T_C_K = Delta_meV / (1.764 * k_B_meV)
-    return T_C_K
+    T_c_K = Delta_meV / (1.764 * k_B_meV)
+    return T_c_K
 
 
-def Delta_meV_of_T(Delta_meV: float, T_K: float) -> float:
+def get_Delta_meV(Delta_meV: float, T_K: float) -> float:
     """BCS gap suppression Δ(T) for a weak-coupling superconductor.
 
     Parameters
@@ -69,20 +69,20 @@ def Delta_meV_of_T(Delta_meV: float, T_K: float) -> float:
 
     For T >= T_c this returns 0.
     """
-    T_C_K = T_C_K_of_Delta_meV(Delta_meV)  # Critical temperature in Kelvin
+    T_c_K = get_T_c_K(Delta_meV)  # Critical temperature in Kelvin
     if T_K < 0:
         raise ValueError("Temperature (K) must be non-negative.")
-    if T_K >= T_C_K:
+    if T_K >= T_c_K:
         # warnings.warn(f"Estimated T_C: {T_C_K:.2f} K", category=UserWarning)
         return 0.0
     elif T_K == 0:
         return Delta_meV
     else:
         # BCS theory: Delta(T) = Delta(0) * tanh(1.74 * sqrt(Tc/T - 1))
-        return Delta_meV * np.tanh(1.74 * np.sqrt(T_C_K / T_K - 1))
+        return Delta_meV * np.tanh(1.74 * np.sqrt(T_c_K / T_K - 1))
 
 
-def f_of_E(E_meV: NDArray64, T_K: float) -> NDArray64:
+def get_f(E_meV: NDArray64, T_K: float) -> NDArray64:
     """Fermi--Dirac distribution f(E) evaluated in meV units.
 
     Parameters
@@ -112,7 +112,7 @@ def f_of_E(E_meV: NDArray64, T_K: float) -> NDArray64:
     return f
 
 
-def N_of_E(E_meV: NDArray64, Delta_meV: float, gamma_meV: float) -> NDArray64:
+def get_dos(E_meV: NDArray64, Delta_meV: float, gamma_meV: float) -> NDArray64:
     """Dynes-broadened BCS density of states N(E).
 
     Implements the standard Dynes substitution E -> E + iγ.
@@ -155,7 +155,7 @@ def N_of_E(E_meV: NDArray64, Delta_meV: float, gamma_meV: float) -> NDArray64:
     return dos
 
 
-def get_I_nA(
+def get_I_bcs_nA(
     V_mV: NDArray64,
     Delta_meV: float | tuple[float, float] = (0.18, 0.18),
     G_N: float = 0.5,
@@ -219,8 +219,8 @@ def get_I_nA(
     else:
         raise KeyError("gamma_meV must be float | tuple[float, float]")
 
-    Delta1_meV_T = Delta_meV_of_T(Delta_meV=Delta1_meV, T_K=T_K)
-    Delta2_meV_T = Delta_meV_of_T(Delta_meV=Delta2_meV, T_K=T_K)
+    Delta1_meV_T = get_Delta_meV(Delta_meV=Delta1_meV, T_K=T_K)
+    Delta2_meV_T = get_Delta_meV(Delta_meV=Delta2_meV, T_K=T_K)
 
     gamma1_meV = gamma_meV_min if gamma1_meV < gamma_meV_min else gamma1_meV
     gamma2_meV = gamma_meV_min if gamma2_meV < gamma_meV_min else gamma2_meV
@@ -246,13 +246,13 @@ def get_I_nA(
     energy2_eV_mesh = energy_eV_mesh + voltage_eV_mesh
 
     # Calculate the Fermi-Dirac Distribution
-    f_E_meV = f_of_E(E_meV=E_meV, T_K=T_K)
+    f_E_meV = get_f(E_meV=E_meV, T_K=T_K)
     f1 = np.interp(energy1_eV_mesh, E_meV, f_E_meV, left=1.0, right=0.0)
     f2 = np.interp(energy2_eV_mesh, E_meV, f_E_meV, left=1.0, right=0.0)
     integrand = f1 - f2
 
     if Delta1_meV_T > 0.0:
-        n1 = N_of_E(
+        n1 = get_dos(
             E_meV=E_meV,
             Delta_meV=Delta1_meV_T,
             gamma_meV=gamma1_meV,
@@ -262,7 +262,7 @@ def get_I_nA(
         integrand *= N1
 
     if Delta2_meV_T > 0.0:
-        n2 = N_of_E(
+        n2 = get_dos(
             E_meV=E_meV,
             Delta_meV=Delta2_meV_T,
             gamma_meV=gamma2_meV,

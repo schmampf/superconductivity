@@ -8,8 +8,8 @@ import jax.numpy as jnp
 from jax import Array
 from jax import device_put
 
-from theory.utilities.types import NDArray64
-from theory.utilities.constants import G_0_muS
+from utilities.types import NDArray64
+from utilities.constants import G_0_muS
 
 FMap = Callable[[Array], Array]
 

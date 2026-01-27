@@ -2,23 +2,15 @@
 Module Doc String
 """
 
-import importlib
-import sys
-from typing import Optional, Callable, TypeAlias, TypedDict
+from typing import Optional, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
 
-from theory.optimizers.models import get_model
-from theory.optimizers.optimizers import optimizers
+from optimizers.models import get_model
+from optimizers.optimizers import optimizers
 
-from models import NDArray64, ModelFunction, ModelType
-
-ParameterType: TypeAlias = tuple[float, tuple[float, float], bool]
-DictType: TypeAlias = dict[str, float | NDArray[np.float64 | np.bool] | str | None]
-
-importlib.reload(sys.modules["theory.optimizers.models"])
-importlib.reload(sys.modules["theory.optimizers.optimizers"])
+from utilities.types import ModelFunction, ModelType, NDArray64, ParameterType
 
 
 class SolutionDict(TypedDict):

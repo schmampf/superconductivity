@@ -44,10 +44,10 @@ from utilities.types import NDArray64
 from utilities.constants import k_B_meV
 from utilities.constants import G_0_muS
 
-from models.bcs import Delta_meV_of_T
+from models.bcs_np import get_Delta_meV
 
 
-def get_IC_AB(
+def get_Ic_ab(
     Delta_meV: float = 0.18,
     G_N: float = 1.0,
     T_K: float = 0.0,
@@ -84,7 +84,7 @@ def get_IC_AB(
     Using `R_N = 1/(G_N G_0)` and normalizing by `G_0 Δ(0)` yields the
     dimensionless form implemented here.
     """
-    Delta_T_meV = Delta_meV_of_T(Delta_meV=Delta_meV, T_K=T_K)
+    Delta_T_meV = get_Delta_meV(Delta_meV=Delta_meV, T_K=T_K)
     if T_K > 0.0:
         k_T = np.tanh(Delta_T_meV / (2 * k_B_meV * T_K))
     else:
@@ -93,7 +93,7 @@ def get_IC_AB(
     return IC_AB
 
 
-def get_IC_AB_nA(
+def get_Ic_ab_nA(
     Delta_meV: float = 0.18,
     G_N: float = 1.0,
     T_K: float = 0.0,
@@ -119,12 +119,12 @@ def get_IC_AB_nA(
     float
         AB critical current in nA.
     """
-    IC_AB = get_IC_AB(Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
+    IC_AB = get_Ic_ab(Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
     IC_AB_nA = IC_AB * G_0_muS * Delta_meV
     return IC_AB_nA
 
 
-def get_CPR_AB(
+def get_cpr_ab(
     phi: NDArray64 = np.linspace(0, 2 * np.pi, 101, dtype=np.float64),
     Delta_meV: float = 0.18,
     G_N: float = 1.0,
@@ -148,11 +148,11 @@ def get_CPR_AB(
     NDArray64
         Dimensionless CPR values `I(φ)/(G_0*Δ(0))`.
     """
-    I_C = get_IC_AB(Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
+    I_C = get_Ic_ab(Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
     return I_C * np.sin(phi)
 
 
-def get_CPR_AB_nA(
+def get_cpr_ab_nA(
     phi: NDArray64 = np.linspace(0, 2 * np.pi, 101, dtype=np.float64),
     Delta_meV: float = 0.18,
     G_N: float = 1.0,
@@ -176,11 +176,11 @@ def get_CPR_AB_nA(
     NDArray64
         CPR values in nA.
     """
-    I_C_nA = get_IC_AB_nA(Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
+    I_C_nA = get_Ic_ab_nA(Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
     return I_C_nA * np.sin(phi)
 
 
-def get_E_ABS(
+def get_E_abs(
     phi: NDArray64 = np.linspace(0, 2 * np.pi, 101, dtype=np.float64),
     tau: float = 1.0,
     Delta_meV: float = 0.18,
@@ -210,12 +210,12 @@ def get_E_ABS(
     NDArray64
         Dimensionless ABS energy `E(φ)/Δ(0)`.
     """
-    Delta_T_meV = Delta_meV_of_T(Delta_meV=Delta_meV, T_K=T_K)
+    Delta_T_meV = get_Delta_meV(Delta_meV=Delta_meV, T_K=T_K)
     E_ABS = np.sqrt(1 - tau * np.sin(phi / 2) ** 2) * Delta_T_meV / Delta_meV
     return E_ABS
 
 
-def get_E_ABS_meV(
+def get_E_abs_meV(
     phi: NDArray64 = np.linspace(0, 2 * np.pi, 101, dtype=np.float64),
     tau: float = 1.0,
     Delta_meV: float = 0.18,
@@ -239,12 +239,12 @@ def get_E_ABS_meV(
     NDArray64
         ABS energy in meV.
     """
-    E_ABS = get_E_ABS(phi=phi, tau=tau, Delta_meV=Delta_meV, T_K=T_K)
+    E_ABS = get_E_abs(phi=phi, tau=tau, Delta_meV=Delta_meV, T_K=T_K)
     E_ABS_meV = E_ABS * Delta_meV
     return E_ABS_meV
 
 
-def get_CPR_ABS(
+def get_cpr_abs(
     phi: NDArray64 = np.linspace(0, 2 * np.pi, 101, dtype=np.float64),
     Delta_meV: float = 0.18,
     tau: float = 1.0,
@@ -284,7 +284,7 @@ def get_CPR_ABS(
     - The overall scale corresponds to the single-channel contribution;
     converting to nA uses `I[nA] = I[dimensionless] * (G_0[µS] * Δ(0)[meV])`.
     """
-    E_abs = get_E_ABS(phi=phi, tau=tau, Delta_meV=Delta_meV, T_K=T_K)
+    E_abs = get_E_abs(phi=phi, tau=tau, Delta_meV=Delta_meV, T_K=T_K)
 
     I_abs = -2 * np.pi * np.gradient(E_abs, phi)
 
@@ -293,7 +293,7 @@ def get_CPR_ABS(
     return I_abs
 
 
-def get_CPR_ABS_nA(
+def get_cpr_abs_nA(
     phi: NDArray64 = np.linspace(0, 2 * np.pi, 101, dtype=np.float64),
     Delta_meV: float = 0.18,
     tau: float = 1.0,
@@ -317,7 +317,7 @@ def get_CPR_ABS_nA(
     NDArray64
         Supercurrent in nA.
     """
-    CPR = get_CPR_ABS(phi=phi, Delta_meV=Delta_meV, tau=tau, T_K=T_K)
+    CPR = get_cpr_abs(phi=phi, Delta_meV=Delta_meV, tau=tau, T_K=T_K)
     CPR_nA = CPR * G_0_muS * Delta_meV
     return CPR_nA
 
@@ -356,7 +356,7 @@ def get_rho(
     return rho
 
 
-def get_CPR_KO1(
+def get_cpr_ko1(
     phi: NDArray64 = np.linspace(0, 2 * np.pi, 101, dtype=np.float64),
     Delta_meV: float = 0.18,
     G_N: float = 1.0,
@@ -398,7 +398,7 @@ def get_CPR_KO1(
     # evaluate I(phi, tau) and integrate over tau
     I_tau_phi = np.empty((tau.size, phi.size), dtype=np.float64)
     for i, tau_i in enumerate(tau):
-        I_tau_phi[i, :] = get_CPR_ABS(
+        I_tau_phi[i, :] = get_cpr_abs(
             phi=phi,
             Delta_meV=Delta_meV,
             tau=tau_i,
@@ -410,7 +410,7 @@ def get_CPR_KO1(
     return np.asarray(I_phi)
 
 
-def get_CPR_KO1_nA(
+def get_cpr_ko1_nA(
     phi: NDArray64 = np.linspace(0, 2 * np.pi, 101, dtype=np.float64),
     Delta_meV: float = 0.18,
     G_N: float = 1.0,
@@ -437,7 +437,7 @@ def get_CPR_KO1_nA(
     NDArray64
         KO-1 supercurrent in nA.
     """
-    CPR_KO1 = get_CPR_KO1(
+    CPR_KO1 = get_cpr_ko1(
         phi=phi,
         Delta_meV=Delta_meV,
         G_N=G_N,
@@ -448,7 +448,7 @@ def get_CPR_KO1_nA(
     return CPR_KO1_nA
 
 
-def get_CPR_KO2(
+def get_cpr_ko2(
     phi: NDArray64 = np.linspace(0, 2 * np.pi, 101, dtype=np.float64),
     Delta_meV: float = 0.18,
     G_N: float = 1.0,
@@ -476,7 +476,7 @@ def get_CPR_KO2(
         Dimensionless KO-2 CPR `I(φ)/(G_0*Δ(0))`.
     """
     return (
-        get_CPR_ABS(
+        get_cpr_abs(
             phi=phi,
             Delta_meV=Delta_meV,
             tau=1.0,
@@ -486,7 +486,7 @@ def get_CPR_KO2(
     )
 
 
-def get_CPR_KO2_nA(
+def get_cpr_ko2_nA(
     phi: NDArray64 = np.linspace(0, 2 * np.pi, 101, dtype=np.float64),
     Delta_meV: float = 0.18,
     G_N: float = 1.0,
@@ -510,12 +510,12 @@ def get_CPR_KO2_nA(
     NDArray64
         KO-2 supercurrent in nA.
     """
-    CPR_KO2 = get_CPR_KO2(phi=phi, Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
+    CPR_KO2 = get_cpr_ko2(phi=phi, Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
     CPR_KO2_nA = CPR_KO2 * G_0_muS * Delta_meV
     return CPR_KO2_nA
 
 
-def get_IC_ABS(
+def get_Ic_abs(
     Delta_meV: float = 0.18,
     tau: float = 1.0,
     T_K: float = 0.0,
@@ -544,12 +544,12 @@ def get_IC_ABS(
     The result depends weakly on `n_phi` for sharply peaked CPRs (τ→1).
     """
     phi = np.linspace(0, 2 * np.pi, n_phi)
-    CPR = get_CPR_ABS(phi=phi, Delta_meV=Delta_meV, tau=tau, T_K=T_K)
+    CPR = get_cpr_abs(phi=phi, Delta_meV=Delta_meV, tau=tau, T_K=T_K)
     I_C = np.max(CPR)
     return I_C
 
 
-def get_IC_ABS_nA(
+def get_Ic_abs_nA(
     Delta_meV: float = 0.18,
     tau: float = 1.0,
     T_K: float = 0.0,
@@ -573,7 +573,7 @@ def get_IC_ABS_nA(
     float
         Critical current in nA.
     """
-    IC_ABS = get_IC_ABS(
+    IC_ABS = get_Ic_abs(
         Delta_meV=Delta_meV,
         tau=tau,
         T_K=T_K,
@@ -583,7 +583,7 @@ def get_IC_ABS_nA(
     return IC_ABS_nA
 
 
-def get_IC_KO1(
+def get_Ic_ko1(
     Delta_meV: float = 0.18,
     G_N: float = 1.0,
     T_K: float = 0.0,
@@ -611,7 +611,7 @@ def get_IC_KO1(
         Dimensionless KO-1 critical current `I_c/(G_0*Δ(0))`.
     """
     phi = np.linspace(0, 2 * np.pi, n_phi)
-    CPR = get_CPR_KO1(
+    CPR = get_cpr_ko1(
         phi=phi,
         Delta_meV=Delta_meV,
         G_N=G_N,
@@ -622,7 +622,7 @@ def get_IC_KO1(
     return I_C
 
 
-def get_IC_KO1_nA(
+def get_Ic_ko1_nA(
     Delta_meV: float = 0.18,
     G_N: float = 1.0,
     T_K: float = 0.0,
@@ -649,7 +649,7 @@ def get_IC_KO1_nA(
     float
         Critical current in nA.
     """
-    IC_KO1 = get_IC_KO1(
+    IC_KO1 = get_Ic_ko1(
         Delta_meV=Delta_meV,
         G_N=G_N,
         T_K=T_K,
@@ -660,7 +660,7 @@ def get_IC_KO1_nA(
     return IC_KO1_nA
 
 
-def get_IC_KO2(
+def get_Ic_ko2(
     Delta_meV: float = 0.18,
     G_N: float = 1.0,
     T_K: float = 0.0,
@@ -685,12 +685,12 @@ def get_IC_KO2(
         Dimensionless KO-2 critical current `I_c/(G_0*Δ(0))`.
     """
     phi = np.linspace(0, 2 * np.pi, n_phi)
-    CPR = get_CPR_KO2(phi=phi, Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
+    CPR = get_cpr_ko2(phi=phi, Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
     I_C = np.max(CPR)
     return I_C
 
 
-def get_IC_KO2_nA(
+def get_Ic_ko2_nA(
     Delta_meV: float = 0.18,
     G_N: float = 1.0,
     T_K: float = 0.0,
@@ -714,7 +714,7 @@ def get_IC_KO2_nA(
     float
         Critical current in nA.
     """
-    IC_KO2 = get_IC_KO2(
+    IC_KO2 = get_Ic_ko2(
         Delta_meV=Delta_meV,
         G_N=G_N,
         T_K=T_K,
@@ -724,7 +724,7 @@ def get_IC_KO2_nA(
     return IC_KO2_nA
 
 
-def get_ICT_AB(
+def get_IcT_ab(
     T_K: NDArray64,
     Delta_meV: float = 0.18,
     G_N: float = 1.0,
@@ -747,7 +747,7 @@ def get_ICT_AB(
     """
     ICT_AB = np.full_like(T_K, np.nan)
     for i, t_K in enumerate(T_K):
-        ICT_AB[i] = get_IC_AB(
+        ICT_AB[i] = get_Ic_ab(
             Delta_meV=Delta_meV,
             G_N=G_N,
             T_K=t_K,
@@ -755,7 +755,7 @@ def get_ICT_AB(
     return ICT_AB
 
 
-def get_ICT_AB_nA(
+def get_IcT_ab_nA(
     T_K: NDArray64,
     Delta_meV: float = 0.18,
     G_N: float = 1.0,
@@ -776,7 +776,7 @@ def get_ICT_AB_nA(
     NDArray64
         AB critical current in nA.
     """
-    ICT_AB = get_ICT_AB(
+    ICT_AB = get_IcT_ab(
         T_K=T_K,
         Delta_meV=Delta_meV,
         G_N=G_N,
@@ -785,7 +785,7 @@ def get_ICT_AB_nA(
     return ICT_AB_nA
 
 
-def get_ICT_ABS(
+def get_IcT_abs(
     T_K: NDArray64,
     Delta_meV: float = 0.18,
     tau: float = 1.0,
@@ -811,7 +811,7 @@ def get_ICT_ABS(
     """
     ICT_ABS = np.full_like(T_K, np.nan)
     for i, t_K in enumerate(T_K):
-        ICT_ABS[i] = get_IC_ABS(
+        ICT_ABS[i] = get_Ic_abs(
             Delta_meV=Delta_meV,
             tau=tau,
             T_K=t_K,
@@ -820,7 +820,7 @@ def get_ICT_ABS(
     return ICT_ABS
 
 
-def get_ICT_ABS_nA(
+def get_IcT_abs_nA(
     T_K: NDArray64,
     Delta_meV: float = 0.18,
     tau: float = 1.0,
@@ -829,7 +829,7 @@ def get_ICT_ABS_nA(
     """
     Temperature dependence of the single-channel ABS critical current (nA).
     """
-    ICT_ABS = get_ICT_ABS(
+    ICT_ABS = get_IcT_abs(
         T_K=T_K,
         Delta_meV=Delta_meV,
         tau=tau,
@@ -839,7 +839,7 @@ def get_ICT_ABS_nA(
     return ICT_ABS_nA
 
 
-def get_ICT_KO1(
+def get_IcT_ko1(
     T_K: NDArray64,
     Delta_meV: float = 0.18,
     G_N: float = 1.0,
@@ -849,7 +849,7 @@ def get_ICT_KO1(
     """Temperature dependence of the KO-1 critical current (dimensionless)."""
     ICT_KO1 = np.full_like(T_K, np.nan)
     for i, t_K in enumerate(tqdm(T_K)):
-        ICT_KO1[i] = get_IC_KO1(
+        ICT_KO1[i] = get_Ic_ko1(
             Delta_meV=Delta_meV,
             G_N=G_N,
             T_K=t_K,
@@ -859,7 +859,7 @@ def get_ICT_KO1(
     return ICT_KO1
 
 
-def get_ICT_KO1_nA(
+def get_IcT_ko1_nA(
     T_K: NDArray64,
     Delta_meV: float = 0.18,
     G_N: float = 1.0,
@@ -867,7 +867,7 @@ def get_ICT_KO1_nA(
     n_phi: int = 501,
 ) -> NDArray64:
     """Temperature dependence of the KO-1 critical current (nA)."""
-    ICT_KO1 = get_ICT_KO1(
+    ICT_KO1 = get_IcT_ko1(
         T_K=T_K,
         Delta_meV=Delta_meV,
         G_N=G_N,
@@ -878,7 +878,7 @@ def get_ICT_KO1_nA(
     return ICT_KO1_nA
 
 
-def get_ICT_KO2(
+def get_IcT_ko2(
     T_K: NDArray64,
     Delta_meV: float = 0.18,
     G_N: float = 1.0,
@@ -887,7 +887,7 @@ def get_ICT_KO2(
     """Temperature dependence of the KO-2 critical current (dimensionless)."""
     ICT_KO2 = np.full_like(T_K, np.nan)
     for i, t_K in enumerate(T_K):
-        ICT_KO2[i] = get_IC_KO2(
+        ICT_KO2[i] = get_Ic_ko2(
             Delta_meV=Delta_meV,
             G_N=G_N,
             T_K=t_K,
@@ -896,14 +896,14 @@ def get_ICT_KO2(
     return ICT_KO2
 
 
-def get_ICT_KO2_nA(
+def get_IcT_ko2_nA(
     T_K: NDArray64,
     Delta_meV: float = 0.18,
     G_N: float = 1.0,
     n_phi: int = 501,
 ) -> NDArray64:
     """Temperature dependence of the KO-2 critical current (nA)."""
-    ICT_KO2 = get_ICT_KO2(
+    ICT_KO2 = get_IcT_ko2(
         T_K=T_K,
         Delta_meV=Delta_meV,
         G_N=G_N,

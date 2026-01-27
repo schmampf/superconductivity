@@ -2,9 +2,9 @@ import numpy as np
 
 import jax
 import jax.numpy as jnp
-from jax import vmap, jit, lax, Array
 
 from utilities.types import NDArray64
+from utilities.types import JNDArray
 
 from utilities.functions_jax import bin_y_over_x
 
@@ -12,18 +12,19 @@ from utilities.constants import k_B_meV
 from utilities.constants import G_0_muS
 
 
-k_B_meV_jax: Array = jnp.array(k_B_meV)
-G_0_muS_jax: Array = jnp.array(G_0_muS)
+k_B_meV_jax: JNDArray = jnp.array(k_B_meV)
+G_0_muS_jax: JNDArray = jnp.array(G_0_muS)
 
-const176: Array = jnp.array(1.76)
-const174: Array = jnp.array(1.74)
+const176: JNDArray = jnp.array(1.76)
+const174: JNDArray = jnp.array(1.74)
 
 
 jax.config.update("jax_enable_x64", True)
 
 
-@jit
-def thermal_energy_gap(Delta_meV: Array, T_K: Array) -> Array:
+@jax.jit
+def get_Delta_jnp_meV(Delta_meV: JNDArray, T_K: JNDArray) -> JNDArray:
+    """Docstring"""
     T_C = Delta_meV / (const176 * k_B_meV_jax)
     return jnp.select(
         [T_K < 0.0, T_K == 0.0, (T_K > 0.0) & (T_K < T_C), T_C <= T_K],
@@ -37,8 +38,9 @@ def thermal_energy_gap(Delta_meV: Array, T_K: Array) -> Array:
     )
 
 
-@jit
-def fermi_distribution(E_meV: Array, T_K: Array) -> Array:
+@jax.jit
+def get_f_jnp(E_meV: JNDArray, T_K: JNDArray) -> JNDArray:
+    """Docstring"""
     exponent = E_meV / (k_B_meV_jax * T_K)
     exponent = jnp.clip(exponent, -100.0, 100.0)
     return jnp.where(
@@ -48,101 +50,84 @@ def fermi_distribution(E_meV: Array, T_K: Array) -> Array:
     )
 
 
-@jit
-def density_of_states(E_meV: Array, Delta_meV: Array, gamma_meV: Array) -> Array:
+@jax.jit
+def get_dos_jnp(
+    E_meV: JNDArray,
+    Delta_meV: JNDArray,
+    gamma_meV: JNDArray,
+) -> JNDArray:
+    """Docstring"""
     # Ensure complex energy
     E_meV_complex = E_meV + 1j * gamma_meV
 
     # Calculate denominator safely
-    N = E_meV_complex / jnp.sqrt(E_meV_complex**2 - Delta_meV**2)
-    N = jnp.abs(jnp.real(N))
+    dos = E_meV_complex / jnp.sqrt(E_meV_complex**2 - Delta_meV**2)
+    dos = jnp.abs(jnp.real(dos))
 
     # Clip unphysical values and set NaNs to 0
-    N = jnp.nan_to_num(N, nan=0.0, posinf=100.0, neginf=0.0)
-    N = jnp.clip(N, 0.0, 100.0)
-    return N
+    dos = jnp.nan_to_num(dos, nan=0.0, posinf=100.0, neginf=0.0)
+    dos = jnp.clip(dos, 0.0, 100.0)
+    return dos
 
 
-@jit
-def current(
-    V_meV: Array,
-    E_meV: Array,
-    Delta_1_meV: Array,
-    Delta_2_meV: Array,
-    T_K: Array,
-    gamma_1_meV: Array,
-    gamma_2_meV: Array,
-) -> Array:
+@jax.jit
+def get_i_jnp_meV(
+    V_meV: JNDArray,
+    E_meV: JNDArray,
+    Delta_1_meV: JNDArray,
+    Delta_2_meV: JNDArray,
+    T_K: JNDArray,
+    gamma_1_meV: JNDArray,
+    gamma_2_meV: JNDArray,
+) -> JNDArray:
+    """Docstring"""
     V_mV_over_2 = V_meV / 2
     E1_meV = E_meV - V_mV_over_2
     E2_meV = E_meV + V_mV_over_2
-    N1 = density_of_states(
+    dos1: JNDArray = get_dos_jnp(
         E_meV=E1_meV,
         Delta_meV=Delta_1_meV,
         gamma_meV=gamma_1_meV,
     )
-    N2 = density_of_states(
+    dos2: JNDArray = get_dos_jnp(
         E_meV=E2_meV,
         Delta_meV=Delta_2_meV,
         gamma_meV=gamma_2_meV,
     )
-    f1 = fermi_distribution(
+    f1: JNDArray = get_f_jnp(
         E_meV=E1_meV,
         T_K=T_K,
     )
-    f2 = fermi_distribution(
+    f2: JNDArray = get_f_jnp(
         E_meV=E2_meV,
         T_K=T_K,
     )
-    integrand = (N1 * N2) * (f1 - f2)
+    integrand: JNDArray = (dos1 * dos2) * (f1 - f2)
     integrand = jnp.nan_to_num(integrand, nan=0.0, posinf=100.0, neginf=0.0)
     I_meV = jnp.trapezoid(integrand, E_meV, axis=0)
     return I_meV
 
 
-# for fitting symmetrical junctions
-@jit
-def currents(
-    V_meV: Array,
-    E_meV: Array,
-    T_K: float,
-    Delta_meV: float,
-    gamma_meV: float,
-) -> Array:
-    current_vectorized = vmap(
-        lambda V_mV: current(
-            V_meV=V_mV,
-            E_meV=E_meV,
-            Delta_1_meV=Delta_meV,
-            Delta_2_meV=Delta_meV,
-            T_K=T_K,
-            gamma_1_meV=gamma_meV,
-            gamma_2_meV=gamma_meV,
-        ),
-        in_axes=0,
-    )
-    return current_vectorized(V_meV)
-
-
-@jit
-def current_over_voltage(
-    V_meV: Array,
-    V_0_meV: Array,
-    E_meV: Array,
-    Delta_meV: Array,
-    T_K: Array,
-    gamma_meV: Array,
-) -> Array:
+@jax.jit
+def get_iv_jnp_nA(
+    V_meV: JNDArray,
+    V_0_meV: JNDArray,
+    E_meV: JNDArray,
+    Delta_meV: JNDArray,
+    T_K: JNDArray,
+    gamma_meV: JNDArray,
+) -> JNDArray:
+    """Docstring"""
 
     # thermal energy gap
-    Delta_meV = thermal_energy_gap(Delta_meV=Delta_meV, T_K=T_K)
+    Delta_meV = get_Delta_jnp_meV(Delta_meV=Delta_meV, T_K=T_K)
 
     # Delta_eV = jnp.atleast_1d(Delta_eV)
     # gamma_eV = jnp.atleast_1d(gamma_eV)
 
     # vectorized current function (over V)
-    current_vectorized = vmap(
-        lambda V_meV: current(
+    current_vectorized = jax.vmap(
+        lambda V_meV: get_i_jnp_meV(
             V_meV=V_meV,
             E_meV=E_meV,
             Delta_1_meV=Delta_meV[0],
@@ -153,7 +138,7 @@ def current_over_voltage(
         ),
         in_axes=0,
     )
-    I_meV = lax.cond(
+    I_meV = jax.lax.cond(
         jnp.all(Delta_meV == 0.0),
         lambda _: V_meV,
         lambda _: current_vectorized(V_meV),
@@ -172,7 +157,7 @@ def current_over_voltage(
     return I_nA
 
 
-def get_I_nA(
+def get_I_bcs_jnp_nA(
     V_mV: NDArray64,
     G_N: float = 1.0,
     T_K: float = 0.0,
@@ -180,6 +165,7 @@ def get_I_nA(
     gamma_meV: float | tuple[float, float] = 0.0,
     gamma_min_meV: float = 1e-4,
 ) -> NDArray64:
+    """Docstring"""
 
     if isinstance(Delta_meV, float):
         Delta_meV: tuple[float, float] = Delta_meV, Delta_meV
@@ -222,7 +208,7 @@ def get_I_nA(
     gamma_meV_jax = jnp.array(gamma_meV)
 
     # do majix
-    I_nA = current_over_voltage(
+    I_nA = get_iv_jnp_nA(
         V_meV=V_meV_jax,
         V_0_meV=V_0_meV_jax,
         E_meV=E_meV_jax,

@@ -6,13 +6,13 @@ from matplotlib.pyplot import Figure
 from matplotlib.pyplot import Axes
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
-from theory.utilities.cpd import cmap, colors
+from utilities.plotting.cpd4 import cmap, colors
 
-from theory.utilities.constants import G_0_muS
-from theory.utilities.types import NDArray64
+from utilities.constants import G_0_muS
+from utilities.types import NDArray64
 
-from theory.optimizers.fit_atomic_contact import SolutionDict
-from theory.optimizers.fit_atomic_contact import gaussian
+from optimizers.fit_atomic_contact import SolutionDict
+from optimizers.fit_atomic_contact import gaussian
 
 
 def plot_atomic_contact(

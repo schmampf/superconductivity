@@ -111,7 +111,7 @@ def run_multiple_ha(
     return all_V_mV, all_I_nA
 
 
-def get_I_nA(
+def get_I_ha_asym_nA(
     V_mV: NDArray64,
     tau: float = 0.5,
     T_K: float = 0.0,

@@ -25,12 +25,12 @@ from utilities.types import NDArray64
 from utilities.constants import G_0_muS
 from utilities.constants import h_e_pVs
 
-from models.abs import get_IC_AB
-from models.abs import get_IC_AB_nA
-from models.abs import get_CPR_ABS
+from models.abs import get_Ic_ab
+from models.abs import get_Ic_ab_nA
+from models.abs import get_cpr_abs
 
 
-def fourier_sine_coeffs(
+def get_I_p(
     phi: NDArray64,
     I_phi: NDArray64,
     p_max: int = 10,
@@ -66,7 +66,7 @@ def fourier_sine_coeffs(
     return coeffs
 
 
-def get_I_p_ABS(
+def get_I_p_abs(
     Delta_meV: float = 0.18,
     tau: float | NDArray64 = 1.0,
     T_K: float = 0.0,
@@ -96,12 +96,12 @@ def get_I_p_ABS(
     tau = np.asarray(tau)
 
     for tau_i in tau:
-        I_phi = get_CPR_ABS(phi=phi, Delta_meV=Delta_meV, tau=tau_i, T_K=T_K)
-        I_p += fourier_sine_coeffs(phi=phi, I_phi=I_phi, p_max=p_max)
+        I_phi = get_cpr_abs(phi=phi, Delta_meV=Delta_meV, tau=tau_i, T_K=T_K)
+        I_p += get_I_p(phi=phi, I_phi=I_phi, p_max=p_max)
     return I_p
 
 
-def get_I_p_ABS_nA(
+def get_I_p_abs_nA(
     Delta_meV: float = 0.18,
     tau: float | NDArray64 = 1.0,
     T_K: float = 0.0,
@@ -125,7 +125,7 @@ def get_I_p_ABS_nA(
     NDArray64
         Harmonic amplitudes I_p in nA.
     """
-    I_p_ABS = get_I_p_ABS(
+    I_p_ABS = get_I_p_abs(
         Delta_meV=Delta_meV,
         tau=tau,
         T_K=T_K,
@@ -135,7 +135,7 @@ def get_I_p_ABS_nA(
     return I_p_ABS_nA
 
 
-def do_I_fSS(
+def do_I_fss(
     V_mV: NDArray64,
     A_mV: NDArray64,
     I: NDArray64 = np.array([1.0]),
@@ -203,7 +203,7 @@ def do_I_fSS(
     return I_fSS
 
 
-def get_I_SS(
+def get_I_ss(
     V_mV: NDArray64,
     A_mV: NDArray64,
     Delta_meV: float = 0.18,
@@ -236,8 +236,8 @@ def get_I_SS(
         The amplitude is in the same normalization as `get_IC_AB`, i.e.
         `I/(G_0*Δ(0))`.
     """
-    I_C = get_IC_AB(Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
-    I_SS = do_I_fSS(
+    I_C = get_Ic_ab(Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
+    I_SS = do_I_fss(
         V_mV=V_mV,
         A_mV=A_mV,
         I=np.array([I_C]),
@@ -247,7 +247,7 @@ def get_I_SS(
     return I_SS
 
 
-def get_I_SS_nA(
+def get_I_ss_nA(
     V_mV: NDArray64,
     A_mV: NDArray64,
     G_N: float = 1.0,
@@ -280,14 +280,14 @@ def get_I_SS_nA(
     NDArray64
         Peak amplitudes in nA placed on the voltage grid.
     """
-    I_C_nA = get_IC_AB_nA(Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
-    I_SS_nA = do_I_fSS(
+    I_C_nA = get_Ic_ab_nA(Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
+    I_SS_nA = do_I_fss(
         V_mV=V_mV, A_mV=A_mV, I=np.array([I_C_nA]), nu_GHz=nu_GHz, n_max=n_max
     )
     return I_SS_nA
 
 
-def get_I_fSS(
+def get_I_fss(
     V_mV: NDArray64,
     A_mV: NDArray64,
     tau: NDArray64 = np.array([1.0]),
@@ -328,13 +328,13 @@ def get_I_fSS(
     The CPR harmonics are obtained by projecting the ABS CPR onto sine
     harmonics. The resulting peak weights scale with |I_p J_n(p a)|.
     """
-    I_p = get_I_p_ABS(
+    I_p = get_I_p_abs(
         tau=tau,
         Delta_meV=Delta_meV,
         T_K=T_K,
         p_max=p_max,
     )
-    I_fSS = do_I_fSS(
+    I_fSS = do_I_fss(
         V_mV=V_mV,
         A_mV=A_mV,
         I=I_p,
@@ -344,7 +344,7 @@ def get_I_fSS(
     return I_fSS
 
 
-def get_I_fSS_nA(
+def get_I_fss_nA(
     V_mV: NDArray64,
     A_mV: NDArray64,
     tau: NDArray64 = np.array([1.0]),
@@ -380,7 +380,7 @@ def get_I_fSS_nA(
     NDArray64
         Peak amplitudes in nA on the voltage grid.
     """
-    I_fSS = get_I_fSS(
+    I_fSS = get_I_fss(
         V_mV=V_mV,
         A_mV=A_mV,
         tau=tau,
