@@ -20,17 +20,6 @@ utilities/__pycache__/
 *DS_Store
 **/.DS_Store
 
-# Specific directories
-23 10 PR-22e-9/breaking/
-23 10 PR-22e-9/2.09G0/data/
-23 10 PR-22e-9/2.09G0/figures/
-
-24 07 OI-24d-10/unbroken/data/
-24 07 OI-24d-10/unbroken/figures/
-
-25 04 OI-25c-09/unbroken/data/
-25 04 OI-25c-09/unbroken/figures/
-
 # Logs and temporary files
 *.log
 *.tmp
@@ -41,12 +30,10 @@ utilities/__pycache__/
 .ipynb_checkpoints/
 
 # HDF5 and other data files (if applicable)
-*.hdf5
-*.csv
 *.dat
 *.pickle
 
 # specific files
 *MCBJ_seeblau_ultra.png
 
-sonst/*
+sonst/
