@@ -1,0 +1,36 @@
+ 0.3                               (trans)
+ 0.02                              (temp in K)
+ 1.0   1.0                         (delta1 and delta2 in meV)
+ 0.0001   0.0001                   (eta1 and eta2 in meV)
+ 0.10   2.50   0.0100              (vi,vf,dv in meV)
+ 10    2003    66                  (nmax,iw,nchi)
+
+-----------------------
+List of parameters:
+-----------------------
+
+ trans = junction transmission
+ temp = temperature in K
+ delta1,2 = Delta1,2 ub meV
+ eta1,2 = Dynes parameter in meV
+ vi= Initial value of the voltage in mV
+ vf= Final value of the voltage in mV
+ dv = step in the voltage values in mV
+ nmax = maximum number of MAR processes
+ iw = number of points in the energy integration
+ nchi = number of counting field points 
+
+
+-----------------------
+Output:
+-----------------------
+
+1st column: voltage in mV
+2nd column: total current in nA
+3rd column: I_1 = current contribution (in nA) of 1e-processes
+4th column: I_2 = current contribution (in nA) of 2e-processes
+5th column: I_3 = current contribution (in nA) of 3e-processes
+.
+.
+.
+12th column: I_10 = current contribution (in nA) of 10e-processes

@@ -1,0 +1,1 @@
+gfortran -o fcs fcs.f -llapack -lblas -L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib -O3

@@ -1,0 +1,13 @@
+; [MASTER]
+; load-plugins=pylint_django
+
+[BASIC]
+method-naming-style=camelCase
+class-naming-style=PascalCase
+function-naming-style=any
+argument-naming-style=any
+variable-naming-style=any
+module-naming-style=any
+
+[DESIGN]
+max-locals=30

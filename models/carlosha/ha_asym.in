@@ -1,0 +1,25 @@
+ 0.100                              (temp in K)
+ 0.18   0.18                        (gap1,gap2 in meV)
+ 0.5                                (transmission)
+ 0.00001  0.00001                   (eta1,eta2 = broadening in meV) 
+ -0.5  0.5  0.001                   (vi,vf,vstep in mV)
+
+
+-----------------------
+List of parameters:
+-----------------------
+
+ temp = temperature in K
+ gap_1,2 = Delta1,2 in meV
+ eta_1,2 = Dynes parameter in meV
+ transmission = junction's transmission [0,1]
+ vi = initial value of the voltage in mV
+ vf = final value of the voltage in mV
+ vstep = step in the voltage values in mV
+
+-----------------------
+Output:
+-----------------------
+
+1st column: voltage in mV
+2nd column: total current in nA

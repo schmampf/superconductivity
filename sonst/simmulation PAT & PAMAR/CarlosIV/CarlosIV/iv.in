@@ -1,0 +1,46 @@
+ 0.5   0.00000                      (trans,temp)
+ -15.000   15.00000                     (wi,wf)
+ 0.05  3.51   0.01            (vi,vf,vstep)
+
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+ PARAMETERS:
+ **********
+
+    trans = normal transmission coefficient: [0,1]
+    temp = temperature in units of the gap at the corresponding temperature.
+    wi = lower limit in the energy integration of the current (in units of the gap)
+    wf = upper limit in the energy integration of the current (in units of the gap)
+    vi = initial voltage (in units of the gap)
+    vf = final voltage (in units of the gap)
+    vstep = voltage step (in units of the gap)
+
+ NOTES AND ADVICES:
+ *****************
+
+ 0) To run the code: the code calls this input file (iv.in) to read the parameters.
+    The output has a free format. Thus, you can write down the results in a new file: 
+			example ----> iv.exe > iv.dat (oupt file)
+
+ 1) The output file contains two columns:
+
+   voltage (in units of the gap)       current (normalized by 2*e*Delta/h) 
+
+ 2) This program only computes the dc current.
+
+ 3) The program estimates the number of multiple Andreev reflections, n, that one
+    needs with the following condition: n = 2*Delta/voltage. Now the maximum value
+    allowed for "n" is 500. This means that the minimum value allowed for "vi" is 
+    more or less 0.005*Delta.
+
+ 4) For the energy integration of the current a personal integration subroutine is used. 
+    The value of the absolute and relative are now Atol=(1.e-8) and Rtol=(1.e-6) (see 
+    program, lines number 58-59). This should be enough, but keep it in mind.
+
+ 5) Energy integration: choose "wi" and "wf" symmetrically (see example). At least use for
+    wi and wf several times the value of the maximum voltage (vf). IMPORTANT: At low 
+    voltages one needs to enlarge the energy integration considerably, otherwise one gets 
+    negative current.
+
+ 6) If you want to do calculations at finite temperature: Notice that all the energy scales 
+    are normalized with the gap at the corresponding temperature. If you need the absolute
+    value of the current, I can implement the temperature dependence of the gap. 
