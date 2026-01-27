@@ -11,21 +11,21 @@ from concurrent.futures import as_completed
 HOME_DIR = "/Users/oliver/Documents/p5control-bluefors-evaluation"
 sys.path.append(HOME_DIR)
 
-from utilities.types import NDArray64
+from ..utilities.types import NDArray64
 
-from utilities.functions import cache_hash_pbar
-from utilities.functions import bin_y_over_x
+from ..utilities.functions import cache_hash_pbar
+from ..utilities.functions import bin_y_over_x
 
-from utilities.constants import V_tol_mV
-from utilities.constants import tau_tol
-from utilities.constants import T_tol_K
-from utilities.constants import Delta_tol_meV
-from utilities.constants import gamma_tol_meV
+from ..utilities.constants import V_tol_mV
+from ..utilities.constants import tau_tol
+from ..utilities.constants import T_tol_K
+from ..utilities.constants import Delta_tol_meV
+from ..utilities.constants import gamma_tol_meV
 
 # number of maximum charges
-from utilities.constants import m_max
-from utilities.constants import iw
-from utilities.constants import nchi
+from ..utilities.constants import m_max
+from ..utilities.constants import iw
+from ..utilities.constants import nchi
 
 
 WORK_DIR = os.path.join(HOME_DIR, "theory/models/carlosfcs/")

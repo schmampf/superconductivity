@@ -5,24 +5,24 @@ import logging
 from importlib import reload
 from contextlib import contextmanager
 
-import models.carlosha.ha_sym as ha_sym
+import .carlosha.ha_sym as ha_sym
 
-from models.bcs_np import Delta_meV_of_T
+from models.bcs_np import get_Delta_meV
 
-from utilities.types import NDArray64
+from ..utilities.types import NDArray64
 
-from utilities.functions import cache_hash_sym
-from utilities.functions import cache_hash_nuni
-from utilities.functions import bin_y_over_x
+from ..utilities.functions import cache_hash_sym
+from ..utilities.functions import cache_hash_nuni
+from ..utilities.functions import bin_y_over_x
 
-from utilities.constants import G_0_muS
-from utilities.constants import k_B_meV
+from ..utilities.constants import G_0_muS
+from ..utilities.constants import k_B_meV
 
-from utilities.constants import V_tol_mV
-from utilities.constants import tau_tol
-from utilities.constants import T_tol_K
-from utilities.constants import Delta_tol_meV
-from utilities.constants import gamma_tol_meV
+from ..utilities.constants import V_tol_mV
+from ..utilities.constants import tau_tol
+from ..utilities.constants import T_tol_K
+from ..utilities.constants import Delta_tol_meV
+from ..utilities.constants import gamma_tol_meV
 
 HOME_DIR = "/Users/oliver/Documents/p5control-bluefors-evaluation"
 sys.path.append(HOME_DIR)
@@ -51,7 +51,7 @@ def get_I_ha_sym_nA(
     if tau == 0.0:
         return np.zeros_like(V_mV)
 
-    Delta_T_meV = Delta_meV_of_T(Delta_meV, T_K)
+    Delta_T_meV = get_Delta_meV(Delta_meV, T_K)
     if Delta_T_meV == 0.0:
         return V_mV * G_0_muS * tau
 
@@ -149,7 +149,7 @@ def get_I_nA_nonuniform(
     if tau == 0.0:
         return np.zeros_like(V_mV)
 
-    Delta_T_meV = Delta_meV_of_T(Delta_meV, T_K)
+    Delta_T_meV = get_Delta_meV(Delta_meV, T_K)
     if Delta_T_meV == 0.0:
         return V_mV * G_0_muS * tau
 

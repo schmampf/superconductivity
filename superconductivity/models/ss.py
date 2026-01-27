@@ -1,6 +1,6 @@
 """Shapiro-step visualization helpers.
 
-This module provides small numerical utilities to construct idealized
+This module provides small numerical ..utilities to construct idealized
 (delta-comb) spectra of integer and fractional Shapiro steps from a
 Fourier-expanded current--phase relation (CPR). The routines here are meant
 for quick figure generation and sanity checks (they are not dynamical RSJ/RCSJ
@@ -20,14 +20,14 @@ Units and conventions
 import numpy as np
 from scipy.special import jv
 
-from utilities.types import NDArray64
+from ..utilities.types import NDArray64
 
-from utilities.constants import G_0_muS
-from utilities.constants import h_e_pVs
+from ..utilities.constants import G_0_muS
+from ..utilities.constants import h_e_pVs
 
-from models.abs import get_Ic_ab
-from models.abs import get_Ic_ab_nA
-from models.abs import get_cpr_abs
+from .abs import get_Ic_ab
+from .abs import get_Ic_ab_nA
+from .abs import get_cpr_abs
 
 
 def get_I_p(

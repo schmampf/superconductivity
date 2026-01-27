@@ -7,15 +7,15 @@ import jax.numpy as jnp
 
 from scipy.special import jv
 
-from utilities.types import NDArray64
-from utilities.types import JNDArray
-from utilities.types import JInterpolator
+from ..utilities.types import NDArray64
+from ..utilities.types import JNDArray
+from ..utilities.types import JInterpolator
 
-from utilities.constants import h_e_pVs
+from ..utilities.constants import h_e_pVs
 
-from utilities.functions_jax import get_dydx
+from ..utilities.functions_jax import get_dydx
 
-from utilities.functions_jax import jnp_interp_y_of_x
+from ..utilities.functions_jax import jnp_interp_y_of_x
 
 
 def get_I_pat_nA(

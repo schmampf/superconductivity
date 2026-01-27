@@ -39,12 +39,12 @@ import numpy as np
 
 from tqdm import tqdm
 
-from utilities.types import NDArray64
+from ..utilities.types import NDArray64
 
-from utilities.constants import k_B_meV
-from utilities.constants import G_0_muS
+from ..utilities.constants import k_B_meV
+from ..utilities.constants import G_0_muS
 
-from models.bcs_np import get_Delta_meV
+from .bcs_np import get_Delta_meV
 
 
 def get_Ic_ab(
