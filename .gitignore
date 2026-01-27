@@ -39,3 +39,4 @@ utilities/__pycache__/
 # specific directories
 sonst/
 models/old/
+models/old_HA/
