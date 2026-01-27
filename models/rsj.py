@@ -37,25 +37,25 @@ import numpy as np
 
 from tqdm import tqdm
 
-from theory.utilities.cpd5 import NDArray64
+from utilities.cpd5 import NDArray64
 
-from theory.utilities.constants import G_0_muS
+from utilities.constants import G_0_muS
 
-from theory.utilities.functions import bin_y_over_x
-from theory.utilities.functions import oversample
+from utilities.functions import bin_y_over_x
+from utilities.functions import oversample
 
-from theory.models.bcs import get_I_nA as get_I_bcs_nA
-from theory.models.fcs_pbar import get_I_nA as get_I_fcs_nA
-from theory.models.tg import get_I_pat_nA_from_I0 as get_I_pat_nA
-from theory.models.utg import get_I_nA as get_I_utg_nA
+from models.bcs import get_I_nA as get_I_bcs_nA
+from models.fcs_pbar import get_I_nA as get_I_fcs_nA
+from models.tg import get_I_pat_nA_from_I0 as get_I_pat_nA
+from models.utg import get_I_nA as get_I_utg_nA
 
-from theory.models.abs import get_IC_AB_nA
-from theory.models.shapiro import get_I_p_ABS_nA
+from models.abs import get_IC_AB_nA
+from models.shapiro import get_I_p_ABS_nA
 
 
-from theory.models.rsj_jax import Interpolator
-from theory.models.rsj_jax import make_interp_V_QP_mV
-from theory.models.rsj_jax import sim_V_RSJ_mV_jax
+from models.rsj_jax import Interpolator
+from models.rsj_jax import make_interp_V_QP_mV
+from models.rsj_jax import sim_V_RSJ_mV_jax
 
 
 def get_I_rsj_nA(

@@ -8,21 +8,21 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import as_completed
 
 
-from theory.utilities.types import NDArray64
+from utilities.types import NDArray64
 
-from theory.utilities.functions import cache_hash
-from theory.utilities.functions import bin_y_over_x
+from utilities.functions import cache_hash
+from utilities.functions import bin_y_over_x
 
-from theory.utilities.constants import V_tol_mV
-from theory.utilities.constants import tau_tol
-from theory.utilities.constants import T_tol_K
-from theory.utilities.constants import Delta_tol_meV
-from theory.utilities.constants import gamma_tol_meV
+from utilities.constants import V_tol_mV
+from utilities.constants import tau_tol
+from utilities.constants import T_tol_K
+from utilities.constants import Delta_tol_meV
+from utilities.constants import gamma_tol_meV
 
 # number of maximum charges
-from theory.utilities.constants import m_max
-from theory.utilities.constants import iw
-from theory.utilities.constants import nchi
+from utilities.constants import m_max
+from utilities.constants import iw
+from utilities.constants import nchi
 
 HOME_DIR = "/Users/oliver/Documents/p5control-bluefors-evaluation"
 sys.path.append(HOME_DIR)

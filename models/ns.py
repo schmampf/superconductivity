@@ -1,11 +1,11 @@
 import numpy as np
 
-from theory.utilities.types import NDArray64
-from theory.models.bcs import get_I_nA as get_I_nA_bcs
-from theory.models.btk import get_I_nA as get_I_nA_btk
+from utilities.types import NDArray64
+from models.bcs import get_I_nA as get_I_nA_bcs
+from models.btk import get_I_nA as get_I_nA_btk
 
-from theory.models.tg import get_I_pat_nA_from_I0_A0 as get_I_nA_tg
-from theory.models.utg import get_I_nA as get_I_nA_utg
+from models.tg import get_I_pat_nA_from_I0_A0 as get_I_nA_tg
+from models.utg import get_I_nA as get_I_nA_utg
 
 
 def get_I_nA(

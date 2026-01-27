@@ -20,14 +20,14 @@ Units and conventions
 import numpy as np
 from scipy.special import jv
 
-from theory.utilities.types import NDArray64
+from utilities.types import NDArray64
 
-from theory.utilities.constants import G_0_muS
-from theory.utilities.constants import h_e_pVs
+from utilities.constants import G_0_muS
+from utilities.constants import h_e_pVs
 
-from theory.models.abs import get_IC_AB
-from theory.models.abs import get_IC_AB_nA
-from theory.models.abs import get_CPR_ABS
+from models.abs import get_IC_AB
+from models.abs import get_IC_AB_nA
+from models.abs import get_CPR_ABS
 
 
 def fourier_sine_coeffs(

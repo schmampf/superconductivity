@@ -4,12 +4,12 @@ import jax
 import jax.numpy as jnp
 from jax import vmap, jit, lax, Array
 
-from theory.utilities.types import NDArray64
+from utilities.types import NDArray64
 
-from theory.utilities.functions_jax import bin_y_over_x
+from utilities.functions_jax import bin_y_over_x
 
-from theory.utilities.constants import k_B_meV
-from theory.utilities.constants import G_0_muS
+from utilities.constants import k_B_meV
+from utilities.constants import G_0_muS
 
 
 k_B_meV_jax: Array = jnp.array(k_B_meV)

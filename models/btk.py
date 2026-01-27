@@ -1,12 +1,12 @@
 import numpy as np
 
-from theory.utilities.types import NDArray64
+from utilities.types import NDArray64
 
-from theory.utilities.functions import bin_y_over_x
+from utilities.functions import bin_y_over_x
 
-from theory.utilities.constants import G_0_muS
+from utilities.constants import G_0_muS
 
-from theory.models.bcs import Delta_meV_of_T, f_of_E
+from models.bcs import Delta_meV_of_T, f_of_E
 
 
 def Z_of_tau(tau: float) -> float:

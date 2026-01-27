@@ -1,13 +1,13 @@
 import torch
 import numpy as np
 
-from theory.utilities.constants import V_tol_mV
-from theory.utilities.constants import tau_tol
-from theory.utilities.constants import T_tol_K
-from theory.utilities.constants import Delta_tol_meV
-from theory.utilities.constants import gamma_tol_meV
+from utilities.constants import V_tol_mV
+from utilities.constants import tau_tol
+from utilities.constants import T_tol_K
+from utilities.constants import Delta_tol_meV
+from utilities.constants import gamma_tol_meV
 
-from theory.utilities.types import NDArray64
+from utilities.types import NDArray64
 
 
 # performance binning

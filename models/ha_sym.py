@@ -5,24 +5,24 @@ import logging
 from importlib import reload
 from contextlib import contextmanager
 
-import theory.models.carlosha.ha_sym as ha_sym
+import models.carlosha.ha_sym as ha_sym
 
-from theory.models.bcs import Delta_meV_of_T
+from models.bcs import Delta_meV_of_T
 
-from theory.utilities.types import NDArray64
+from utilities.types import NDArray64
 
-from theory.utilities.functions import cache_hash_sym
-from theory.utilities.functions import cache_hash_nuni
-from theory.utilities.functions import bin_y_over_x
+from utilities.functions import cache_hash_sym
+from utilities.functions import cache_hash_nuni
+from utilities.functions import bin_y_over_x
 
-from theory.utilities.constants import G_0_muS
-from theory.utilities.constants import k_B_meV
+from utilities.constants import G_0_muS
+from utilities.constants import k_B_meV
 
-from theory.utilities.constants import V_tol_mV
-from theory.utilities.constants import tau_tol
-from theory.utilities.constants import T_tol_K
-from theory.utilities.constants import Delta_tol_meV
-from theory.utilities.constants import gamma_tol_meV
+from utilities.constants import V_tol_mV
+from utilities.constants import tau_tol
+from utilities.constants import T_tol_K
+from utilities.constants import Delta_tol_meV
+from utilities.constants import gamma_tol_meV
 
 HOME_DIR = "/Users/oliver/Documents/p5control-bluefors-evaluation"
 sys.path.append(HOME_DIR)

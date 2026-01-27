@@ -4,7 +4,7 @@ from numpy.typing import NDArray
 from scipy.special import jv
 from scipy.interpolate import RegularGridInterpolator
 
-from theory.utilities.constants import h_e_pVs
+from utilities.constants import h_e_pVs
 
 
 def get_I_nA(

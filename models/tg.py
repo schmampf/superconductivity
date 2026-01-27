@@ -31,7 +31,7 @@ from numpy.typing import NDArray
 from scipy.interpolate import RegularGridInterpolator
 from scipy.special import jv
 
-from theory.utilities.constants import h_e_pVs
+from utilities.constants import h_e_pVs
 
 ERROR = "A_mV must be float or array. I_nA must match shape of (A_mV, V_mV)."
 

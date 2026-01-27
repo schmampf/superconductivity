@@ -12,8 +12,8 @@ from jax import config as _jax_config
 import jax.numpy as jnp
 from jax import lax
 
-from theory.utilities.constants import G_0_muS, e, h
-from theory.utilities.types import NDArray64
+from utilities.constants import G_0_muS, e, h
+from utilities.types import NDArray64
 
 # Enable float64 if available (recommended for RSJ phase integration stability).
 # If the installed jaxlib backend does not support x64, JAX will fall back.
