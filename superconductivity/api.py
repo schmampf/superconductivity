@@ -1,3 +1,20 @@
+"""Curated public API.
+
+This module re-exports the functions/constants you most frequently use, so that
+users can do either:
+
+    import superconductivity.api as sc
+    sc.get_I_bcs_nA(...)
+
+or:
+
+    from superconductivity.api import *
+
+The package-level convenience import (`import superconductivity as sc`) is
+implemented in `superconductivity/__init__.py` and forwards missing attributes
+to this module.
+"""
+
 # import from abs
 from .models.abs import get_rho
 from .models.abs import get_E_abs
@@ -46,3 +63,17 @@ from .models.btk import get_I_btk_nA
 
 # import from pat
 from .models.pat import get_I_pat_nA
+
+# import utilities
+from .utilities.constants import G_0_muS
+from .utilities.constants import k_B_meV
+from .utilities.constants import h_e_pVs
+
+from .utilities.functions import bin_y_over_x
+from .utilities.functions import oversample
+
+from .utilities.types import NDArray64
+
+
+# Public API for `from superconductivity.api import *`
+__all__ = [name for name in list(globals().keys()) if not name.startswith("_")]
