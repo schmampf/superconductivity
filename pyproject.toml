@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "superconductivity"
+version = "0.1.0"
+description = "Superconductivity models, utilities, and plotting helpers"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "Oliver Aschenbrenner" },
+]
+
+# Keep core deps minimal; add heavy deps as extras.
+dependencies = [
+  "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+plot = [
+  "matplotlib>=3.7",
+]
+scipy = [
+  "scipy>=1.10",
+]
+jax = [
+  "jax>=0.4",
+]
+# Convenience bundles
+all = [
+  "matplotlib>=3.7",
+  "scipy>=1.10",
+  "jax>=0.4",
+]
+dev = [
+  "pytest>=7.4",
+  "ruff>=0.4",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["superconductivity*"]
+exclude = ["tests*", "docs*", "notebooks*", "examples*", "thesis*", "sonst*", "simulations*", "plotting*", "optimizers*", "old*"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]

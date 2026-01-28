@@ -6,10 +6,25 @@
             "source.fixAll": "explicit"
         }
         },
-        "isort.args": [
-            "--profile",
-            "black"
-        ],
+    "isort.args": [
+        "--profile",
+        "black"
+    ],
+    "black-formatter.args": [
+        "--ipynb"
+    ],
+    "workbench.editorAssociations": {
+        "*.ipynb": "jupyter-notebook"
+    },
+    "notebook.formatOnSave.enabled": true,
+    "notebook.defaultFormatter": "ms-python.black-formatter",
+    "jupyter.openNotebookInTextEditor": false,
+    "files.associations": {
+        "*.ipynb": "json"
+    },
+    "[json]": {
+        "editor.defaultFormatter": "vscode.json-language-features"
+    },
     // === Pylance settings ===
     "python.languageServer": "Pylance",
     "python.analysis.typeCheckingMode": "strict",
