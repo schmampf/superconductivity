@@ -1,13 +1,13 @@
 import numpy as np
 import os
-import sys
 import logging
 from importlib import reload
 from contextlib import contextmanager
 
-import .carlosha.ha_sym as ha_sym
 
-from models.bcs_np import get_Delta_meV
+import superconductivity.models.carlosha.ha_sym as ha_sym
+
+from .bcs_np import get_Delta_meV
 
 from ..utilities.types import NDArray64
 
@@ -24,11 +24,10 @@ from ..utilities.constants import T_tol_K
 from ..utilities.constants import Delta_tol_meV
 from ..utilities.constants import gamma_tol_meV
 
-HOME_DIR = "/Users/oliver/Documents/p5control-bluefors-evaluation"
-sys.path.append(HOME_DIR)
+HOME_DIR = "/Users/oliver/Documents/superconductivity/"
+WORK_DIR = os.path.join(HOME_DIR, "superconductivity/models/carlosha/")
+CACHE_DIR = os.path.join(HOME_DIR, ".cache/ha_sym")
 
-WORK_DIR = os.path.join(HOME_DIR, "theory/models/carlosha/")
-CACHE_DIR = os.path.join(WORK_DIR, ".cache_sym")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 # Configure logging

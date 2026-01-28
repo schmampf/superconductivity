@@ -2,7 +2,6 @@ import io
 import numpy as np
 import os
 import subprocess
-import sys
 
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import as_completed
@@ -24,11 +23,11 @@ from ..utilities.constants import m_max
 from ..utilities.constants import iw
 from ..utilities.constants import nchi
 
-HOME_DIR = "/Users/oliver/Documents/p5control-bluefors-evaluation"
-sys.path.append(HOME_DIR)
-WORK_DIR = os.path.join(HOME_DIR, "theory/models/carlosfcs/")
-CACHE_DIR = os.path.join(WORK_DIR, ".cache")
+HOME_DIR = "/Users/oliver/Documents/superconductivity/"
+WORK_DIR = os.path.join(HOME_DIR, "superconductivity/models/carlosfcs/")
+CACHE_DIR = os.path.join(HOME_DIR, ".cache/fcs_")
 FCS_EXE = os.path.join(WORK_DIR, "fcs")
+
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 

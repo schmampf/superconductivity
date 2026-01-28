@@ -2,14 +2,10 @@ import io
 import numpy as np
 import os
 import subprocess
-import sys
 
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import as_completed
-
-HOME_DIR = "/Users/oliver/Documents/p5control-bluefors-evaluation"
-sys.path.append(HOME_DIR)
 
 from ..utilities.types import NDArray64
 
@@ -28,9 +24,11 @@ from ..utilities.constants import iw
 from ..utilities.constants import nchi
 
 
-WORK_DIR = os.path.join(HOME_DIR, "theory/models/carlosfcs/")
-CACHE_DIR = os.path.join(WORK_DIR, ".cache_pbar")
+HOME_DIR = "/Users/oliver/Documents/superconductivity/"
+WORK_DIR = os.path.join(HOME_DIR, "superconductivity/models/carlosfcs/")
+CACHE_DIR = os.path.join(HOME_DIR, ".cache/fcs_pbar")
 FCS_EXE = os.path.join(WORK_DIR, "fcs")
+
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 
