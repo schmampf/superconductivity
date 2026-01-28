@@ -61,6 +61,13 @@ from .models.btk import get_Z_btk
 from .models.btk import get_AB_btk
 from .models.btk import get_I_btk_nA
 
+# import from ha
+from .models.ha_sym import get_I_ha_sym_nA as get_I_ha_nA
+from .models.ha_asym import get_I_ha_asym_nA
+
+# import from fcs
+from .models.fcs_pbar import get_I_fcs_pbar_nA as get_I_fcs_nA
+
 # import from pat
 from .models.pat import get_I_pat_nA
 

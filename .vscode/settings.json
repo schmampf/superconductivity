@@ -19,9 +19,6 @@
     "notebook.formatOnSave.enabled": true,
     "notebook.defaultFormatter": "ms-python.black-formatter",
     "jupyter.openNotebookInTextEditor": false,
-    "files.associations": {
-        "*.ipynb": "json"
-    },
     "[json]": {
         "editor.defaultFormatter": "vscode.json-language-features"
     },

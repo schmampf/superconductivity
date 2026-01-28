@@ -37,7 +37,12 @@ all = [
 dev = [
   "pytest>=7.4",
   "ruff>=0.4",
+  "black[jupyter]>=24.3",
 ]
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
 
 [tool.setuptools]
 include-package-data = true
