@@ -5,7 +5,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import Figure, Axes
 
-from utilities.types import NDArray64
+from ..utilities.types import NDArray64
 
 Textwidth: float = 4.25279  # in
 Textheight: float = 6.85173  # in
@@ -13,9 +13,11 @@ Textheight: float = 6.85173  # in
 
 Local: str = "/Users/oliver/Documents/superconductivity/thesis/"
 
-Remote = "/Users/oliver/Documents/dissertation/"
+Remote: str = "/Users/oliver/Documents/dissertation/"
 
-plt.style.use(f"{Local}thesisstyle.mplstyle")
+Style: str = "/Users/oliver/Documents/superconductivity/superconductivity/style/"
+
+plt.style.use(f"{Style}thesisstyle.mplstyle")
 
 
 def save_figure(
@@ -65,7 +67,7 @@ def get_ext(
 def get_figure(
     figsize: tuple[float, float] = (1.7, 0.85),
     facecolor: Optional[str] = None,
-    subfigure: bool = False,
+    subfigure: bool = True,
     padding: Optional[tuple[float, float]] = None,
 ):
     if padding is None:

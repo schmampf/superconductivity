@@ -74,6 +74,31 @@ from .utilities.functions import oversample
 
 from .utilities.types import NDArray64
 
+# import styles
+from .style.man import man
+
+from .style.thesislayout import get_ext
+from .style.thesislayout import get_figure
+from .style.thesislayout import theory_layout
+
+from .style.cpd5 import get_color, get_colors
+from .style.cpd5 import (
+    seeblau120,
+    seeblau100,
+    seeblau80,
+    seeblau65,
+    seeblau35,
+    seeblau20,
+    seegrau120,
+    seegrau100,
+    seegrau80,
+    seegrau65,
+    seegrau35,
+    seegrau20,
+)
+
+seeblau = [seeblau120, seeblau100, seeblau65, seeblau35, seeblau20]
+seegrau = [seegrau120, seegrau100, seegrau65, seegrau35, seegrau20]
 
 # Public API for `from superconductivity.api import *`
 __all__ = [name for name in list(globals().keys()) if not name.startswith("_")]
