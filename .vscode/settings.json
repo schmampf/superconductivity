@@ -1,105 +1,12 @@
 {
-    "[python]": {
-        "editor.defaultFormatter": "ms-python.black-formatter",
-        "editor.formatOnSave": true,
-        "editor.codeActionsOnSave": {
-            "source.fixAll": "explicit"
-        }
-        },
-    "isort.args": [
-        "--profile",
-        "black"
-    ],
-    "black-formatter.args": [
-        "--ipynb"
-    ],
-    "workbench.editorAssociations": {
-        "*.ipynb": "jupyter-notebook"
-    },
-    "notebook.formatOnSave.enabled": true,
-    "notebook.defaultFormatter": "ms-python.black-formatter",
-    "jupyter.openNotebookInTextEditor": false,
-    "[json]": {
-        "editor.defaultFormatter": "vscode.json-language-features"
-    },
-    // === Pylance settings ===
-    "python.languageServer": "Pylance",
-    "python.analysis.typeCheckingMode": "strict",
-    "python.analysis.diagnosticSeverityOverrides": {
-        "reportUnknownMemberType": "none"
-    },
-
-    // === Mypy settings ===
-    "mypy.executablePath": "${workspaceFolder}/.venv/bin/mypy",
-    "mypy.args": [
-        "--config-file",
-        "${workspaceFolder}/.vscode/mypy.ini"
-    ],
-
-    // // Optional: disable the deprecated built-in mypy integration to avoid conflicts
-    // "python.linting.mypyEnabled": false,
-
-    "cSpell.words": [
-        "arbu",
-        "colorbar",
-        "imshow",
-        "interp",
-        "meshgrid",
-        "newaxis",
-        "zorder",
-        "popt",
-        "pcov",
-        "perr",
-        "xdata",
-        "ydata",
-        "maxfev",
-        "jaxfit"
-    ],
-    "python-envs.pythonProjects": [],
-} // {
-//   // === Python editor formatting and imports ===
-//   "[python]": {
-//     "editor.defaultFormatter": "ms-python.black-formatter",
-//     "editor.formatOnSave": true,
-//     "editor.codeActionsOnSave": {
-//       "source.fixAll": true
-//     }
-//   },
-//   "isort.args": [
-//     "--profile",
-//     "black"
-//   ],
-
-//   // === Python linting ===
-//   "editor.codeActionsOnSave": {
-//     "source.organizeImports": true
-//   },
-
-//   // === Pylance settings ===
-//   "python.languageServer": "Pylance",
-//   "python.analysis.typeCheckingMode": "strict",
-//   "python.analysis.autoSearchPaths": true,
-//   "python.analysis.useLibraryCodeForTypes": true,
-//   "python.analysis.indexing": true,
-
-
-//   // === Spell check custom words ===
-//   "cSpell.words": [
-//     "adwin",
-//     "arbu",
-//     "Downsample",
-//     "Downsampled",
-//     "downsampling",
-//     "errstate",
-//     "meshgrid",
-//     "nanmax",
-//     "nanmean",
-//     "nans",
-//     "nanstd",
-//     "ndarray",
-//     "newaxis",
-//     "Nyquist",
-//     "polyfit",
-//     "Upsampling"
-//   ]
-// }
+  "editor.formatOnSave": false,
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": true
+    }
+  },
+  "notebook.formatOnSave.enabled": true,
+  "notebook.formatOnCellExecution": true
+}
