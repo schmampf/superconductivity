@@ -16,7 +16,8 @@ from numpy.typing import NDArray
 from scipy.optimize import curve_fit
 from tqdm.auto import tqdm
 
-from ..models.ha_sym import get_I_nA, ha_sym_nonuniform_worker
+from ..models.ha_sym import get_I_ha_sym_nA as get_I_nA
+from ..models.ha_sym import ha_sym_nonuniform_worker
 from ..utilities.constants import G_0_muS
 from ..utilities.types import NDArray64
 from .fit_atomic_contacts_helper import (

@@ -5,3 +5,6 @@ python -m pip install -e .
 source ~/Documents/.venv/bin/activate
 deactivate
 
+git rm -r --cached .
+git add .
+git commit -m "Apply .gitignore (remove tracked ignored files)"
