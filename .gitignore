@@ -27,6 +27,7 @@ models/old/
 models/old_HA/
 old/
 .cache/
+.vscode/
 
 thesis/theory/
 superconductivity.egg-info/
