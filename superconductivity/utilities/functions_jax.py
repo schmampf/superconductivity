@@ -14,15 +14,12 @@ jnp_interp_y_of_x:
     Build a JAX-callable 1D interpolator with linear extrapolation.
 """
 
-import numpy as np
 import jax
 import jax.numpy as jnp
-
+import numpy as np
 from jax import config as _jax_config
 
-from .types import NDArray64
-from .types import JNDArray
-from .types import JInterpolator
+from .types import JInterpolator, JNDArray, NDArray64
 
 _jax_config.update("jax_enable_x64", True)
 

@@ -33,29 +33,27 @@ They are not a substitute for a full circuit model (e.g. frequency-dependent
 embedding impedances, noise, heating, etc.).
 """
 
+# Optional JAX acceleration (used for RSJ sweeps)
+import jax
+import jax.numpy as jnp
 import numpy as np
-
+from jax import config as _jax_config
+from jax import lax
 from tqdm import tqdm
 
-from utilities.cpd5 import NDArray64
+from ..utilities.constants import G_0_muS, e, h, h_e_pVs
+from ..utilities.functions import bin_y_over_x, oversample
+from ..utilities.functions_jax import get_dydx, jnp_interp_y_of_x
+from ..utilities.types import JInterpolator, NDArray64
+from .abs import get_Ic_ab_nA
+from .bcs_jnp import get_I_bcs_jnp_nA as get_I_bcs_nA
+from .fcs_pbar import get_I_fcs_pbar_nA as get_I_fcs_nA
+from .pat import get_I_pamar_nA, get_I_pat_nA
+from .ss import get_I_p_abs_nA
 
-from utilities.constants import G_0_muS
-
-from utilities.functions import bin_y_over_x
-from utilities.functions import oversample
-
-from models.bcs_np import get_I_bcs_jnp_nA as get_I_bcs_nA
-from models.fcs_pbar import get_I_nA as get_I_fcs_nA
-from models.tg import get_I_pat_nA_from_I0 as get_I_pat_nA
-from models.utg import get_I_nA as get_I_utg_nA
-
-from models.abs import get_IC_AB_nA
-from models.shapiro import get_I_p_ABS_nA
-
-
-from models.rsj_jax import Interpolator
-from models.rsj_jax import make_interp_V_QP_mV
-from models.rsj_jax import sim_V_RSJ_mV_jax
+# Enable float64 if available (recommended for RSJ phase integration stability).
+# If the installed jaxlib backend does not support x64, JAX will fall back.
+_jax_config.update("jax_enable_x64", True)
 
 
 def get_I_rsj_nA(
@@ -152,37 +150,43 @@ def get_I_rsj_nA(
     I_BCS_nA = get_I_bcs_nA(
         V_mV=V_bias_mV,
         G_N=G_N,
-        Delta_meV=(Delta_meV, Delta_meV),
         T_K=T_K,
+        Delta_meV=(Delta_meV, Delta_meV),
         gamma_meV=gamma_meV,
     )
     I_PAT_nA = get_I_pat_nA(
-        A_mV=A_bias_mV,
         V_mV=V_bias_mV,
         I_nA=I_BCS_nA,
+        A_mV=A_bias_mV,
         nu_GHz=nu_GHz,
-        N=n_max,
+        n_max=n_max,
+        m=1,
     )
     I_QP_nA = I_PAT_nA
 
     # generate SC
-    I_C_nA = get_IC_AB_nA(Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
+    I_C_nA = get_Ic_ab_nA(Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
     I_p_nA = I_SW * np.array([I_C_nA])
 
     for i, a_bias_nA in enumerate(tqdm(A_bias_nA)):
         I_QP_nA_over, V_bias_mV_over = oversample(I_QP_nA[i, :], V_bias_mV)
         v_QP_mV = bin_y_over_x(I_QP_nA_over, V_bias_mV_over, I_bias_nA)
 
-        interp_V_QP_mV: Interpolator = make_interp_V_QP_mV(
-            I_bias_nA=I_bias_nA,
-            V_QP_mV=v_QP_mV,
-            G_N=G_N,
+        # dydx = get_dydx(
+        #     x=I_bias_nA,
+        #     y=v_QP_mV,
+        # )
+
+        interp_V_QP_mV: JInterpolator = jnp_interp_y_of_x(
+            x=I_bias_nA,
+            y=v_QP_mV,
+            dydx=G_N,
         )
 
         v_mv_mV = sim_V_RSJ_mV_jax(
             I_bias_nA=I_bias_nA,
             A_bias_nA=a_bias_nA,
-            interp_V_QP_mV=interp_V_QP_mV,
+            V_QP_mV=interp_V_QP_mV,
             I_p_nA=I_p_nA,
             nu_GHz=nu_GHz,
             n_periods_total=n_periods_total,
@@ -303,20 +307,19 @@ def get_I_rsj_meso_nA(
             gamma_meV=gamma_meV,
         )
     I_FCS_nA = np.sum(I_FCS_nA, axis=0)
-    I_PAMAR_nA = get_I_utg_nA(
+    I_PAMAR_nA = get_I_pamar_nA(
         V_mV=V_bias_mV,
         A_mV=A_bias_mV,
-        I_nA=I_FCS_nA,
+        I_nA=I_FCS_nA[:, 1:],
         nu_GHz=nu_GHz,
-        N=n_max,
-        M=m_max,
+        n_max=n_max,
+        m_max=m_max,
     )
-    I_PAMAR_nA = np.sum(I_PAMAR_nA[:, :, 1:], axis=2)
     I_QP_nA = I_PAMAR_nA
 
     # generate SC
     if np.shape(I_p_nA) == (0,):
-        I_p_nA = get_I_p_ABS_nA(
+        I_p_nA = get_I_p_abs_nA(
             tau=tau,
             Delta_meV=Delta_meV,
             T_K=T_K,
@@ -328,16 +331,16 @@ def get_I_rsj_meso_nA(
         I_QP_nA_over, V_bias_mV_over = oversample(I_QP_nA[i, :], V_bias_mV)
         v_QP_mV = bin_y_over_x(I_QP_nA_over, V_bias_mV_over, I_bias_nA)
 
-        interp_V_QP_mV: Interpolator = make_interp_V_QP_mV(
-            I_bias_nA=I_bias_nA,
-            V_QP_mV=v_QP_mV,
-            G_N=G_N,
+        interp_V_QP_mV: JInterpolator = jnp_interp_y_of_x(
+            x=I_bias_nA,
+            y=v_QP_mV,
+            dydx=G_N,
         )
 
         v_mv_mV = sim_V_RSJ_mV_jax(
             I_bias_nA=I_bias_nA,
             A_bias_nA=a_bias_nA,
-            interp_V_QP_mV=interp_V_QP_mV,
+            V_QP_mV=interp_V_QP_mV,
             I_p_nA=I_p_nA,
             nu_GHz=nu_GHz,
             n_periods_total=n_periods_total,
@@ -349,3 +352,96 @@ def get_I_rsj_meso_nA(
         I_rsj_nA[i, :] = i_rsj_nA
 
     return np.squeeze(I_rsj_nA)
+
+
+def sim_V_RSJ_mV_jax(
+    I_bias_nA: NDArray64,
+    A_bias_nA: NDArray64,
+    V_QP_mV: JInterpolator,
+    I_p_nA: NDArray64,
+    nu_GHz: float,
+    n_periods_total: int = 500,
+    n_periods_discard: int = 200,
+    n_steps_per_period: int = 200,
+) -> NDArray64:
+    if jax is None or jnp is None or lax is None:
+        raise ImportError(
+            "JAX is not available. Install jax/jaxlib to use sim_V_RSJ_mV_jax."
+        )
+
+    # Convert inputs to JAX arrays and ensure expected ranks.
+    # Users sometimes pass scalars; vmap requires at least 1D inputs.
+    I_bias_nA = jnp.atleast_1d(jnp.asarray(I_bias_nA, dtype=jnp.float64))
+    A_bias_nA = jnp.atleast_1d(jnp.asarray(A_bias_nA, dtype=jnp.float64))
+    I_p_nA = jnp.atleast_1d(jnp.asarray(I_p_nA, dtype=jnp.float64))
+
+    # Precompute time grid
+    dn_steps_per_period = 1.0 / float(n_steps_per_period)
+    n_steps_total = int(n_periods_total * n_steps_per_period)
+    n_steps_discard = int(n_periods_discard * n_steps_per_period)
+
+    omega = 2.0 * np.pi * nu_GHz * 1e9
+    T_s = 1.0 / (nu_GHz * 1e9)
+    dt_s = T_s * dn_steps_per_period
+
+    n = jnp.arange(n_steps_total, dtype=jnp.int32)
+    t = n.astype(jnp.float64) * dt_s
+    sin_omega_t = jnp.sin(omega * t)
+
+    # Josephson relation: dphi/dt = 2eV/h -> phi += (4*pi*e/h) * V * dt
+    dphi_pmV = (4.0 * np.pi * e / h) * dt_s * 1e-3
+    dphi_pmV = h_e_pVs
+
+    # Harmonic indices p = 1..P
+    p = jnp.arange(1, I_p_nA.size + 1, dtype=jnp.float64)
+
+    # ---------------------------------------------------------------------
+    # RSJ integrator for one (I_dc, A_ac)
+    # ---------------------------------------------------------------------
+    def _for_one_A(A_ac_nA: jnp.ndarray) -> jnp.ndarray:
+        # Vectorized over all DC bias points simultaneously.
+        I_dc_nA_vec = I_bias_nA  # shape (n_I,)
+
+        def step(carry, x):
+            phi_vec, sumV_vec, count, k = carry
+            sin_val = x
+
+            # Total bias current at this time for all I_dc
+            I_t_nA_vec = I_dc_nA_vec + A_ac_nA * sin_val
+
+            # Supercurrent for all I_dc: I_s(phi) = sum_p I_p sin(p phi)
+            I_sc_nA_vec = jnp.sum(
+                I_p_nA[:, None] * jnp.sin(p[:, None] * phi_vec[None, :]), axis=0
+            )
+
+            # QP current and corresponding voltage via inverse QP curve
+            I_qp_nA_vec = I_t_nA_vec - I_sc_nA_vec
+            V_mV_vec = V_QP_mV(I_qp_nA_vec)
+
+            # Phase update (Josephson relation) + wrap to (-pi, pi]
+            phi_vec = phi_vec + V_mV_vec * dphi_pmV
+            phi_vec = jnp.mod(phi_vec + jnp.pi, 2.0 * jnp.pi) - jnp.pi
+
+            take = k >= n_steps_discard
+            sumV_vec = sumV_vec + jnp.where(take, V_mV_vec, 0.0)
+            count = count + jnp.where(take, 1.0, 0.0)
+            k = k + 1
+
+            return (phi_vec, sumV_vec, count, k), None
+
+        carry0 = (
+            jnp.zeros_like(I_dc_nA_vec, dtype=jnp.float64),
+            jnp.zeros_like(I_dc_nA_vec, dtype=jnp.float64),
+            jnp.array(0.0, dtype=jnp.float64),
+            jnp.array(0, dtype=jnp.int32),
+        )
+
+        carry_f, _ = lax.scan(step, carry0, sin_omega_t)
+        _, sumV_vec, count, _ = carry_f
+        return sumV_vec / jnp.maximum(count, 1.0)
+
+    # vmap over the AC amplitudes; jit the whole map so compilation happens once per shape.
+    V_avg_mV = jax.jit(jax.vmap(_for_one_A))(A_bias_nA)
+
+    # Return as NumPy array for compatibility with the rest of the file.
+    return np.asarray(V_avg_mV)
