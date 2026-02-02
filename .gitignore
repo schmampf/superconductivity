@@ -33,3 +33,5 @@ superconductivity.egg-info/
 superconductivity/models/carlosha/ha_asym
 superconductivity/models/carlosha/compile
 superconductivity/models/carlosfcs/fcs
+
+*cpython-313-darwin.so
