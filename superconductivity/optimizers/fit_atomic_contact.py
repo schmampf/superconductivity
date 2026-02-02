@@ -2,39 +2,27 @@
 Docstring for theory.optimizers.fit_atomic_contact
 """
 
-# region imports
-from typing import Optional
-from typing import TypedDict
-
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from functools import partial
 from time import time
 
-from functools import partial
-
-import numpy as np
-from numpy.typing import NDArray
+# region imports
+from typing import Optional, TypedDict
 
 import jax.numpy as jnp
-from jax import device_put
-from jax import vmap
-from jax import jit
-from jax import Array
-
-from tqdm.auto import tqdm
+import numpy as np
+from jax import Array, device_put, jit, vmap
+from numpy.typing import NDArray
 from scipy.optimize import curve_fit
+from tqdm.auto import tqdm
 
-from concurrent.futures import ProcessPoolExecutor
-from concurrent.futures import as_completed
-
-from utilities.constants import G_0_muS
-from utilities.types import NDArray64
-
-from models.ha_sym import get_I_nA
-from models.ha_sym import ha_sym_nonuniform_worker
-
-from optimizers.fit_atomic_contacts_helper import (
-    remap_to_nonuniform_centers,
-    generate_constrained_pincodes,
+from ..models.ha_sym import get_I_nA, ha_sym_nonuniform_worker
+from ..utilities.constants import G_0_muS
+from ..utilities.types import NDArray64
+from .fit_atomic_contacts_helper import (
     chi2_for_all,
+    generate_constrained_pincodes,
+    remap_to_nonuniform_centers,
 )
 
 # endregion

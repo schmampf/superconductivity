@@ -8,8 +8,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import curve_fit  # type: ignore
 
-from utilities.types import NDArray64
-from utilities.types import ModelFunction
+from ..utilities.types import ModelFunction, NDArray64
 
 
 def weights_to_sigma(

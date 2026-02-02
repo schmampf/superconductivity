@@ -4,7 +4,6 @@
 *.pyd
 *.npz
 __pycache__/
-utilities/__pycache__/
 
 # macOS system files
 *.DS_Store
@@ -26,10 +25,11 @@ utilities/__pycache__/
 sonst/
 models/old/
 models/old_HA/
+old/
+.cache/
 
 thesis/theory/
 superconductivity.egg-info/
-
 superconductivity/models/carlosha/ha_asym
 superconductivity/models/carlosha/compile
 superconductivity/models/carlosfcs/fcs

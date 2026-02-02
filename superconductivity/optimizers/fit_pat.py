@@ -7,10 +7,9 @@ from typing import Optional, TypedDict
 import numpy as np
 from numpy.typing import NDArray
 
-from optimizers.models import get_model
-from optimizers.optimizers import optimizers
-
-from utilities.types import ModelFunction, ModelType, NDArray64, ParameterType
+from ..utilities.types import ModelFunction, ModelType, NDArray64, ParameterType
+from .models import get_model
+from .optimizers import optimizers
 
 
 class SolutionDict(TypedDict):
@@ -124,7 +123,10 @@ def fit_I_nA(
     lower = lower_full[free_mask]
     upper = upper_full[free_mask]
 
-    def fixed_function(V_mV: NDArray64, *free_params: tuple[float, ...]) -> NDArray64:
+    def fixed_function(
+        V_mV: NDArray64,
+        *free_params: tuple[float, ...],
+    ) -> NDArray64:
         full_params = guess_full.copy()
         full_params[free_mask] = free_params
         return function(V_mV, *full_params[parameter_mask])
@@ -184,4 +186,7 @@ def fit_I_nA(
         "nu_GHz": popt_full[5],
     }
 
+    return solution
+
+    return solution
     return solution

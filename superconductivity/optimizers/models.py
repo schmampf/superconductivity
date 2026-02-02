@@ -10,11 +10,9 @@ import numpy as np
 from jax import Array, jit
 from numpy.typing import NDArray
 
-from models.tg import get_I_pat_nA_from_I0_A0
-from models.bcs_jnp import G_0_muS_jax, currents, thermal_energy_gap
-
-from utilities.types import NDArray64
-from utilities.types import ModelType
+from ..models.bcs_jnp import G_0_muS_jax, currents, thermal_energy_gap
+from ..models.pat import get_I_pat_nA as get_I_pat_nA_from_I0_A0
+from ..utilities.types import ModelType, NDArray64
 
 jax.config.update("jax_enable_x64", True)
 

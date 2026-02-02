@@ -1,15 +1,13 @@
-from typing import Literal
 from collections.abc import Callable
-
-import numpy as np
-from numpy.typing import NDArray
+from typing import Literal
 
 import jax.numpy as jnp
-from jax import Array
-from jax import device_put
+import numpy as np
+from jax import Array, device_put
+from numpy.typing import NDArray
 
-from utilities.types import NDArray64
-from utilities.constants import G_0_muS
+from ..utilities.constants import G_0_muS
+from ..utilities.types import NDArray64
 
 FMap = Callable[[Array], Array]
 

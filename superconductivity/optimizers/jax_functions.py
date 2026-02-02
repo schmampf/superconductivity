@@ -1,10 +1,10 @@
 import jax.numpy as jnp
 import numpy as np
-from numpy.typing import NDArray
-from jax import Array, jit, jacfwd
+from jax import Array, jacfwd, jit
 from jaxfit import CurveFit
+from numpy.typing import NDArray
 
-from models.bcs_jnp import G_0_muS_jax, currents, thermal_energy_gap
+from ..models.bcs_jnp import G_0_muS_jax, currents, thermal_energy_gap
 
 # importlib.reload(sys.modules["theory.models.dynes_jnp"])
 

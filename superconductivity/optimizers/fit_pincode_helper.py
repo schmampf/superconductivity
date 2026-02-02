@@ -1,18 +1,14 @@
-from itertools import combinations_with_replacement
-from functools import partial
 from collections.abc import Callable
-
-import numpy as np
-from numpy.typing import NDArray
+from functools import partial
+from itertools import combinations_with_replacement
 
 import jax.numpy as jnp
-from jax import device_put
-from jax import vmap
-from jax import jit
-from jax import Array
+import numpy as np
+from jax import Array, device_put, jit, vmap
+from numpy.typing import NDArray
 
-from utilities.types import NDArray64
-from utilities.constants import G_0_muS
+from ..utilities.constants import G_0_muS
+from ..utilities.types import NDArray64
 
 FMap = Callable[[Array], Array]
 

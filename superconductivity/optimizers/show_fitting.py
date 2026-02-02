@@ -1,10 +1,9 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
-from utilities.constants import G_0_muS, e, h
-from utilities.plotting.cpd4 import colors, cmap
-
-from optimizers.fit_pat import NDArray64, SolutionDict
+from ..optimizers.fit_pat import NDArray64, SolutionDict
+from ..style.cpd4 import cmap, colors
+from ..utilities.constants import G_0_muS, e, h
 
 
 def show_fitting(solution: SolutionDict, num: int = 0):

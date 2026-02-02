@@ -1,18 +1,13 @@
+import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.pyplot import Axes, Figure
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from numpy.typing import NDArray
 
-import matplotlib.pyplot as plt
-from matplotlib.pyplot import Figure
-from matplotlib.pyplot import Axes
-from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-
-from utilities.plotting.cpd4 import cmap, colors
-
-from utilities.constants import G_0_muS
-from utilities.types import NDArray64
-
-from optimizers.fit_atomic_contact import SolutionDict
-from optimizers.fit_atomic_contact import gaussian
+from ..style.cpd4 import cmap, colors
+from ..utilities.constants import G_0_muS
+from ..utilities.types import NDArray64
+from .fit_atomic_contact import SolutionDict, gaussian
 
 
 def plot_atomic_contact(
