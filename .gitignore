@@ -29,7 +29,6 @@ old/
 .cache/
 .vscode/
 
-thesis/theory/
 superconductivity.egg-info/
 superconductivity/models/carlosha/ha_asym
 superconductivity/models/carlosha/compile
