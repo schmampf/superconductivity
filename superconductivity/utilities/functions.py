@@ -1,12 +1,7 @@
-import torch
 import numpy as np
+import torch
 
-from .constants import V_tol_mV
-from .constants import tau_tol
-from .constants import T_tol_K
-from .constants import Delta_tol_meV
-from .constants import gamma_tol_meV
-
+from .constants import Delta_tol_meV, T_tol_K, V_tol_mV, gamma_tol_meV, tau_tol
 from .types import NDArray64
 
 
