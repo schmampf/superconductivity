@@ -212,7 +212,6 @@ These figures are exported to `thesis/theory/` (PNG) and embedded here to provid
 
 - The repo follows a "curated API" approach: add new stable user-facing callables to `superconductivity/api.py`.
 - Keep examples minimal and executable; if a new model is added, add a small regression test.
-- If you add new theory figures, export them as PNG into `thesis/theory/` and embed them above.
 
 ## License
 
