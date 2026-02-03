@@ -118,27 +118,25 @@ These figures are exported to `thesis/theory/` (PNG) and embedded here to provid
 ### Microscopic / tunneling / PAT
 
 <p align="center">
-  <img src="thesis/theory/micro/dos.png" width="32%" />
-  <img src="thesis/theory/micro/gap.png" width="32%" />
-  <img src="thesis/theory/micro/fermi.png" width="32%" />
+  <img src="thesis/theory/micro/dos.png" height="50%" />
+  <img src="thesis/theory/micro/gap.png" height="50%" />
+  <img src="thesis/theory/micro/fermi.png" height="50%" />
 </p>
 
 <p align="center">
-  <img src="thesis/theory/micro/tunnel-iv-T.png" width="32%" />
-  <img src="thesis/theory/micro/tunnel-didv-gamma.png" width="32%" />
-  <img src="thesis/theory/micro/pat-iv.png" width="32%" />
+  <img src="thesis/theory/micro/tunnel-iv-T.png" width="50%" />
+  <img src="thesis/theory/micro/tunnel-didv-gamma.png" width="50%" />
+  <img src="thesis/theory/micro/pat-iv.png" width="50%" />
+  <img src="thesis/theory/micro/pat-didv.png" width="50%" />
 </p>
 
 <p align="center">
-  <img src="thesis/theory/micro/pat-didv.png" width="32%" />
 </p>
 
 ### Josephson / RSJ / Shapiro
 
 <p align="center">
-  <img src="thesis/theory/macro/josephson-iphi.png" width="32%" />
-  <img src="thesis/theory/macro/josephson-iv.png" width="32%" />
-  <img src="thesis/theory/macro/rcsj-iv.png" width="32%" />
+  <img src="thesis/theory/macro/u-phi.png" width="100%" />
 </p>
 
 <p align="center">
@@ -150,19 +148,20 @@ These figures are exported to `thesis/theory/` (PNG) and embedded here to provid
 ### Mesoscopic / ABS / BTK / MAR
 
 <p align="center">
-  <img src="thesis/theory/meso/abs-Ephi.png" width="32%" />
-  <img src="thesis/theory/meso/abs-Iphi.png" width="32%" />
-  <img src="thesis/theory/meso/ko-cpr.png" width="32%" />
+  <img src="thesis/theory/meso/abs-Ephi.png" width="50%" />
+  <img src="thesis/theory/meso/abs-Iphi.png" width="50%" />
+  <img src="thesis/theory/meso/ko-cpr.png" width="50%" />
+  <img src="thesis/theory/meso/ko-ic.png" width="50%" />
 </p>
 
 <p align="center">
-  <img src="thesis/theory/meso/btk-iv.png" width="32%" />
-  <img src="thesis/theory/meso/btk-didv.png" width="32%" />
+  <img src="thesis/theory/meso/btk-iv.png" width="50%" />
+  <img src="thesis/theory/meso/btk-didv.png" width="50%" />
+</p>
+
+<p align="center">
   <img src="thesis/theory/meso/ha-iv.png" width="32%" />
-</p>
-
-<p align="center">
-  <img src="thesis/theory/meso/fcs-iv-m-inv.png" width="32%" />
+  <img src="thesis/theory/meso/fcs-iv-m-inv.png" width="100%" />
 </p>
 
 ### Microwave notation helpers / macro relations
@@ -173,10 +172,6 @@ These figures are exported to `thesis/theory/` (PNG) and embedded here to provid
   <img src="thesis/theory/basics/mw-Jn.png" width="32%" />
 </p>
 
-<p align="center">
-  <img src="thesis/theory/basics/critical-current.png" width="32%" />
-  <img src="thesis/theory/basics/u-phi.png" width="32%" />
-</p>
 
 ---
 
