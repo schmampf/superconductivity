@@ -122,13 +122,6 @@ These figures are exported to `thesis/theory/` (PNG) and embedded here to provid
   <img src="thesis/theory/micro/gap.png" width="30%" />
 </p>
 
-#### Density of States and Fermi Function
-<p align="center">
-  <img src="thesis/theory/micro/dos.png" height="32%" />
-  <img src="thesis/theory/micro/fermi.png" height="32%" />
-  <img src="thesis/theory/micro/fermi-kernel.png" height="32%" />
-</p>
-
 #### Tunnel Current (BCS)
 <p align="center">
   <img src="thesis/theory/micro/tunnel-iv-T.png" width="32%" />
@@ -178,7 +171,7 @@ These figures are exported to `thesis/theory/` (PNG) and embedded here to provid
 
 <p align="center">
   <img src="thesis/theory/meso/ko-cpr.png" width="32%" />
-  <img src="thesis/theory/meso/ko-Ic.png" width="32%" />
+  <img src="thesis/theory/meso/ko-ic.png" width="32%" />
 </p>
 
 #### Multiple Andreev Reflection (MAR)
