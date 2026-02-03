@@ -115,70 +115,90 @@ Utilities/constants:
 
 These figures are exported to `thesis/theory/` (PNG) and embedded here to provide a quick visual index of the models implemented in the package.
 
-### Microscopic Superconductivity
+### Microscopic Superconductivity (BCS)
 
-## Superconducting Gap
+#### Superconducting Gap
 <p align="center">
   <img src="thesis/theory/micro/gap.png" width="30%" />
 </p>
 
-## Density of States and Fermi Function
+#### Density of States and Fermi Function
 <p align="center">
-  <img src="thesis/theory/micro/dos.png" width="32%" />
-  <img src="thesis/theory/micro/gap.png" width="32%" />
-  <img src="thesis/theory/micro/fermi.png" width="32%" />
+  <img src="thesis/theory/micro/dos.png" height="32%" />
+  <img src="thesis/theory/micro/fermi.png" height="32%" />
+  <img src="thesis/theory/micro/fermi-kernel.png" height="32%" />
 </p>
 
+#### Tunnel Current (BCS)
 <p align="center">
   <img src="thesis/theory/micro/tunnel-iv-T.png" width="32%" />
-  <img src="thesis/theory/micro/tunnel-didv-gamma.png" width="32%" />
-  <img src="thesis/theory/micro/pat-iv.png" width="32%" />
+  <img src="thesis/theory/micro/tunnel-didv-T.png" width="32%" />
 </p>
 
 <p align="center">
+  <img src="thesis/theory/micro/tunnel-iv-gamma.png" width="32%" />
+  <img src="thesis/theory/micro/tunnel-didv-gamma.png" width="32%" />
+</p>
+
+#### Photon-Assisted Tunneling (PAT)
+<p align="center">
+  <img src="thesis/theory/micro/pat-iv.png" width="32%" />
   <img src="thesis/theory/micro/pat-didv.png" width="32%" />
 </p>
 
 
-### Josephson
+### Macroscopic Superconductivity (Josephson)
 
-## RCSJ Tilted Washboard Potential
+#### RCSJ Tilted Washboard Potential
 <p align="center">
   <img src="thesis/theory/macro/u-phi.png" width="60%" />
 </p>
 
-## Shapiro Steps in RCSJ (under- / over damped)
+#### Shapiro Steps in RCSJ (under- / over damped)
 <p align="center">
-  <img src="thesis/theory/macro/josephson-iphi.png" width="32%" />
-  <img src="thesis/theory/macro/josephson-iv.png" width="32%" />
-  <img src="thesis/theory/macro/rcsj-iv.png" width="32%" />
+  <img src="thesis/theory/macro/shapiro-under.png" width="32%" />
+  <img src="thesis/theory/macro/shapiro-over.png" width="32%" />
 </p>
 
-### Mesoscopic
+### Mesoscopic Superconductivity
 
-## Andreev Reflections - Blonder-Tinkham-Klappwik
+#### Andreev Reflections - Blonder-Tinkham-Klappwik
 
 <p align="center">
   <img src="thesis/theory/meso/btk-iv.png" width="30%" />
   <img src="thesis/theory/meso/btk-didv.png" width="30%" />
 </p>
 
-## Andreev Bound States
+#### Andreev Bound States
 
 <p align="center">
   <img src="thesis/theory/meso/abs-Ephi.png" width="32%" />
   <img src="thesis/theory/meso/abs-Iphi.png" width="32%" />
+</p>
+
+<p align="center">
   <img src="thesis/theory/meso/ko-cpr.png" width="32%" />
+  <img src="thesis/theory/meso/ko-Ic.png" width="32%" />
 </p>
 
+#### Multiple Andreev Reflection (MAR)
+
+##### Hamiltonian Approach (HA)
+
 <p align="center">
-  <img src="thesis/theory/meso/btk-iv.png" width="32%" />
-  <img src="thesis/theory/meso/btk-didv.png" width="32%" />
   <img src="thesis/theory/meso/ha-iv.png" width="32%" />
+  <img src="thesis/theory/meso/ha-didv.png" width="32%" />
+</p>
+<p align="center">
+  <img src="thesis/theory/meso/ha-iv-inv.png" width="32%" />
+  <img src="thesis/theory/meso/ha-didv-inv.png" width="32%" />
 </p>
 
+##### Full Counting Statistics (FCS)
+
 <p align="center">
-  <img src="thesis/theory/meso/fcs-iv-m-inv.png" width="32%" />
+  <img src="thesis/theory/meso/fcs-iv-m-inv.png" width="60%" />
+  <img src="thesis/theory/meso/fcs-didv-m-inv.png" width="60%" />
 </p>
 
 ### Microwave notation
@@ -189,8 +209,8 @@ These figures are exported to `thesis/theory/` (PNG) and embedded here to provid
 </p>
 
 <p align="center">
-  <img src="thesis/theory/basics/critical-current.png" width="32%" />
-  <img src="thesis/theory/basics/u-phi.png" width="32%" />
+  <img src="thesis/theory/basics/mw-ReU.png" width="32%" />
+  <img src="thesis/theory/basics/mw-Jn.png" width="32%" />
 </p>
 
 ---
