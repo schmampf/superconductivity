@@ -35,7 +35,7 @@ def save_figure(
     # save figure
     if title is not None:
         pgf_dir = Path(path_pgf).expanduser().resolve()
-        pdf_dir = Path(path_pdf).expanduser().resolve()
+        png_dir = Path(path_pdf).expanduser().resolve()
 
         # Allow `title` to include subfolders (e.g. "figs/foo")
         # and/or a suffix.
@@ -43,13 +43,13 @@ def save_figure(
         t = t.with_suffix("") if t.suffix else t
 
         out_pgf = (pgf_dir / t).with_suffix(".pgf")
-        out_pdf = (pdf_dir / t).with_suffix(".pdf")
+        out_png = (png_dir / t).with_suffix(".png")
 
         out_pgf.parent.mkdir(parents=True, exist_ok=True)
-        out_pdf.parent.mkdir(parents=True, exist_ok=True)
+        out_png.parent.mkdir(parents=True, exist_ok=True)
 
         fig.savefig(out_pgf)
-        fig.savefig(out_pdf)
+        fig.savefig(out_png)
 
 
 def get_ext(
