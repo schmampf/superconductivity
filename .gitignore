@@ -17,6 +17,7 @@ __pycache__/
 # HDF5 and other data files (if applicable)
 *.dat
 *.pickle
+*.zip
 
 # specific files
 *MCBJ_seeblau_ultra.png
@@ -35,3 +36,8 @@ superconductivity/models/carlosha/compile
 superconductivity/models/carlosfcs/fcs
 
 *cpython-313-darwin.so
+
+# Remove files from repo, that are now ignored.
+# git rm -r --cached .
+# git add .
+# git commit -m "Apply .gitignore (remove tracked ignored files)"
