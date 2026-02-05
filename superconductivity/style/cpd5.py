@@ -62,17 +62,12 @@ Version
 Oliver Aschenbrenner
 """
 
-from typing import Dict
-from typing import TypeAlias
-from typing import Sequence
+from typing import Dict, Sequence, TypeAlias
 
 import numpy as np
-from numpy.typing import NDArray
-
-from matplotlib.colors import ListedColormap
-from matplotlib.colors import to_rgba
-
 from colorspacious import cspace_convert
+from matplotlib.colors import ListedColormap, to_rgba
+from numpy.typing import NDArray
 
 NDArray64: TypeAlias = NDArray[np.float64]
 
