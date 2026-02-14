@@ -25,7 +25,7 @@ _jax_config.update("jax_enable_x64", True)
 
 
 @jax.jit
-def bin_y_over_x(
+def jbin_y_over_x(
     x: JNDArray,
     y: JNDArray,
     x_bins: JNDArray,
@@ -74,7 +74,7 @@ def bin_y_over_x(
     return _sum / _count
 
 
-def jnp_interp_y_of_x(
+def jinterp_y_of_x(
     x: NDArray64,
     y: NDArray64,
     dydx: float,

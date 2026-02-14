@@ -1,16 +1,10 @@
-import numpy as np
-
 import jax
 import jax.numpy as jnp
+import numpy as np
 
-from ..utilities.types import NDArray64
-from ..utilities.types import JNDArray
-
-from ..utilities.functions_jax import bin_y_over_x
-
-from ..utilities.constants import k_B_meV
-from ..utilities.constants import G_0_muS
-
+from ..utilities.constants import G_0_muS, k_B_meV
+from ..utilities.functions_jax import jbin_y_over_x as bin_y_over_x
+from ..utilities.types import JNDArray, NDArray64
 
 k_B_meV_jax: JNDArray = jnp.array(k_B_meV)
 G_0_muS_jax: JNDArray = jnp.array(G_0_muS)

@@ -6,7 +6,7 @@ import numpy as np
 from scipy.special import jv
 
 from ..utilities.constants import h_e_pVs
-from ..utilities.functions_jax import get_dydx, jnp_interp_y_of_x
+from ..utilities.functions_jax import get_dydx, jinterp_y_of_x
 from ..utilities.types import JInterpolator, JNDArray, NDArray64
 
 
@@ -33,7 +33,7 @@ def get_I_pat_nA(
     G_N_muS: float = np.mean(np.stack(get_dydx(x=V_mV, y=I_nA)), axis=0)
 
     # Build interpolator once per trace; ensure V is sorted for jnp.interp
-    I_i_nA: JInterpolator = jnp_interp_y_of_x(x=V_mV, y=I_nA, dydx=G_N_muS)
+    I_i_nA: JInterpolator = jinterp_y_of_x(x=V_mV, y=I_nA, dydx=G_N_muS)
 
     # Voltage shifts  # (Nn,)
     V_nm_mV: NDArray64 = (n / m) * nu_mV

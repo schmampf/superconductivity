@@ -24,7 +24,6 @@ h_e_fVs: float = h_e_Vs * 1e15
 # G_0_muS = 77.48091729863648 µS
 # k_B_meV = 0.08617333262145178 mV/K
 
-
 # parameter tolerances
 V_tol_mV: int = 6  # meV
 tau_tol: int = 4

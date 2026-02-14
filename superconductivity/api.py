@@ -46,11 +46,8 @@ from .models.abs import (
     get_rho,
 )
 
-# imports from bcs_jnp
-from .models.bcs_jnp import get_I_bcs_jnp_nA as get_I_bcs_nA
-
 # imports from bcs
-from .models.bcs_np import get_Delta_meV, get_dos, get_f, get_T_c_K
+from .models.bcs_np import get_Delta_meV, get_dos, get_f, get_I_bcs_nA, get_T_c_K
 
 # imports from btk
 from .models.btk import get_AB_btk, get_I_btk_nA, get_Z_btk
@@ -64,9 +61,6 @@ from .models.ha_sym import get_I_ha_sym_nA as get_I_ha_nA
 
 # import from pat
 from .models.pat import get_I_pat_nA
-
-# import from rsj
-from .models.rsj import get_I_rsj_meso_nA, get_I_rsj_nA
 
 # import from ss
 from .models.ss import get_I_p_abs_nA
@@ -96,8 +90,12 @@ from .style.thesislayout import get_ext, get_figure, map_layout, theory_layout
 # import utilities
 from .utilities.constants import G_0_muS, h_e_pVs, k_B_meV
 from .utilities.functions import bin_y_over_x, oversample
-from .utilities.functions_jax import jnp_interp_y_of_x
+from .utilities.functions_jax import jinterp_y_of_x
 from .utilities.types import NDArray64
+
+# import from rsj
+# from .models.rsj_old import get_I_rsj_meso_nA, get_I_rsj_nA
+
 
 seeblau = [seeblau120, seeblau100, seeblau65, seeblau35, seeblau20]
 seegrau = [seegrau120, seegrau100, seegrau65, seegrau35, seegrau20]

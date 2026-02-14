@@ -48,8 +48,17 @@ def save_figure(
         out_pgf.parent.mkdir(parents=True, exist_ok=True)
         out_png.parent.mkdir(parents=True, exist_ok=True)
 
+        # PGF for LaTeX (keep normal)
         fig.savefig(out_pgf)
-        fig.savefig(out_png)
+
+        # PNG for slides/web: transparent background (no white fill)
+        fig.savefig(
+            out_png,
+            dpi=600,
+            transparent=True,
+            facecolor="none",
+            edgecolor="none",
+        )
 
 
 def get_ext(
