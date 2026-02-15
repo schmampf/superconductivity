@@ -59,8 +59,16 @@ def fit_I_nA(
     # Define Parameter
     G_N_0, (G_N_lower, G_N_upper), G_N_fixed = G_N
     T_K_0, (T_K_lower, T_K_upper), T_K_fixed = T_K
-    Delta_meV_0, (Delta_meV_lower, Delta_meV_upper), Delta_meV_fixed = Delta_meV
-    gamma_meV_0, (gamma_meV_lower, gamma_meV_upper), gamma_meV_fixed = gamma_meV
+    (
+        Delta_meV_0,
+        (Delta_meV_lower, Delta_meV_upper),
+        Delta_meV_fixed,
+    ) = Delta_meV
+    (
+        gamma_meV_0,
+        (gamma_meV_lower, gamma_meV_upper),
+        gamma_meV_fixed,
+    ) = gamma_meV
     A_mV_0, (A_mV_lower, A_mV_upper), A_mV_fixed = A_mV
     nu_GHz_0, (nu_GHz_lower, nu_GHz_upper), nu_GHz_fixed = nu_GHz
 
@@ -180,13 +188,10 @@ def fit_I_nA(
         "maxfev": maxfev,
         "G_N": popt_full[0],
         "T_K": popt_full[1],
-        "Delta_meV": popt_full[2],
-        "gamma_meV": popt_full[3],
+        "Delta_mV": popt_full[2],
+        "gamma_mV": popt_full[3],
         "A_mV": popt_full[4],
         "nu_GHz": popt_full[5],
     }
 
-    return solution
-
-    return solution
     return solution

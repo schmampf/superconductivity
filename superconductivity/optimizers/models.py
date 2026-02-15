@@ -10,8 +10,8 @@ import numpy as np
 from jax import Array, jit
 from numpy.typing import NDArray
 
-from ..models.bcs_jnp import G_0_muS_jax, currents, thermal_energy_gap
-from ..models.pat import get_I_pat_nA as get_I_pat_nA_from_I0_A0
+from ..models.bcs_jnp import G_0_muS_jax, get_Delta_jnp_meV, get_i_jnp_meV
+from ..models.pat import get_I_pat_nA
 from ..utilities.types import ModelType, NDArray64
 
 jax.config.update("jax_enable_x64", True)
@@ -38,15 +38,26 @@ def get_model(
         Delta_mV: Array,
         gamma_meV: Array,
     ) -> Array:
-        Delta_T_mV: Array = thermal_energy_gap(Delta_meV=Delta_mV, T_K=T_K)
-        I_mV: Array = currents(
-            V_meV=V_mV,
-            E_meV=E_mV_jax,
-            T_K=T_K,
-            Delta_meV=Delta_T_mV,
-            gamma_meV=gamma_meV,
+        current_vectorized = jax.vmap(
+            lambda V_mV: get_i_jnp_meV(
+                V_meV=V_mV,
+                E_meV=E_mV_jax,
+                Delta_1_meV=Delta_mV,
+                Delta_2_meV=Delta_mV,
+                T_K=T_K,
+                gamma_1_meV=gamma_meV,
+                gamma_2_meV=gamma_meV,
+            ),
+            in_axes=0,
         )
-        I_nA: Array = I_mV * G_N * G_0_muS_jax
+        I_meV = jax.lax.cond(
+            jnp.all(Delta_mV == 0.0),
+            lambda _: V_mV,
+            lambda _: current_vectorized(V_mV),
+            operand=None,
+        )
+
+        I_nA = I_meV * G_N * G_0_muS_jax
         return I_nA
 
     match model:
@@ -59,11 +70,15 @@ def get_model(
                 Delta_mV: float,
                 gamma_meV: float,
             ) -> NDArray64:
+                Delta_T_meV: Array = get_Delta_jnp_meV(
+                    Delta_meV=jnp.array(Delta_mV, dtype=jnp.float64),
+                    T_K=jnp.array(T_K, dtype=jnp.float64),
+                )
                 I_nA_jax: Array = get_dynes_jnp(
                     V_mV=jnp.array(V_mV, dtype=jnp.float64),
                     G_N=jnp.array(G_N, dtype=jnp.float64),
                     T_K=jnp.array(T_K, dtype=jnp.float64),
-                    Delta_mV=jnp.array(Delta_mV, dtype=jnp.float64),
+                    Delta_mV=jnp.array(Delta_T_meV, dtype=jnp.float64),
                     gamma_meV=jnp.array(gamma_meV, dtype=jnp.float64),
                 )
                 I_nA: NDArray64 = np.array(I_nA_jax, dtype=np.float64)
@@ -88,20 +103,25 @@ def get_model(
             ) -> NDArray64:
                 V_mV_jax = jnp.array(V_mV, dtype=jnp.float64)
 
+                Delta_T_meV: Array = get_Delta_jnp_meV(
+                    Delta_meV=jnp.array(Delta_mV, dtype=jnp.float64),
+                    T_K=jnp.array(T_K, dtype=jnp.float64),
+                )
+
                 I_dynes_jax: Array = get_dynes_jnp(
                     V_mV=V_mV_jax,
                     G_N=jnp.array(G_N, dtype=jnp.float64),
                     T_K=jnp.array(T_K, dtype=jnp.float64),
-                    Delta_mV=jnp.array(Delta_mV, dtype=jnp.float64),
+                    Delta_mV=jnp.array(Delta_T_meV, dtype=jnp.float64),
                     gamma_meV=jnp.array(gamma_meV, dtype=jnp.float64),
                 )
                 I_dynes: NDArray64 = np.array(I_dynes_jax, dtype=np.float64)
-                I_dynes_pat: NDArray64 = get_I_pat_nA_from_I0_A0(
+                I_dynes_pat: NDArray64 = get_I_pat_nA(
                     V_mV=V_mV,
                     I_nA=I_dynes,
                     A_mV=A_mV,
                     nu_GHz=nu_GHz,
-                    N=N,
+                    n_max=N,
                 )
                 return I_dynes_pat
 

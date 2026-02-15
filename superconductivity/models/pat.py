@@ -13,17 +13,32 @@ from ..utilities.types import JInterpolator, JNDArray, NDArray64
 def get_I_pat_nA(
     V_mV: NDArray64,  # (Nv,)
     I_nA: NDArray64,  # (Nv,)
-    A_mV: NDArray64,  # (Na,)
+    A_mV: NDArray64 | float,  # (Na,) or scalar
     nu_GHz: float = 10.0,
     n_max: int = 100,
     m: int = 1,
-) -> NDArray64:  # (Na, Nv)
+) -> NDArray64:  # (Na, Nv) or (Nv,) if A_mV is scalar
+    """Photon-assisted tunneling (Tien–Gordon).
+
+    Returns I_PAT(A, V). Internally supports either a scalar drive amplitude
+    `A_mV` or a 1D array of amplitudes.
+
+    Output shape:
+      - if `A_mV` is scalar -> (Nv,)
+      - if `A_mV` is array  -> (Na, Nv)
+
+    Assumes `V_mV` is sorted ascending for the interpolation.
     """
-    Returns I_PAT[A, V] with shape (Na, Nv).
-    Assumes V_mV is sorted ascending for the interpolation.
-    """
-    nu_mV: float = nu_GHz * h_e_pVs
-    a_m: NDArray64 = m * A_mV / nu_mV  # (Na,)
+    V_mV = np.asarray(V_mV, dtype=np.float64)
+    I_nA = np.asarray(I_nA, dtype=np.float64)
+
+    # `curve_fit` will pass scalars for free parameters; support scalar A_mV.
+    A_mV_arr = np.asarray(A_mV, dtype=np.float64)
+    scalar_A = A_mV_arr.ndim == 0
+    A_mV_1d: NDArray64 = np.atleast_1d(A_mV_arr)  # (Na,)
+
+    nu_mV: float = float(nu_GHz) * float(h_e_pVs)
+    a_m: NDArray64 = m * A_mV_1d / nu_mV  # (Na,)
 
     # Build up to order n
     n = np.arange(-n_max, n_max + 1, dtype=np.int32)  # (Nn,)
@@ -57,6 +72,11 @@ def get_I_pat_nA(
 
     I_pat: NDArray64 = np.asarray(I_pat_j, dtype=np.float64)
 
+    # If A was provided as scalar, return a 1D trace so optimizers like
+    # `scipy.optimize.curve_fit` receive shape (Nv,) instead of (1, Nv).
+    if scalar_A:
+        return I_pat[0]
+
     return I_pat
 
 
@@ -88,6 +108,10 @@ def get_I_pamar_nA(
     n_max: int = 100,
     m_max: int = 10,
 ) -> NDArray64:  # (Na, Nv)
+
+    V_mV = np.atleast_1d(V_mV, dtype=np.float64)
+    I_nA = np.atleast_1d(I_nA, dtype=np.float64)
+    A_mV = np.atleast_1d(A_mV, dtype=np.float64)
 
     m = np.arange(1, m_max + 1, 1)
     I_pat_m_nA = np.zeros((m.shape[0], A_mV.shape[0], V_mV.shape[0]))
