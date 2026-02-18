@@ -5,9 +5,9 @@ import jax.numpy as jnp
 import numpy as np
 from scipy.special import jv
 
-from ..utilities.constants import h_e_pVs
-from ..utilities.functions_jax import get_dydx, jinterp_y_of_x
-from ..utilities.types import JInterpolator, JNDArray, NDArray64
+from superconductivity.utilities.constants import h_e_pVs
+from superconductivity.utilities.functions_jax import get_dydx, jinterp_y_of_x
+from superconductivity.utilities.types import JInterpolator, JNDArray, NDArray64
 
 
 def get_I_pat_nA(
@@ -131,4 +131,5 @@ def get_I_pamar_nA(
             n_max=n_max,
         )
     I_pamar_nA = np.sum(I_pat_m_nA, axis=0)
+    return I_pamar_nA
     return I_pamar_nA
