@@ -274,6 +274,8 @@ def plot_atomic_contact(
         fontsize=8, markerscale=0.7, handlelength=1.2, labelspacing=0.2, borderpad=0.2
     )
 
+    ax_dIdV_fit.set_ylim((0, 3 * Tau_max))
+
     # region T, Delta, gamma
     parameter: list[tuple[Axes, NDArray64, NDArray64, str]] = [
         (
