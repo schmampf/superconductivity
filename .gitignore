@@ -18,6 +18,7 @@ __pycache__/
 *.dat
 *.pickle
 *.zip
+*.stl
 
 # specific files
 *MCBJ_seeblau_ultra.png
