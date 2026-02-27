@@ -6,7 +6,7 @@ Public API:
 - build_worlds: build worlds from datasets/ and optionally deploy
 """
 
-from .build_worlds import build_worlds
+from .build_worlds import build_worlds, clean_worlds
 from .dataset import export_dataset
 
-__all__ = ["export_dataset", "build_worlds"]
+__all__ = ["export_dataset", "build_worlds", "clean_worlds"]

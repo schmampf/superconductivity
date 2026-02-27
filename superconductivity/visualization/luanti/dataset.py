@@ -30,6 +30,7 @@ def export_dataset(
     *,
     title: str = ".",
     name: str = "map",
+    dataset: str | Path = ".",
     zlim: Optional[Tuple[float, float]] = None,
     colormap: Optional[str | ListedColormap] = cmap(),
     palette_name: str = "cmap",
@@ -52,6 +53,9 @@ def export_dataset(
         Dataset title (folder name under `datasets/`).
     name
         Basename for output files (e.g. `name.u16le`, `name.json`).
+    dataset
+        Output directory used as the base path for `datasets/<title>/`.
+        By default this is the current working directory (".").
     zlim
         Optional scaling range `(z_scale_min, z_scale_max)` used for
         normalization (i.e. mapping into the requested height range).
@@ -85,14 +89,17 @@ def export_dataset(
     ImportError
         If `colormap` is given but matplotlib/pillow are unavailable.
     """
-    out = ROOT / "datasets" / title
+    out_base = Path(dataset)
+    out = out_base / "datasets" / title
     out.mkdir(parents=True, exist_ok=True)
+
+    palette_path: Optional[Path] = None
 
     if colormap is not None:
         if cm is None or Image is None:
             raise ImportError(
                 "Palette export requires matplotlib and pillow. "
-                "Install them or call export_dataset without cmap_name."
+                "Install them or call export_dataset without colormap."
             )
         if isinstance(colormap, str):
             colormap = cm.get_cmap(colormap, 256)
@@ -146,7 +153,7 @@ def export_dataset(
         # Actual data range (unclipped)
         "z_data_min": float(np.nanmin(z)),
         "z_data_max": float(np.nanmax(z)),
-        "palette": f"{palette_name}.png",
+        "palette": f"{palette_name}.png" if palette_path is not None else None,
         "format": "u16le_rowmajor",
     }
     (out / f"{name}.json").write_text(json.dumps(meta, indent=2))
@@ -199,7 +206,4 @@ def remap_to_regular_grid_nearest(
 
     # Fancy indexing: broadcast iy (rows) against ix (cols)
     out = src[iy[:, None], ix[None, :]]
-    return out
-    return out
-    return out
     return out

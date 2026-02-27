@@ -1,20 +1,26 @@
 """Luanti/Minetest world builder and deploy helpers.
 
 This module builds Luanti worlds from exported datasets located in
-`<this module>/datasets/`. Each dataset directory is expected to contain at
+`./datasets/`. Each dataset directory is expected to contain at
 least:
 
 - `map.u16le` : uint16 little-endian heightmap (row-major)
 - `map.json`  : metadata sidecar (may include a `palette` filename)
 
-The builder creates one world per dataset under `<this module>/worlds/` based
-on the template file `worlds/_template/world.mt.template`.
+The builder creates one world per dataset under `<dataset>/worlds/` based
+on the template file `world.mt.template`.
+
+In addition, each generated world is copied into `<dataset>/worlds/` (where
+`dataset` is the `dataset` argument interpreted relative to the current
+working directory). This makes the dataset folder self-contained for
+shipping.
 
 If `map.json` references a palette texture (e.g. `cmap.png`), it is shipped as
 a per-world texture-only worldmod `measurement_palette` so each world can use
 its own colormap without modifying global mods.
 """
 
+import fnmatch
 import json
 import shutil
 import subprocess
@@ -22,9 +28,12 @@ from pathlib import Path
 from typing import List
 
 ROOT = Path(__file__).resolve().parent
-DATASETS = ROOT / "datasets"
-WORLDS = ROOT / "worlds"
-TEMPLATE = WORLDS / "_template" / "world.mt.template"
+TEMPLATE = ROOT / "world.mt.template"
+
+
+DEFAULT_REMOTE_WORLDS_DIR = (
+    Path.home() / "Library" / "Application Support" / "minetest" / "worlds"
+)
 
 
 def slug(name: str) -> str:
@@ -43,8 +52,89 @@ def slug(name: str) -> str:
     return "".join(c if (c.isalnum() or c in "_-") else "_" for c in name)
 
 
+def clean_worlds(
+    matching_rule: str = "my ",
+    *,
+    worlds_dir: str | Path | None = None,
+    dry_run: bool = False,
+) -> List[Path]:
+    """Delete remote Luanti/Minetest worlds matching a rule.
+
+    The match rule is applied to the world directory name (basename). If
+    `matching_rule` contains glob characters (`*`, `?`, `[`), it is treated as a
+    glob. Otherwise it is treated as a prefix.
+
+    Parameters
+    ----------
+    matching_rule
+        Prefix or glob used to select worlds for deletion. Default is "my ".
+    worlds_dir
+        Directory containing worlds. If None, uses the default macOS path:
+        `~/Library/Application Support/minetest/worlds`.
+    dry_run
+        If True, do not delete anything; just return the would-be targets.
+
+    Returns
+    -------
+    deleted
+        List of world directories that were deleted (or would be deleted when
+        `dry_run=True`).
+
+    Raises
+    ------
+    FileNotFoundError
+        If the worlds directory does not exist.
+    RuntimeError
+        If Luanti/Minetest appears to be running.
+    """
+    wdir = Path(worlds_dir) if worlds_dir is not None else DEFAULT_REMOTE_WORLDS_DIR
+    if not wdir.exists():
+        raise FileNotFoundError(f"Worlds directory not found: {wdir}")
+
+    # Safety: refuse to delete while the game is running.
+    if (
+        subprocess.run(
+            ["pgrep", "-x", "luanti"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode
+        == 0
+        or subprocess.run(
+            ["pgrep", "-x", "minetest"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode
+        == 0
+    ):
+        raise RuntimeError("Luanti/Minetest is running. Quit it first.")
+
+    rule = matching_rule
+    is_glob = any(ch in rule for ch in ("*", "?", "["))
+
+    targets: List[Path] = []
+    for p in sorted(wdir.iterdir()):
+        if not p.is_dir():
+            continue
+        name = p.name
+        if is_glob:
+            if fnmatch.fnmatch(name, rule):
+                targets.append(p)
+        else:
+            if name.startswith(rule):
+                targets.append(p)
+
+    if dry_run:
+        return targets
+
+    for p in targets:
+        shutil.rmtree(p)
+
+    return targets
+
+
 def build_worlds(
     prefix: str = "",
+    dataset: str = "",
     *,
     remove_existing_worlds: bool = True,
     deploy: bool = True,
@@ -52,8 +142,13 @@ def build_worlds(
 ) -> List[str]:
     """Build one Luanti world per dataset and optionally deploy them.
 
-    Worlds are created under `<this module>/worlds/` with names derived from
-    the dataset directory names under `<this module>/datasets/`.
+    Worlds are created under `<dataset>/worlds/` with names derived from
+    the dataset directory names under `./datasets/`.
+
+    In addition, each generated world is copied into `<dataset>/worlds/` (where
+    `dataset` is the `dataset` argument interpreted relative to the current
+    working directory). This makes the dataset folder self-contained for
+    shipping.
 
     Parameters
     ----------
@@ -84,7 +179,21 @@ def build_worlds(
     world_mt = TEMPLATE.read_text()
     built: List[str] = []
 
-    for ds_dir in sorted(DATASETS.iterdir()):
+    # Datasets are discovered relative to the current working directory.
+    # This matches `export_dataset(..., out_dir=".")` usage.
+    datasets_dir = Path.cwd() / dataset / "datasets"
+    if not datasets_dir.exists():
+        raise FileNotFoundError(f"Missing datasets directory: {datasets_dir}")
+
+    # Additionally export the built worlds into the dataset base folder so the
+    # dataset directory is self-contained for shipping.
+    export_worlds_dir = Path.cwd() / dataset / "worlds"
+    export_worlds_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build worlds directly into the execution directory (dataset base).
+    worlds_dir = export_worlds_dir
+
+    for ds_dir in sorted(datasets_dir.iterdir()):
         if not ds_dir.is_dir():
             continue
 
@@ -95,7 +204,7 @@ def build_worlds(
             continue
 
         wname = prefix + slug(ds_dir.name)
-        wdir = WORLDS / wname
+        wdir = worlds_dir / wname
         measdir = wdir
 
         if wdir.exists():
@@ -145,7 +254,11 @@ def build_worlds(
 
     if deploy:
         try:
-            run_deploy_script(deploy_script, prefix=prefix)
+            run_deploy_script(
+                deploy_script,
+                prefix=prefix,
+                dataset_dir=dataset,
+            )
         except subprocess.CalledProcessError:
             pass
 
@@ -156,6 +269,7 @@ def run_deploy_script(
     script: str | Path = "deploy.sh",
     *,
     prefix: str = "my ",
+    dataset_dir: str = "",
 ) -> None:
     """Run the deploy shell script.
 
@@ -166,6 +280,10 @@ def run_deploy_script(
         absolute).
     prefix
         Prefix passed to the deploy script via `--prefix`.
+    dataset_dir
+        Dataset directory relative to the current working directory. This is
+        forwarded to deploy.sh via `--dataset-dir` so it can find
+        `dataset_dir/worlds`.
 
     Raises
     ------
@@ -182,4 +300,11 @@ def run_deploy_script(
     if not script_path.exists():
         raise FileNotFoundError(f"Deploy script not found: {script_path}")
 
-    subprocess.run(["bash", str(script_path), "--prefix", prefix], check=True)
+    cmd = ["bash", str(script_path), "--prefix", prefix]
+    if dataset_dir:
+        cmd += ["--dataset-dir", dataset_dir]
+    else:
+        # Worlds are expected in ./worlds when no dataset dir is used.
+        cmd += ["--src-worlds-dir", str(Path.cwd() / "worlds")]
+
+    subprocess.run(cmd, check=True)

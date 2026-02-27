@@ -1,9 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SRC_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SRC_MODS="${SRC_ROOT}/mods"
-SRC_WORLDS="${SRC_ROOT}/worlds"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Prefer copying worlds from the directory where this script is executed.
+# This matches build_worlds() which now writes worlds to the execution folder.
+EXEC_DIR="$(pwd)"
+
+# Mods still live next to this script by default.
+SRC_MODS="${SCRIPT_DIR}/mods"
+
+# Default dataset directory (relative to execution dir).
+DATASET_DIR="dataset"
+
+# Worlds are expected under: ./<dataset>/worlds
+SRC_WORLDS="${EXEC_DIR}/${DATASET_DIR}/worlds"
 
 DST_ROOT="${HOME}/Library/Application Support/minetest"
 DST_MODS="${DST_ROOT}/mods"
@@ -23,6 +35,26 @@ while [[ $# -gt 0 ]]; do
       KEEP_EXISTING_WORLDS=1
       shift
       ;;
+    --dataset-dir)
+      shift
+      if [[ $# -eq 0 ]]; then
+        echo "Missing value for --dataset-dir" >&2
+        exit 2
+      fi
+      DATASET_DIR="$1"
+      SRC_WORLDS="${EXEC_DIR}/${DATASET_DIR}/worlds"
+      shift
+      ;;
+    --src-worlds-dir)
+      shift
+      if [[ $# -eq 0 ]]; then
+        echo "Missing value for --src-worlds-dir" >&2
+        exit 2
+      fi
+      SRC_WORLDS="$1"
+      DATASET_DIR=""
+      shift
+      ;;
     --managed-world-prefix|--prefix)
       shift
       if [[ $# -eq 0 ]]; then
@@ -38,6 +70,11 @@ Usage: deploy.sh [OPTIONS]
 
 Options:
   --keep-existing-worlds         Do not delete existing remote worlds (managed prefix).
+  --dataset-dir DIR              Dataset directory relative to current working
+                                directory. Worlds are read from DIR/worlds.
+                                Default: dataset
+  --src-worlds-dir DIR           Explicit source worlds directory to copy from.
+                                Overrides --dataset-dir.
   --managed-world-prefix PREFIX  Prefix used to identify worlds managed by this script.
   --prefix PREFIX                Alias for --managed-world-prefix.
                                 Default: "my "
@@ -51,6 +88,17 @@ EOF
       ;;
   esac
 done
+
+if [[ ! -d "${SRC_WORLDS}" ]]; then
+  echo "Source worlds directory not found: ${SRC_WORLDS}" >&2
+  if [[ -n "${DATASET_DIR}" ]]; then
+    echo "Hint: run from the folder containing '${DATASET_DIR}/worlds'," >&2
+    echo "      or pass --dataset-dir, or use --src-worlds-dir." >&2
+  else
+    echo "Hint: pass --src-worlds-dir to point at your worlds directory." >&2
+  fi
+  exit 2
+fi
 
 # Abort if Luanti/Minetest is running (prevents disk I/O corruption)
 if pgrep -x "luanti" >/dev/null || pgrep -x "minetest" >/dev/null; then
@@ -88,6 +136,8 @@ for m in "${SRC_MODS}"/*; do
   rm -rf "${DST_MODS}/${name}"
   cp -R "${m}" "${DST_MODS}/${name}"
 done
+
+echo "Copying worlds from: ${SRC_WORLDS}"
 
 # Copy worlds (skip _template)
 for w in "${SRC_WORLDS}"/*; do
