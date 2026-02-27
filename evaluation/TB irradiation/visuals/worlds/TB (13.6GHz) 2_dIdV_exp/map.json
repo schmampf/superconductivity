@@ -1,0 +1,14 @@
+{
+  "nx": 300,
+  "ny": 282,
+  "hmin": 0,
+  "hmax": 120,
+  "z_scale_min": 0.0,
+  "z_scale_max": 2.0,
+  "zmin": 0.0,
+  "zmax": 2.0,
+  "z_data_min": -0.7516833073180524,
+  "z_data_max": 43.33040944976337,
+  "palette": "cmap.png",
+  "format": "u16le_rowmajor"
+}
