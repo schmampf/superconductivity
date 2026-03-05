@@ -11,8 +11,8 @@ from .bcs_np import get_Delta_meV
 
 from ..utilities.types import NDArray64
 
-from ..utilities.functions import cache_hash_sym
-from ..utilities.functions import cache_hash_nuni
+from ..utilities.cache import cache_hash_nuni
+from ..utilities.cache import cache_hash_sym
 from ..utilities.functions import bin_y_over_x
 
 from ..utilities.constants import G_0_muS

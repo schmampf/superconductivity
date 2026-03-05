@@ -8,7 +8,7 @@ from concurrent.futures import as_completed
 
 from ..utilities.types import NDArray64
 
-from ..utilities.functions import cache_hash
+from ..utilities.cache import cache_hash
 from ..utilities.functions import bin_y_over_x
 
 from ..utilities.constants import V_tol_mV
