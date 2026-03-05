@@ -107,7 +107,7 @@ Plotting / style helpers:
 
 Utilities/constants:
 - `G_0_muS`, `k_B_meV`, `h_e_pVs`
-- helper functions: `oversample`, `bin_y_over_x`, JAX interpolation `jnp_interp_y_of_x`
+- helper functions: `upsample`, `bin_y_over_x`, JAX interpolation `jnp_interp_y_of_x`
 
 ---
 
