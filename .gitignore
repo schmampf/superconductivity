@@ -21,6 +21,8 @@ __pycache__/
 *.stl
 *.hdf5
 
+plotly.min.js
+
 # specific files
 *MCBJ_seeblau_ultra.png
 

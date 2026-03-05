@@ -47,7 +47,13 @@ from .models.abs import (
 )
 
 # imports from bcs
-from .models.bcs_np import get_Delta_meV, get_dos, get_f, get_I_bcs_nA, get_T_c_K
+from .models.bcs_np import (
+    get_Delta_meV,
+    get_I_bcs_nA,
+    get_T_c_K,
+    get_dos,
+    get_f,
+)
 
 # imports from btk
 from .models.btk import get_AB_btk, get_I_btk_nA, get_Z_btk
@@ -55,6 +61,17 @@ from .models.btk import get_AB_btk, get_I_btk_nA, get_Z_btk
 # import from fcs
 from .models.fcs_pbar import get_I_fcs_pbar_nA as get_I_fcs_nA
 from .models.ha_asym import get_I_ha_asym_nA
+
+# import from evaluation
+from .evaluation.offset import get_offset
+from .evaluation.fft import get_fft_ivt
+from .evaluation.iv_data import (
+    get_ivt,
+    list_measurement_keys,
+    list_specific_keys,
+    list_specific_keys_and_values,
+    sort_specific_keys_by_value,
+)
 
 # import from ha
 from .models.ha_sym import get_I_ha_sym_nA as get_I_ha_nA
@@ -66,6 +83,7 @@ from .models.pat import get_I_pat_nA
 from .models.ss import get_I_p_abs_nA
 
 # import colors
+from .style.cpd4 import cmap as get_cmap
 from .style.cpd5 import (
     get_color,
     get_colors,
@@ -89,7 +107,7 @@ from .style.thesislayout import get_ext, get_figure, map_layout, theory_layout
 
 # import utilities
 from .utilities.constants import G_0_muS, h_e_pVs, k_B_meV
-from .utilities.functions import bin_y_over_x, oversample
+from .utilities.functions import bin_y_over_x, ragged_to_array, upsample
 from .utilities.functions_jax import jinterp_y_of_x
 from .utilities.types import NDArray64
 
