@@ -19,6 +19,7 @@ __pycache__/
 *.pickle
 *.zip
 *.stl
+*.hdf5
 
 # specific files
 *MCBJ_seeblau_ultra.png
