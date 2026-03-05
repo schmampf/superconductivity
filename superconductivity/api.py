@@ -64,7 +64,7 @@ from .models.ha_asym import get_I_ha_asym_nA
 
 # import from evaluation
 from .evaluation.offset import get_offset
-from .evaluation.fft import get_fft_ivt
+from .evaluation.psd import get_psd
 from .evaluation.iv_data import (
     get_ivt,
     list_measurement_keys,

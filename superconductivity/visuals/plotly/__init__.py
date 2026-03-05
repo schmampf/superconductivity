@@ -18,7 +18,7 @@ from .maps import (
     get_surface,
     save_figure,
 )
-from .tuples import get_ivt_sliders
+from .tuples import get_tuple_slider
 
 __all__ = [
     "get_axis",
@@ -28,5 +28,5 @@ __all__ = [
     "get_heatmap",
     "get_all",
     "save_figure",
-    "get_ivt_sliders",
+    "get_tuple_slider",
 ]

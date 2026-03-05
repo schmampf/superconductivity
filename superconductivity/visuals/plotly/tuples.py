@@ -63,15 +63,19 @@ def _prepare_xy_trace_lists(
     return x_out, y_out
 
 
-def _get_xy_slider_from_lists(
+def get_tuple_slider(
     x_list: Sequence[Sequence[float] | np.ndarray],
     y_list: Sequence[Sequence[float] | np.ndarray],
-    y_values: Sequence[float] | np.ndarray,
+    slider_values: Sequence[float] | np.ndarray,
     xlabel: str,
     ylabel: str,
     slider_label: str = "y",
     xlim: LIM = None,
     ylim: LIM = None,
+    ylogscale: bool = False,
+    name: Optional[str] = None,
+    scheme: str = "standard",
+    dataset: str = "dataset",
 ) -> go.Figure:
     """Create a slider figure from lists of x/y traces.
 
@@ -81,7 +85,7 @@ def _get_xy_slider_from_lists(
         Sequence of x-traces, one trace per slider step.
     y_list : Sequence[Sequence[float] | np.ndarray]
         Sequence of y-traces with same outer length as ``x_list``.
-    y_values : Sequence[float] | np.ndarray
+    slider_values : Sequence[float] | np.ndarray
         Slider values associated with each trace.
     xlabel : str
         X-axis label.
@@ -93,17 +97,25 @@ def _get_xy_slider_from_lists(
         Optional x-axis limits.
     ylim : LIM, default=None
         Optional y-axis limits.
+    ylogscale : bool, default=False
+        If ``True``, use logarithmic scaling on the y-axis.
+    name : str | None, default=None
+        If provided, save the slider figure using this title.
+    scheme : str, default="standard"
+        HTML save scheme passed to :func:`save_figure`.
+    dataset : str, default="dataset"
+        Output directory passed to :func:`save_figure`.
 
     Returns
     -------
     go.Figure
         Plotly figure with one dynamic trace and slider steps.
     """
-    y_arr = np.asarray(y_values, dtype=np.float64).reshape(-1)
-    if y_arr.size == 0:
-        raise ValueError("y_values must not be empty.")
-    if not np.all(np.isfinite(y_arr)):
-        raise ValueError("y_values must contain only finite values.")
+    slider_arr = np.asarray(slider_values, dtype=np.float64).reshape(-1)
+    if slider_arr.size == 0:
+        raise ValueError("slider_values must not be empty.")
+    if not np.all(np.isfinite(slider_arr)):
+        raise ValueError("slider_values must contain only finite values.")
 
     x_pre, y_pre = _prepare_xy_trace_lists(
         x_list=x_list,
@@ -111,34 +123,41 @@ def _get_xy_slider_from_lists(
         x_name="x_list",
         y_name="y_list",
     )
-    if len(x_pre) != y_arr.size:
+    if len(x_pre) != slider_arr.size:
         raise ValueError(
-            "y_values length must match number of traces.",
+            "slider_values length must match number of traces.",
         )
 
-    order = np.argsort(y_arr)
-    y_sorted = y_arr[order]
+    order = np.argsort(slider_arr)
+    slider_sorted = slider_arr[order]
     x_sorted = [x_pre[i] for i in order]
     y_sorted_traces = [y_pre[i] for i in order]
+    has_nonpositive = any(
+        np.any(y_trace <= 0.0) for y_trace in y_sorted_traces
+    )
+    if ylogscale and has_nonpositive:
+        raise ValueError(
+            "y_list must be strictly positive when ylogscale=True.",
+        )
 
     trace_dyn = go.Scatter(
         x=x_sorted[0],
         y=y_sorted_traces[0],
         mode="lines",
-        name=f"{slider_label}={y_sorted[0]:g}",
+        name=f"{slider_label}={slider_sorted[0]:g}",
     )
 
     steps = []
-    for k, yk in enumerate(y_sorted):
+    for k, slider_k in enumerate(slider_sorted):
         steps.append(
             dict(
-                label=f"{yk:g}",
+                label=f"{slider_k:g}",
                 method="restyle",
                 args=[
                     {
                         "x": [x_sorted[k]],
                         "y": [y_sorted_traces[k]],
-                        "name": [f"{slider_label}={yk:g}"],
+                        "name": [f"{slider_label}={slider_k:g}"],
                     },
                     [0],
                 ],
@@ -146,7 +165,11 @@ def _get_xy_slider_from_lists(
         )
 
     xaxis = get_axis(lim=xlim, label=xlabel)
-    yaxis = get_axis(lim=ylim, label=ylabel)
+    yaxis = get_axis(
+        lim=ylim,
+        label=ylabel,
+        logscale=ylogscale,
+    )
 
     layout = go.Layout(
         xaxis=xaxis,
@@ -161,107 +184,17 @@ def _get_xy_slider_from_lists(
         ],
     )
 
-    return go.Figure(
+    fig = go.Figure(
         data=[trace_dyn],
         layout=layout,
         skip_invalid=False,
     )
-
-
-def get_ivt_sliders(
-    y_values: Sequence[float] | np.ndarray,
-    t_s_list: Sequence[Sequence[float] | np.ndarray],
-    I_nA_list: Sequence[Sequence[float] | np.ndarray],
-    V_mV_list: Sequence[Sequence[float] | np.ndarray],
-    y_label: str = "y",
-    tlim: LIM = None,
-    ilim: LIM = None,
-    vlim: LIM = None,
-    name: Optional[str] = None,
-    scheme: str = "standard",
-    dataset: str = "dataset",
-) -> tuple[go.Figure, go.Figure, go.Figure]:
-    """Create slider figures for ``I(t)``, ``V(t)``, and ``I(V)``.
-
-    Parameters
-    ----------
-    y_values : Sequence[float] | np.ndarray
-        One y-value per trace (e.g., amplitude or power).
-    t_s_list : Sequence[Sequence[float] | np.ndarray]
-        Time traces in seconds, one per y-value.
-    I_nA_list : Sequence[Sequence[float] | np.ndarray]
-        Current traces in nA, one per y-value.
-    V_mV_list : Sequence[Sequence[float] | np.ndarray]
-        Voltage traces in mV, one per y-value.
-    y_label : str, default="y"
-        Label used for slider current value display.
-    tlim : LIM, default=None
-        Optional limits for time axis.
-    ilim : LIM, default=None
-        Optional limits for current axis.
-    vlim : LIM, default=None
-        Optional limits for voltage axis.
-    name : str | None, default=None
-        If provided, save three HTML files using this prefix.
-    scheme : str, default="standard"
-        HTML save scheme passed to :func:`save_figure`.
-    dataset : str, default="dataset"
-        Output directory passed to :func:`save_figure`.
-
-    Returns
-    -------
-    tuple[go.Figure, go.Figure, go.Figure]
-        ``(fig_I_t, fig_V_t, fig_I_V)``.
-    """
-    fig_I_t = _get_xy_slider_from_lists(
-        x_list=t_s_list,
-        y_list=I_nA_list,
-        y_values=y_values,
-        xlabel="t (s)",
-        ylabel="I (nA)",
-        slider_label=y_label,
-        xlim=tlim,
-        ylim=ilim,
-    )
-    fig_V_t = _get_xy_slider_from_lists(
-        x_list=t_s_list,
-        y_list=V_mV_list,
-        y_values=y_values,
-        xlabel="t (s)",
-        ylabel="V (mV)",
-        slider_label=y_label,
-        xlim=tlim,
-        ylim=vlim,
-    )
-    fig_I_V = _get_xy_slider_from_lists(
-        x_list=V_mV_list,
-        y_list=I_nA_list,
-        y_values=y_values,
-        xlabel="V (mV)",
-        ylabel="I (nA)",
-        slider_label=y_label,
-        xlim=vlim,
-        ylim=ilim,
-    )
-
     if name is not None:
         save_figure(
-            fig=fig_I_t,
-            title=f"{name}_heatmap",
-            scheme=scheme,
-            out_dir=dataset,
-        )
-        save_figure(
-            fig=fig_V_t,
-            title=f"{name}_slider",
-            scheme=scheme,
-            out_dir=dataset,
-        )
-        save_figure(
-            fig=fig_I_V,
-            title=f"{name}_surface",
+            fig=fig,
+            title=name,
             scheme=scheme,
             out_dir=dataset,
         )
 
-    return fig_I_t, fig_V_t, fig_I_V
+    return fig

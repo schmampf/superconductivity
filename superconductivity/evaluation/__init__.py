@@ -1,4 +1,4 @@
-from .fft import get_ivf
+from .psd import get_psd
 from .iv_data import (
     get_ivt,
     list_measurement_keys,
@@ -11,7 +11,7 @@ from .offset import OffsetResult, get_offset
 __all__ = [
     "OffsetResult",
     "get_offset",
-    "get_ivf",
+    "get_psd",
     "get_ivt",
     "list_measurement_keys",
     "list_specific_keys",
