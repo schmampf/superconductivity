@@ -226,3 +226,62 @@ def lookup_linear_uniform_clamped(
     y0 = y_grid[i]
     y1 = y_grid[i + 1]
     return y0 + w * (y1 - y0)
+
+
+def oversample_linear_np(
+    x: NDArray64,
+    y: NDArray64,
+    upsample: int = 100,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Upsample paired 1D arrays using NumPy linear interpolation.
+
+    Parameters
+    ----------
+    x : NDArray64
+        Input x-values.
+    y : NDArray64
+        Input y-values sampled on the same parameter grid as ``x``.
+    upsample : int, default=100
+        Integer upsampling factor.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        Upsampled ``(x, y)`` arrays with shape ``(len(x) * upsample,)``.
+    """
+    x_arr = np.asarray(x, dtype=np.float64).reshape(-1)
+    y_arr = np.asarray(y, dtype=np.float64).reshape(-1)
+    if x_arr.shape != y_arr.shape:
+        raise ValueError("x and y must have the same shape")
+    x_up = upsample_linear_values_np(x_arr, upsample=upsample)
+    y_up = upsample_linear_values_np(y_arr, upsample=upsample)
+    return x_up, y_up
+
+
+def upsample_linear_values_np(
+    values: NDArray64,
+    upsample: int = 100,
+) -> np.ndarray:
+    """Upsample one 1D array with NumPy linear interpolation.
+
+    Parameters
+    ----------
+    values : NDArray64
+        Input values sampled on an evenly spaced parameter grid.
+    upsample : int, default=100
+        Integer upsampling factor.
+
+    Returns
+    -------
+    np.ndarray
+        Upsampled values with shape ``(len(values) * upsample,)``.
+    """
+    arr = np.asarray(values, dtype=np.float64).reshape(-1)
+    if upsample <= 1 or arr.size < 2:
+        return arr
+
+    n = arr.size
+    n_out = n * int(upsample)
+    t_src = np.arange(n, dtype=np.float64)
+    t_dst = np.linspace(0.0, float(n - 1), n_out, dtype=np.float64)
+    return np.interp(t_dst, t_src, arr)

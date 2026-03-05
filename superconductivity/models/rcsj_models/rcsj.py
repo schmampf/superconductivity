@@ -5,7 +5,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from ...utilities.functions import bin_y_over_x, oversample
+from ...utilities.functions import bin_y_over_x, upsample
+from ...utilities.safety import require_all_finite
 from ...utilities.types import NDArray64
 from .helper import (
     JF32,
@@ -47,8 +48,7 @@ def get_I_rcsj_nA(
     I_sw_arr = np.atleast_1d(np.asarray(I_sw_nA, dtype=np.float32))
     if I_sw_arr.size == 0:
         raise ValueError("I_sw_nA must not be empty.")
-    if not np.all(np.isfinite(I_sw_arr)):
-        raise ValueError("I_sw_nA must contain only finite values.")
+    require_all_finite(I_sw_arr, name="I_sw_nA")
 
     (
         V_lut_mV,
@@ -102,7 +102,7 @@ def get_I_rcsj_nA(
         dtype=np.float64,
     )
     for i in range(A_arr_mV.size):
-        I_bias_nA_over, V_rcsj_mV_over = oversample(
+        I_bias_nA_over, V_rcsj_mV_over = upsample(
             x=I_bias_nA,
             y=V_rcsj_mV[i],
         )

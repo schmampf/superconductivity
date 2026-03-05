@@ -5,7 +5,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from ...utilities.functions import bin_y_over_x, oversample
+from ...utilities.functions import bin_y_over_x
+from ...utilities.safety import require_all_finite
 from ...utilities.types import NDArray64
 from .helper import (
     JF32,
@@ -15,6 +16,7 @@ from .helper import (
     JTWO_MPI32,
     JTWO_PI32,
     lookup_linear_uniform_clamped,
+    upsample_linear_values_np,
     prepare_uniform_inverse_lookup_table,
     suggest_dt_Nt,
 )
@@ -43,8 +45,7 @@ def get_I_rsj_nA(
     I_sw_arr = np.atleast_1d(np.asarray(I_sw_nA, dtype=np.float32))
     if I_sw_arr.size == 0:
         raise ValueError("I_sw_nA must not be empty.")
-    if not np.all(np.isfinite(I_sw_arr)):
-        raise ValueError("I_sw_nA must contain only finite values.")
+    require_all_finite(I_sw_arr, name="I_sw_nA")
 
     I_lut_nA, V_iqp_lut_mV, I_lut0_nA, inv_dI_per_nA = (
         prepare_uniform_inverse_lookup_table(
@@ -91,15 +92,14 @@ def get_I_rsj_nA(
         np.nan,
         dtype=np.float64,
     )
+    V_bins_mV = np.asarray(V_mV)
+    I_bias_nA_over = upsample_linear_values_np(I_bias_nA)
     for i in range(A_arr_mV.size):
-        I_bias_nA_over, V_rsj_mV_over = oversample(
-            x=I_bias_nA,
-            y=V_rsj_mV[i],
-        )
+        V_rsj_mV_over = upsample_linear_values_np(V_rsj_mV[i])
         I_rsj_all_nA[i] = bin_y_over_x(
             x=V_rsj_mV_over,
             y=I_bias_nA_over,
-            x_bins=np.asarray(V_mV),
+            x_bins=V_bins_mV,
         )
 
     if A_is_scalar:
@@ -128,7 +128,24 @@ def simulate_rsj_with_pat_vac_batch(
     I_nA = jnp.ravel(jnp.asarray(I_nA, dtype=JF32))
     A_mV = jnp.ravel(jnp.asarray(A_mV, dtype=JF32))
     I_sw_nA = jnp.ravel(jnp.asarray(I_sw_nA, dtype=JF32))
-    harm_idx = jnp.arange(1, I_sw_nA.shape[0] + 1, dtype=JF32)[None, None, :]
+    if I_sw_nA.shape[0] == 1:
+        I_sw_1_nA = I_sw_nA[0]
+
+        def supercurrent_nA(phi_tot: jnp.ndarray) -> jnp.ndarray:
+            return jnp.sin(phi_tot) * I_sw_1_nA
+
+    else:
+        harm_idx = jnp.arange(
+            1,
+            I_sw_nA.shape[0] + 1,
+            dtype=JF32,
+        )[None, None, :]
+
+        def supercurrent_nA(phi_tot: jnp.ndarray) -> jnp.ndarray:
+            return jnp.sum(
+                jnp.sin(phi_tot[..., None] * harm_idx) * I_sw_nA,
+                axis=-1,
+            )
 
     A_col = A_mV[:, None]
     I_row = I_nA[None, :]
@@ -152,10 +169,7 @@ def simulate_rsj_with_pat_vac_batch(
         coswt = coswt_all[n_i]
 
         phi_tot = phi + a * sinwt
-        I_sc_nA = jnp.sum(
-            jnp.sin(phi_tot[..., None] * harm_idx) * I_sw_nA,
-            axis=-1,
-        )
+        I_sc_nA = supercurrent_nA(phi_tot)
         I_for_qp_nA = I_row - I_sc_nA
 
         V_qp_mV = lookup_linear_uniform_clamped(
