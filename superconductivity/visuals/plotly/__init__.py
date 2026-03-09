@@ -18,6 +18,7 @@ from .maps import (
     get_surface,
     save_figure,
 )
+from .html import build_html
 from .tuples import get_tuple_slider
 
 __all__ = [
@@ -28,5 +29,6 @@ __all__ = [
     "get_heatmap",
     "get_all",
     "save_figure",
+    "build_html",
     "get_tuple_slider",
 ]
