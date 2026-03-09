@@ -1,0 +1,1 @@
+-- Texture-only worldmod for per-world palette shipping.
