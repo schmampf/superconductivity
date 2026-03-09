@@ -3,8 +3,10 @@
 import plotly.graph_objects as go
 import plotly.io as pio
 
+from superconductivity.style.cpd4 import cmap
 from superconductivity.utilities.types import COLOR
-from .helper import mpl_color_to_plotly
+
+from .helper import mpl_cmap_to_plotly, mpl_color_to_plotly
 
 
 def build_house_template() -> go.layout.Template:
@@ -21,6 +23,8 @@ def build_house_template() -> go.layout.Template:
 
     gridcolor = mpl_color_to_plotly(gridcolor_mpl)
     backgroundcolor = mpl_color_to_plotly(backgroundcolor_mpl)
+
+    colormap = mpl_cmap_to_plotly(cmap_mpl=cmap())
 
     global_axis = dict(
         showgrid=True,
@@ -40,7 +44,7 @@ def build_house_template() -> go.layout.Template:
         paper_bgcolor=backgroundcolor,
         plot_bgcolor=backgroundcolor,
         font=dict(size=14),
-        margin=dict(l=20, r=20, t=20, b=20),
+        margin=dict(l=40, r=40, t=40, b=40, pad=4),
         hoverlabel=dict(font_size=12),
         xaxis=global_axis,
         yaxis=global_axis,
@@ -55,10 +59,10 @@ def build_house_template() -> go.layout.Template:
     )
     template.data.scatter = [go.Scatter(mode="lines", line=dict(width=2))]
     template.data.heatmap = [
-        go.Heatmap(colorscale="Viridis", showscale=True),
+        go.Heatmap(colorscale=colormap, showscale=True),
     ]
     template.data.surface = [
-        go.Surface(colorscale="Viridis", showscale=True),
+        go.Surface(colorscale=colormap, showscale=False),
     ]
 
     return template
@@ -74,4 +78,5 @@ def register_house_template(set_default: bool = True) -> None:
     """
     pio.templates["house"] = build_house_template()
     if set_default:
+        pio.templates.default = "house"
         pio.templates.default = "house"
