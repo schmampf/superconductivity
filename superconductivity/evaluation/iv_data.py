@@ -23,7 +23,8 @@ def _import_h5py():
         import h5py
     except ImportError as exc:  # pragma: no cover
         raise ImportError(
-            "h5py is required for HDF5 loading. Install it with " "'pip install h5py'.",
+            "h5py is required for HDF5 loading. Install it with "
+            "'pip install h5py'.",
         ) from exc
     return h5py
 
@@ -56,36 +57,31 @@ def _to_measurement_path(
 
 def list_measurement_keys(
     h5path: str | Path,
-    measurement: str,
 ) -> list[str]:
-    """List available dataset keys for one measurement.
+    """List available measurement names.
 
     Parameters
     ----------
     h5path : str | pathlib.Path
         HDF5 file path.
-    measurement : str
-        Measurement name, e.g. ``"frequency_at_15GHz"``.
 
     Returns
     -------
     list[str]
-        Sorted key names below ``measurement/<measurement>``.
+        Sorted measurement names below ``measurement/``.
 
     Raises
     ------
     KeyError
-        If measurement path does not exist in file.
+        If the ``measurement`` group does not exist in the file.
     """
     h5py = _import_h5py()
     p = Path(h5path).expanduser()
-    measurement_path = _to_measurement_path(measurement)
+    root = "measurement"
     with h5py.File(p, "r") as file:
-        if measurement_path not in file:
-            raise KeyError(
-                f"Measurement path not found: '{measurement_path}'.",
-            )
-        keys = list(file[measurement_path].keys())
+        if root not in file:
+            raise KeyError(f"Measurement root not found: '{root}'.")
+        keys = list(file[root].keys())
     return sorted(keys)
 
 
@@ -106,11 +102,22 @@ def list_specific_keys(
     -------
     list[str]
         Sorted specific keys below ``measurement/<measurement>``.
+
+    Raises
+    ------
+    KeyError
+        If the measurement path does not exist in the file.
     """
-    return list_measurement_keys(
-        h5path=h5path,
-        measurement=measurement,
-    )
+    h5py = _import_h5py()
+    p = Path(h5path).expanduser()
+    measurement_path = _to_measurement_path(measurement)
+    with h5py.File(p, "r") as file:
+        if measurement_path not in file:
+            raise KeyError(
+                f"Measurement path not found: '{measurement_path}'.",
+            )
+        keys = list(file[measurement_path].keys())
+    return sorted(keys)
 
 
 def _extract_value_from_specific_key(
@@ -155,7 +162,9 @@ def _extract_value_from_specific_key(
     else:
         end_idx = specific_key.find(strip1, start_idx)
         token = (
-            specific_key[start_idx:] if end_idx < 0 else specific_key[start_idx:end_idx]
+            specific_key[start_idx:]
+            if end_idx < 0
+            else specific_key[start_idx:end_idx]
         )
 
     token = token.strip()
