@@ -9,6 +9,7 @@ from matplotlib.colors import ListedColormap
 
 from superconductivity.style.cpd4 import cmap
 from superconductivity.utilities.types import LIM, NDArray64
+
 from ..helper import (
     check_xyz,
     get_clim,
@@ -76,6 +77,7 @@ def get_surface(
         cmin=cmin,
         cmax=cmax,
         colorscale=colorscale,
+        showscale=False,
     )
 
     xaxis = get_axis(lim=xlim, label=xlabel)
@@ -273,6 +275,7 @@ def get_heatmap(
     ylabel: str = "<i>eA/hν</i>",
     zlabel: str = "d<i>I</i>/d<i>V</i> (G<sub>0</sub>)",
     cmap_mpl: ListedColormap = cmap(),
+    show_scale: bool = True,
 ):
     x, y, z = check_xyz(
         x=x,
@@ -306,7 +309,7 @@ def get_heatmap(
         zmin=cmin,
         zmax=cmax,
         colorscale=colorscale,
-        showscale=True,
+        showscale=show_scale,
         colorbar=colorbar,
     )
 
@@ -340,6 +343,7 @@ def get_all(
     zlabel: str = "d<i>I</i>/d<i>V</i> (G<sub>0</sub>)",
     cmap_mpl: ListedColormap = cmap(),
     k_static: Optional[list[int]] = None,
+    show_scale: bool = True,
     name: Optional[str] = None,
     scheme: str = "standard",
     dataset: str = "dataset",
@@ -384,13 +388,14 @@ def get_all(
         ylabel=ylabel,
         zlabel=zlabel,
         cmap_mpl=cmap_mpl,
+        show_scale=show_scale,
     )
 
     if name is not None:
         figs = [fig_surface, fig_slider, fig_heatmap]
-        ext = ["_surface", "_slider", "_heatmap"]
+        labels = ["surface", "slider", "heatmap"]
         for i, fig in enumerate(figs):
-            fig_title = f"{name}{ext[i]}"
+            fig_title = f"{name} {labels[i]} {i}"
             save_figure(
                 fig=fig,
                 title=fig_title,
