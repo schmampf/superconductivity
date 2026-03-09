@@ -9,6 +9,29 @@ from ..utilities.safety import require_same_shape, to_1d_float64
 from ..utilities.types import NDArray64
 
 
+def _import_tqdm():
+    """Import tqdm lazily.
+
+    Returns
+    -------
+    callable
+        Imported ``tqdm`` callable.
+
+    Raises
+    ------
+    ImportError
+        If ``tqdm`` is not installed.
+    """
+    try:
+        from tqdm.auto import tqdm
+    except ImportError as exc:  # pragma: no cover
+        raise ImportError(
+            "tqdm is required for progress display. Install it with "
+            "'pip install tqdm'.",
+        ) from exc
+    return tqdm
+
+
 class OffsetResult(TypedDict):
     """Return type for :func:`get_offset`."""
 
@@ -76,6 +99,7 @@ def get_offset(
     V_off_range_mV: Sequence[float] | np.ndarray,
     I_off_range_nA: Sequence[float] | np.ndarray,
     upsample: int = 10,
+    show_progress: bool = True,
 ) -> OffsetResult:
     """Find per-curve offset via symmetry of ``G(V)`` and ``R(I)``.
 
@@ -99,6 +123,8 @@ def get_offset(
         Candidate current offsets in nA.
     upsample : int, default=10
         Linear index-based oversampling factor applied per input trace.
+    show_progress : bool, default=True
+        If True, show a tqdm progress bar over curves.
 
     Returns
     -------
@@ -137,7 +163,17 @@ def get_offset(
     Voff_mV = np.full(n_curves, np.nan, dtype=np.float64)
     Ioff_nA = np.full(n_curves, np.nan, dtype=np.float64)
 
-    for j_curve, (v_curve, i_curve) in enumerate(zip(v_list_mV, i_list_nA)):
+    curve_iter = zip(v_list_mV, i_list_nA)
+    if show_progress:
+        tqdm = _import_tqdm()
+        curve_iter = tqdm(
+            curve_iter,
+            total=n_curves,
+            desc="get_offset",
+            unit="curve",
+        )
+
+    for j_curve, (v_curve, i_curve) in enumerate(curve_iter):
         v_raw_mV = to_1d_float64(v_curve, f"v_list_mV[{j_curve}]")
         i_raw_nA = to_1d_float64(i_curve, f"i_list_nA[{j_curve}]")
         require_same_shape(
