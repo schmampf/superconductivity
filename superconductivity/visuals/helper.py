@@ -175,7 +175,7 @@ def get_xylim_indices(
     y: NDArray64,  # (Ny,)
     xlim: LIM = None,
     ylim: LIM = None,
-) -> tuple[NDArray[np.bool], NDArray[np.bool]]:
+) -> tuple[NDArray[np.bool_], NDArray[np.bool_]]:
     """Compute boolean masks selecting x/y values inside given limits.
 
     Parameters
@@ -231,7 +231,7 @@ def get_compressed_indices(
     rtol: float = 1e-10,
     atol: float = 1e-12,
     equal_nan: bool = True,
-) -> NDArray[np.bool]:
+) -> NDArray[np.bool_]:
     """
     Compute indices that compress consecutive duplicate rows in ``z``.
 
@@ -286,6 +286,4 @@ def get_compressed_indices(
 
     keep_idx = np.flatnonzero(keep)
 
-    return keep
-    return keep
     return keep

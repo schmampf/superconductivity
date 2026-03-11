@@ -10,6 +10,7 @@ from matplotlib.colors import ListedColormap
 from superconductivity.style.cpd4 import cmap
 from superconductivity.utilities.types import LIM, NDArray64
 
+from ..relief import extract_visible_relief
 from ..helper import (
     check_xyz,
     get_clim,
@@ -37,6 +38,35 @@ def get_axis(
     )
 
     return axis
+
+
+def _normalize_vector(vec: NDArray64 | tuple[float, float, float]) -> NDArray64:
+    """Return a normalized 3-vector."""
+    arr = np.asarray(vec, dtype=np.float64)
+    if arr.shape != (3,):
+        raise ValueError("Expected a 3-vector with shape (3,).")
+
+    norm = float(np.linalg.norm(arr))
+    if norm <= 0.0:
+        raise ValueError("Camera vectors must be non-zero.")
+
+    return arr / norm
+
+
+def _get_plotly_camera(
+    observer: NDArray64 | tuple[float, float, float],
+    target: NDArray64 | tuple[float, float, float],
+    up: NDArray64 | tuple[float, float, float],
+    *,
+    eye_scale: float = 2.5,
+) -> dict[str, dict[str, float]]:
+    """Build an approximate Plotly camera from observer/target/up."""
+    eye = eye_scale * _normalize_vector(np.asarray(observer) - np.asarray(target))
+    up_vec = _normalize_vector(up)
+    return dict(
+        eye=dict(x=float(eye[0]), y=float(eye[1]), z=float(eye[2])),
+        up=dict(x=float(up_vec[0]), y=float(up_vec[1]), z=float(up_vec[2])),
+    )
 
 
 def get_surface(
@@ -97,6 +127,122 @@ def get_surface(
         data=[surface],
         layout=layout,
         skip_invalid=False,
+    )
+    return fig
+
+
+def get_surface_relief(
+    x: NDArray64,
+    y: NDArray64,
+    z: NDArray64,
+    *,
+    observer: NDArray64 | tuple[float, float, float],
+    target: NDArray64 | tuple[float, float, float],
+    up: NDArray64 | tuple[float, float, float] = (0.0, 0.0, 1.0),
+    projection: str = "perspective",
+    xlim: LIM = None,
+    ylim: LIM = None,
+    zlim: LIM = None,
+    clim: LIM = None,
+    xlabel: str = "<i>eV/</i>Δ<sub>0</sub>",
+    ylabel: str = "<i>eA/hν</i>",
+    zlabel: str = "d<i>I</i>/d<i>V</i> (G<sub>0</sub>)",
+    cmap_mpl: ListedColormap = cmap(),
+    surface_opacity: float = 0.85,
+    line_color: str = "black",
+    line_width: float = 6.0,
+) -> go.Figure:
+    """Create a 3D surface plot with visible relief segments overlaid.
+
+    Parameters
+    ----------
+    x
+        1D x-axis values of shape ``(Nx,)``.
+    y
+        1D y-axis values of shape ``(Ny,)``.
+    z
+        2D height field of shape ``(Ny, Nx)`` with ``z[y_i, x_j]``.
+    observer
+        Camera position in world coordinates used for relief extraction.
+    target
+        Camera target point in world coordinates used for relief extraction.
+    up
+        Approximate world up-direction used to orient the extraction camera.
+    projection
+        Projection mode passed to ``extract_visible_relief``.
+    xlim
+        Optional x-range used to crop the field before plotting.
+    ylim
+        Optional y-range used to crop the field before plotting.
+    zlim
+        Optional z-axis limits for the surface plot.
+    clim
+        Optional color limits for the surface plot.
+    xlabel, ylabel, zlabel
+        Axis labels for the 3D surface plot.
+    cmap_mpl
+        Matplotlib colormap used for the surface.
+    surface_opacity
+        Opacity of the surface layer.
+    line_color
+        Line color for the visible relief overlay.
+    line_width
+        Line width for the visible relief overlay.
+
+    Returns
+    -------
+    go.Figure
+        Plotly figure containing one surface trace and one line trace.
+    """
+    fig = get_surface(
+        x=x,
+        y=y,
+        z=z,
+        xlim=xlim,
+        ylim=ylim,
+        zlim=zlim,
+        clim=clim,
+        xlabel=xlabel,
+        ylabel=ylabel,
+        zlabel=zlabel,
+        cmap_mpl=cmap_mpl,
+    )
+    fig.update_traces(opacity=surface_opacity, selector=dict(type="surface"))
+
+    relief = extract_visible_relief(
+        x=x,
+        y=y,
+        z=z,
+        observer=observer,
+        target=target,
+        up=up,
+        projection=projection,
+        xlim=xlim,
+        ylim=ylim,
+    )
+
+    x_line: list[float | None] = []
+    y_line: list[float | None] = []
+    z_line: list[float | None] = []
+    for segment in relief.world_segments or []:
+        x_line.extend([float(segment[0, 0]), float(segment[1, 0]), None])
+        y_line.extend([float(segment[0, 1]), float(segment[1, 1]), None])
+        z_line.extend([float(segment[0, 2]), float(segment[1, 2]), None])
+
+    fig.add_trace(
+        go.Scatter3d(
+            x=x_line,
+            y=y_line,
+            z=z_line,
+            mode="lines",
+            line=dict(color=line_color, width=line_width),
+            showlegend=False,
+            hoverinfo="skip",
+            name="visible relief",
+        ),
+    )
+    fig.update_layout(
+        scene_camera=_get_plotly_camera(observer=observer, target=target, up=up),
     )
     return fig
 
@@ -328,6 +474,104 @@ def get_heatmap(
     )
 
     return fig
+
+
+def get_relief(
+    x: NDArray64,
+    y: NDArray64,
+    z: NDArray64,
+    *,
+    observer: NDArray64 | tuple[float, float, float],
+    target: NDArray64 | tuple[float, float, float],
+    up: NDArray64 | tuple[float, float, float] = (0.0, 0.0, 1.0),
+    projection: str = "perspective",
+    xlim: LIM = None,
+    ylim: LIM = None,
+    line_color: str = "black",
+    line_width: float = 2.0,
+) -> go.Figure:
+    """Create a 2D Plotly figure of visible relief outlines.
+
+    Parameters
+    ----------
+    x
+        1D x-axis values of shape ``(Nx,)``.
+    y
+        1D y-axis values of shape ``(Ny,)``.
+    z
+        2D height field of shape ``(Ny, Nx)`` with ``z[y_i, x_j]``.
+    observer
+        Camera position in world coordinates.
+    target
+        Camera target point in world coordinates.
+    up
+        Approximate world up-direction used to orient the camera.
+    projection
+        Projection mode, either ``"perspective"`` or ``"orthographic"``.
+    xlim
+        Optional x-range used to crop the field before meshing.
+    ylim
+        Optional y-range used to crop the field before meshing.
+    line_color
+        Line color for visible relief strokes.
+    line_width
+        Line width for visible relief strokes.
+
+    Returns
+    -------
+    go.Figure
+        Plotly figure containing only 2D line traces.
+    """
+    relief = extract_visible_relief(
+        x=x,
+        y=y,
+        z=z,
+        observer=observer,
+        target=target,
+        up=up,
+        projection=projection,
+        xlim=xlim,
+        ylim=ylim,
+    )
+
+    traces = [
+        go.Scatter(
+            x=polyline[:, 0],
+            y=polyline[:, 1],
+            mode="lines",
+            line=dict(color=line_color, width=line_width),
+            showlegend=False,
+            hoverinfo="skip",
+        )
+        for polyline in relief.polylines
+    ]
+
+    (xmin, xmax), (ymin, ymax) = relief.screen_bounds
+    xpad = 0.03 * max(1.0, xmax - xmin)
+    ypad = 0.03 * max(1.0, ymax - ymin)
+
+    layout = go.Layout(
+        xaxis=dict(
+            visible=False,
+            showgrid=False,
+            zeroline=False,
+            range=[xmin - xpad, xmax + xpad],
+        ),
+        yaxis=dict(
+            visible=False,
+            showgrid=False,
+            zeroline=False,
+            range=[ymin - ypad, ymax + ypad],
+            scaleanchor="x",
+            scaleratio=1.0,
+        ),
+        margin=dict(l=0, r=0, t=0, b=0, pad=0),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        showlegend=False,
+    )
+
+    return go.Figure(data=traces, layout=layout, skip_invalid=False)
 
 
 def get_all(
