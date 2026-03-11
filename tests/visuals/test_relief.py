@@ -24,6 +24,19 @@ def _grid(n: int = 11) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     return x, y, *np.meshgrid(x, y, indexing="xy")
 
 
+def _canonical_segments(
+    segments: list[np.ndarray] | None,
+) -> list[tuple[tuple[float, ...], tuple[float, ...]]]:
+    """Return rounded, direction-independent world segments."""
+    canonical: list[tuple[tuple[float, ...], tuple[float, ...]]] = []
+    for segment in segments or []:
+        rounded = np.round(np.asarray(segment, dtype=np.float64), decimals=10)
+        point_a = tuple(float(value) for value in rounded[0])
+        point_b = tuple(float(value) for value in rounded[1])
+        canonical.append((point_a, point_b) if point_a <= point_b else (point_b, point_a))
+    return sorted(canonical)
+
+
 def test_single_peak_relief_regression() -> None:
     """A single isolated peak should yield stable visible outline geometry."""
     x, y, xg, yg = _grid()
@@ -246,6 +259,7 @@ def test_progress_smoke() -> None:
         observer=(-10.0, -0.5, 0.9),
         target=(0.0, 0.0, 0.25),
         progress=True,
+        progress_mode="candidates",
     )
     mesh = prepare_relief_mesh(x, y, z)
     prepared = extract_visible_relief_from_mesh(
@@ -253,7 +267,62 @@ def test_progress_smoke() -> None:
         observer=(-10.0, -0.5, 0.9),
         target=(0.0, 0.0, 0.25),
         progress=True,
+        progress_mode="candidates",
     )
 
     assert len(direct.polylines) > 0
     assert len(prepared.polylines) == len(direct.polylines)
+
+
+def test_parallel_matches_serial_extraction() -> None:
+    """The multiprocessing path should match serial extraction."""
+    x, y, xg, yg = _grid(n=21)
+    z = (
+        0.85 * np.exp(-((xg + 2.0) ** 2 + (yg + 0.2) ** 2) / 1.4)
+        + 0.65 * np.exp(-((xg + 0.2) ** 2 + (yg - 0.1) ** 2) / 1.1)
+        + 1.05 * np.exp(-((xg - 1.8) ** 2 + (yg + 0.1) ** 2) / 1.5)
+    )
+    mesh = prepare_relief_mesh(x, y, z)
+    kwargs = dict(
+        observer=(-10.0, -0.5, 0.9),
+        target=(0.0, 0.0, 0.25),
+    )
+
+    serial = extract_visible_relief_from_mesh(mesh, n_jobs=1, **kwargs)
+    parallel = extract_visible_relief_from_mesh(
+        mesh,
+        n_jobs=2,
+        progress=True,
+        **kwargs,
+    )
+
+    assert len(parallel.polylines) == len(serial.polylines)
+    assert sum(poly.shape[0] for poly in parallel.polylines) == sum(
+        poly.shape[0] for poly in serial.polylines
+    )
+    assert _canonical_segments(parallel.world_segments) == _canonical_segments(
+        serial.world_segments
+    )
+    parallel_bounds = np.asarray(parallel.screen_bounds, dtype=np.float64).ravel()
+    serial_bounds = np.asarray(serial.screen_bounds, dtype=np.float64).ravel()
+    assert parallel_bounds == pytest.approx(serial_bounds)
+
+
+@pytest.mark.parametrize("progress_mode", ["auto", "chunks", "candidates"])
+def test_progress_modes_validate(progress_mode: str) -> None:
+    """Supported progress modes should all produce valid geometry."""
+    x, y, xg, yg = _grid(n=9)
+    z = np.exp(-((xg + 0.5) ** 2 + yg**2) / 2.0)
+
+    relief = extract_visible_relief(
+        x,
+        y,
+        z,
+        observer=(-10.0, -0.5, 0.9),
+        target=(0.0, 0.0, 0.25),
+        progress=True,
+        progress_mode=progress_mode,
+        n_jobs=2,
+    )
+
+    assert len(relief.polylines) > 0

@@ -152,6 +152,8 @@ def get_surface_relief(
     line_color: str = "black",
     line_width: float = 6.0,
     progress: bool = False,
+    progress_mode: str = "auto",
+    n_jobs: int = 1,
 ) -> go.Figure:
     """Create a 3D surface plot with visible relief segments overlaid.
 
@@ -192,6 +194,10 @@ def get_surface_relief(
     progress
         If ``True``, show a ``tqdm`` progress bar while extracting visible
         relief segments.
+    progress_mode
+        Progress update granularity passed to ``extract_visible_relief``.
+    n_jobs
+        Number of worker processes used for relief extraction.
 
     Returns
     -------
@@ -224,6 +230,8 @@ def get_surface_relief(
         xlim=xlim,
         ylim=ylim,
         progress=progress,
+        progress_mode=progress_mode,
+        n_jobs=n_jobs,
     )
 
     x_line: list[float | None] = []
@@ -495,6 +503,8 @@ def get_relief(
     line_color: str = "black",
     line_width: float = 2.0,
     progress: bool = False,
+    progress_mode: str = "auto",
+    n_jobs: int = 1,
 ) -> go.Figure:
     """Create a 2D Plotly figure of visible relief outlines.
 
@@ -525,6 +535,10 @@ def get_relief(
     progress
         If ``True``, show a ``tqdm`` progress bar while extracting visible
         relief segments.
+    progress_mode
+        Progress update granularity passed to ``extract_visible_relief``.
+    n_jobs
+        Number of worker processes used for relief extraction.
 
     Returns
     -------
@@ -542,6 +556,8 @@ def get_relief(
         xlim=xlim,
         ylim=ylim,
         progress=progress,
+        progress_mode=progress_mode,
+        n_jobs=n_jobs,
     )
 
     traces = [
