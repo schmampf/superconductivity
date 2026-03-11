@@ -10,7 +10,11 @@ import pytest
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/mpl")
 
 from superconductivity.visuals.plotly.maps import get_relief, get_surface_relief
-from superconductivity.visuals.relief import extract_visible_relief
+from superconductivity.visuals.relief import (
+    extract_visible_relief,
+    extract_visible_relief_from_mesh,
+    prepare_relief_mesh,
+)
 
 
 def _grid(n: int = 11) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -204,3 +208,52 @@ def test_plotly_surface_relief_smoke() -> None:
     assert fig.data[1].type == "scatter3d"
     assert fig.data[1].mode == "lines"
     assert fig.layout.scene.camera.eye is not None
+
+
+def test_prepared_mesh_matches_direct_extraction() -> None:
+    """Prepared-mesh extraction should match the direct convenience path."""
+    x, y, xg, yg = _grid()
+    z = (
+        0.85 * np.exp(-((xg + 2.0) ** 2 + (yg + 0.2) ** 2) / 1.4)
+        + 0.65 * np.exp(-((xg + 0.2) ** 2 + (yg - 0.1) ** 2) / 1.1)
+        + 1.05 * np.exp(-((xg - 1.8) ** 2 + (yg + 0.1) ** 2) / 1.5)
+    )
+    kwargs = dict(
+        observer=(-10.0, -0.5, 0.9),
+        target=(0.0, 0.0, 0.25),
+    )
+
+    direct = extract_visible_relief(x, y, z, **kwargs)
+    mesh = prepare_relief_mesh(x, y, z)
+    prepared = extract_visible_relief_from_mesh(mesh, **kwargs)
+
+    assert len(prepared.polylines) == len(direct.polylines)
+    assert len(prepared.world_segments or []) == len(direct.world_segments or [])
+    prepared_bounds = np.asarray(prepared.screen_bounds, dtype=np.float64).ravel()
+    direct_bounds = np.asarray(direct.screen_bounds, dtype=np.float64).ravel()
+    assert prepared_bounds == pytest.approx(direct_bounds)
+
+
+def test_progress_smoke() -> None:
+    """Progress-enabled extraction should run without changing outputs."""
+    x, y, xg, yg = _grid(n=9)
+    z = np.exp(-((xg + 0.5) ** 2 + yg**2) / 2.0)
+
+    direct = extract_visible_relief(
+        x,
+        y,
+        z,
+        observer=(-10.0, -0.5, 0.9),
+        target=(0.0, 0.0, 0.25),
+        progress=True,
+    )
+    mesh = prepare_relief_mesh(x, y, z)
+    prepared = extract_visible_relief_from_mesh(
+        mesh,
+        observer=(-10.0, -0.5, 0.9),
+        target=(0.0, 0.0, 0.25),
+        progress=True,
+    )
+
+    assert len(direct.polylines) > 0
+    assert len(prepared.polylines) == len(direct.polylines)

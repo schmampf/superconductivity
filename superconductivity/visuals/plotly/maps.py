@@ -151,6 +151,7 @@ def get_surface_relief(
     surface_opacity: float = 0.85,
     line_color: str = "black",
     line_width: float = 6.0,
+    progress: bool = False,
 ) -> go.Figure:
     """Create a 3D surface plot with visible relief segments overlaid.
 
@@ -188,6 +189,9 @@ def get_surface_relief(
         Line color for the visible relief overlay.
     line_width
         Line width for the visible relief overlay.
+    progress
+        If ``True``, show a ``tqdm`` progress bar while extracting visible
+        relief segments.
 
     Returns
     -------
@@ -219,6 +223,7 @@ def get_surface_relief(
         projection=projection,
         xlim=xlim,
         ylim=ylim,
+        progress=progress,
     )
 
     x_line: list[float | None] = []
@@ -489,6 +494,7 @@ def get_relief(
     ylim: LIM = None,
     line_color: str = "black",
     line_width: float = 2.0,
+    progress: bool = False,
 ) -> go.Figure:
     """Create a 2D Plotly figure of visible relief outlines.
 
@@ -516,6 +522,9 @@ def get_relief(
         Line color for visible relief strokes.
     line_width
         Line width for visible relief strokes.
+    progress
+        If ``True``, show a ``tqdm`` progress bar while extracting visible
+        relief segments.
 
     Returns
     -------
@@ -532,6 +541,7 @@ def get_relief(
         projection=projection,
         xlim=xlim,
         ylim=ylim,
+        progress=progress,
     )
 
     traces = [
