@@ -1,6 +1,8 @@
-import numpy as np
-import os
 import logging
+import os
+from pathlib import Path
+
+import numpy as np
 from importlib import reload
 from contextlib import contextmanager
 
@@ -24,9 +26,11 @@ from ..utilities.constants import T_tol_K
 from ..utilities.constants import Delta_tol_meV
 from ..utilities.constants import gamma_tol_meV
 
-HOME_DIR = "/Users/oliver/Documents/superconductivity/"
-WORK_DIR = os.path.join(HOME_DIR, "superconductivity/models/carlosha/")
-CACHE_DIR = os.path.join(HOME_DIR, ".cache/ha_sym")
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+HOME_DIR = f"{_REPO_ROOT}/"
+WORK_DIR = str(_REPO_ROOT / "superconductivity" / "models" / "carlosha")
+CACHE_DIR = str(_REPO_ROOT / ".cache" / "ha_sym")
 
 os.makedirs(CACHE_DIR, exist_ok=True)
 

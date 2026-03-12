@@ -1,7 +1,9 @@
 import io
-import numpy as np
 import os
 import subprocess
+from pathlib import Path
+
+import numpy as np
 
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import as_completed
@@ -17,11 +19,12 @@ from ..utilities.constants import T_tol_K
 from ..utilities.constants import Delta_tol_meV
 from ..utilities.constants import gamma_tol_meV
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
-HOME_DIR = "/Users/oliver/Documents/superconductivity/"
-WORK_DIR = os.path.join(HOME_DIR, "superconductivity/models/carlosha/")
-CACHE_DIR = os.path.join(HOME_DIR, ".cache/ha_asym")
-HA_EXE = os.path.join(WORK_DIR, "ha_asym")
+HOME_DIR = f"{_REPO_ROOT}/"
+WORK_DIR = str(_REPO_ROOT / "superconductivity" / "models" / "carlosha")
+CACHE_DIR = str(_REPO_ROOT / ".cache" / "ha_asym")
+HA_EXE = str(Path(WORK_DIR) / "ha_asym")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 

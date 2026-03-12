@@ -11,13 +11,17 @@ Textwidth: float = 4.25279  # in
 Textheight: float = 6.85173  # in
 
 
-Local: str = "/Users/oliver/Documents/superconductivity/thesis/"
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_CRYOLAB_ROOT = _REPO_ROOT.parent
+_STYLE_DIR = Path(__file__).resolve().parent
 
-Remote: str = "/Users/oliver/Documents/dissertation/"
+Local: str = f"{(_REPO_ROOT / 'thesis').resolve()}/"
 
-Style: str = "/Users/oliver/Documents/superconductivity/superconductivity/style/"
+Remote: str = f"{(_CRYOLAB_ROOT / 'dissertation').resolve()}/"
 
-plt.style.use(f"{Style}thesisstyle.mplstyle")
+Style: str = f"{_STYLE_DIR.resolve()}/"
+
+plt.style.use(str(_STYLE_DIR / "thesisstyle.mplstyle"))
 
 
 def save_figure(

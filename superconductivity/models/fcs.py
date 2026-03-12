@@ -1,7 +1,9 @@
 import io
-import numpy as np
 import os
 import subprocess
+from pathlib import Path
+
+import numpy as np
 
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import as_completed
@@ -23,10 +25,12 @@ from ..utilities.constants import m_max
 from ..utilities.constants import iw
 from ..utilities.constants import nchi
 
-HOME_DIR = "/Users/oliver/Documents/superconductivity/"
-WORK_DIR = os.path.join(HOME_DIR, "superconductivity/models/carlosfcs/")
-CACHE_DIR = os.path.join(HOME_DIR, ".cache/fcs_")
-FCS_EXE = os.path.join(WORK_DIR, "fcs")
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+HOME_DIR = f"{_REPO_ROOT}/"
+WORK_DIR = str(_REPO_ROOT / "superconductivity" / "models" / "carlosfcs")
+CACHE_DIR = str(_REPO_ROOT / ".cache" / "fcs_")
+FCS_EXE = str(Path(WORK_DIR) / "fcs")
 
 os.makedirs(CACHE_DIR, exist_ok=True)
 
