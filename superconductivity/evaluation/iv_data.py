@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Sequence
+from typing import Mapping, Sequence
 
 import numpy as np
 
@@ -181,10 +181,55 @@ def _extract_value_from_specific_key(
         ) from exc
 
 
+def _normalize_specific_key_value_overrides(
+    value_overrides: (
+        Mapping[str, float] | Sequence[tuple[str, float]] | None
+    ) = None,
+) -> dict[str, float]:
+    """Normalize exact-key value overrides.
+
+    Parameters
+    ----------
+    value_overrides : mapping or sequence of tuple, optional
+        Exact specific-key overrides as ``{key: value}`` or
+        ``[(key, value), ...]``. Matching keys bypass the string parser and
+        use the provided numeric value directly.
+
+    Returns
+    -------
+    dict[str, float]
+        Normalized override dictionary with finite float values.
+
+    Raises
+    ------
+    ValueError
+        If an override key is empty or an override value is not finite.
+    """
+    if value_overrides is None:
+        return {}
+
+    overrides = dict(value_overrides)
+    normalized: dict[str, float] = {}
+    for key, value in overrides.items():
+        if not isinstance(key, str) or key == "":
+            raise ValueError("Override keys must be non-empty strings.")
+
+        value_float = float(value)
+        if not np.isfinite(value_float):
+            raise ValueError(
+                f"Override value for specific_key '{key}' must be finite.",
+            )
+        normalized[key] = value_float
+    return normalized
+
+
 def sort_specific_keys_by_value(
     specific_keys: Sequence[str],
     strip0: str = "=",
     strip1: str | None = None,
+    value_overrides: (
+        Mapping[str, float] | Sequence[tuple[str, float]] | None
+    ) = None,
 ) -> tuple[list[str], np.ndarray]:
     """Sort specific keys by parsed numeric value.
 
@@ -196,6 +241,10 @@ def sort_specific_keys_by_value(
         Start delimiter for value parsing.
     strip1 : str | None, default=None
         End delimiter for value parsing. If ``None``, parse to key end.
+    value_overrides : mapping or sequence of tuple, optional
+        Exact specific-key overrides as ``{key: value}`` or
+        ``[(key, value), ...]``. Matching keys skip parsing and use the
+        supplied value instead.
 
     Returns
     -------
@@ -211,12 +260,17 @@ def sort_specific_keys_by_value(
     if len(keys) == 0:
         raise ValueError("specific_keys must not be empty.")
 
+    overrides = _normalize_specific_key_value_overrides(value_overrides)
     values = np.asarray(
         [
-            _extract_value_from_specific_key(
-                specific_key=key,
-                strip0=strip0,
-                strip1=strip1,
+            (
+                overrides[key]
+                if key in overrides
+                else _extract_value_from_specific_key(
+                    specific_key=key,
+                    strip0=strip0,
+                    strip1=strip1,
+                )
             )
             for key in keys
         ],
@@ -233,6 +287,9 @@ def list_specific_keys_and_values(
     measurement: str,
     strip0: str = "=",
     strip1: str | None = None,
+    value_overrides: (
+        Mapping[str, float] | Sequence[tuple[str, float]] | None
+    ) = None,
 ) -> tuple[list[str], np.ndarray]:
     """List and sort specific keys with parsed numeric values.
 
@@ -246,6 +303,10 @@ def list_specific_keys_and_values(
         Start delimiter for value parsing from each key.
     strip1 : str | None, default=None
         End delimiter for value parsing. If ``None``, parse to key end.
+    value_overrides : mapping or sequence of tuple, optional
+        Exact specific-key overrides as ``{key: value}`` or
+        ``[(key, value), ...]``. Matching keys skip parsing and use the
+        supplied value instead.
 
     Returns
     -------
@@ -260,6 +321,7 @@ def list_specific_keys_and_values(
         specific_keys=specific_keys,
         strip0=strip0,
         strip1=strip1,
+        value_overrides=value_overrides,
     )
 
 
