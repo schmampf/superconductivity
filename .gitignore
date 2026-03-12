@@ -3,6 +3,8 @@
 *.pyo
 *.pyd
 *.npz
+*.aux
+*.log
 __pycache__/
 
 # macOS system files
