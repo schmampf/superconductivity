@@ -89,6 +89,7 @@ peach80: NDArray64 = np.array([254, 160, 144], dtype=np.float64) / 255
 peach100: NDArray64 = np.array([255, 142, 123], dtype=np.float64) / 255
 
 # seegrau
+seegrau10: NDArray64 = np.array([240, 241, 242], dtype=np.float64) / 255
 seegrau20: NDArray64 = np.array([225, 226, 229], dtype=np.float64) / 255
 seegrau35: NDArray64 = np.array([184, 188, 193], dtype=np.float64) / 255
 seegrau65: NDArray64 = np.array([154, 160, 167], dtype=np.float64) / 255
