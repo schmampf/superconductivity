@@ -34,6 +34,7 @@ models/old/
 models/old_HA/
 old/
 .cache/
+.venv
 .venv/
 .vscode/
 
