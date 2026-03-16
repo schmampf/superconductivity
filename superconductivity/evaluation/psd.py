@@ -1,3 +1,10 @@
+"""Helpers for power spectral densities derived from IV traces."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Iterator, TypedDict
+
 import numpy as np
 
 from ..utilities.safety import (
@@ -6,50 +13,158 @@ from ..utilities.safety import (
     require_same_shape,
     to_1d_float64,
 )
+from ..utilities.types import NDArray64
+from .ivdata import IVTrace, IVTraces
 
 
-def get_psd(
-    I_nA: np.ndarray,
-    V_mV: np.ndarray,
-    t_s: np.ndarray,
+class PSDTrace(TypedDict):
+    """One PSD trace with metadata."""
+
+    specific_key: str
+    index: int | None
+    yvalue: float | None
+    I_psd_nA2_per_Hz: NDArray64
+    V_psd_mV2_per_Hz: NDArray64
+    f_Hz: NDArray64
+
+
+@dataclass(slots=True)
+class PSDTraces:
+    """Container for multiple PSD traces with lookup helpers."""
+
+    traces: list[PSDTrace]
+    keys: list[str] = field(init=False)
+    yvalues: NDArray64 = field(init=False)
+    I_psd_nA2_per_Hz: list[NDArray64] = field(init=False)
+    V_psd_mV2_per_Hz: list[NDArray64] = field(init=False)
+    f_Hz: list[NDArray64] = field(init=False)
+    _indices_by_key: dict[str, list[int]] = field(
+        init=False,
+        repr=False,
+    )
+
+    def __post_init__(self) -> None:
+        """Build list views and lookup tables from ``traces``."""
+        self.keys = []
+        self.I_psd_nA2_per_Hz = []
+        self.V_psd_mV2_per_Hz = []
+        self.f_Hz = []
+        yvalues: list[float] = []
+        indices_by_key: dict[str, list[int]] = {}
+
+        for index, trace in enumerate(self.traces):
+            specific_key = trace["specific_key"]
+            self.keys.append(specific_key)
+            self.I_psd_nA2_per_Hz.append(trace["I_psd_nA2_per_Hz"])
+            self.V_psd_mV2_per_Hz.append(trace["V_psd_mV2_per_Hz"])
+            self.f_Hz.append(trace["f_Hz"])
+            yvalue = trace["yvalue"]
+            yvalues.append(np.nan if yvalue is None else float(yvalue))
+            indices_by_key.setdefault(specific_key, []).append(index)
+
+        self.yvalues = np.asarray(yvalues, dtype=np.float64)
+        self._indices_by_key = indices_by_key
+
+    def __len__(self) -> int:
+        """Return number of traces."""
+        return len(self.traces)
+
+    def __iter__(self) -> Iterator[PSDTrace]:
+        """Iterate over traces."""
+        return iter(self.traces)
+
+    def __getitem__(
+        self,
+        index: int | slice,
+    ) -> PSDTrace | list[PSDTrace]:
+        """Return trace(s) by positional index."""
+        return self.traces[index]
+
+    def all_by_key(
+        self,
+        specific_key: str,
+    ) -> list[PSDTrace]:
+        """Return all traces with one exact specific key."""
+        indices = self._indices_by_key.get(specific_key, [])
+        return [self.traces[index] for index in indices]
+
+    def by_key(
+        self,
+        specific_key: str,
+    ) -> PSDTrace:
+        """Return one trace for one exact specific key."""
+        return self._resolve_unique_match(
+            matches=self.all_by_key(specific_key),
+            selector_name="specific_key",
+            selector_value=specific_key,
+            plural_hint="all_by_key",
+        )
+
+    def all_by_value(
+        self,
+        yvalue: float,
+    ) -> list[PSDTrace]:
+        """Return all traces with one y-value."""
+        indices = self._find_indices_by_value(yvalue)
+        return [self.traces[index] for index in indices]
+
+    def by_value(
+        self,
+        yvalue: float,
+    ) -> PSDTrace:
+        """Return one trace for one y-value."""
+        return self._resolve_unique_match(
+            matches=self.all_by_value(yvalue),
+            selector_name="yvalue",
+            selector_value=yvalue,
+            plural_hint="all_by_value",
+        )
+
+    def _find_indices_by_value(
+        self,
+        yvalue: float,
+    ) -> list[int]:
+        """Return positional indices that match one y-value."""
+        value = float(yvalue)
+        if not np.isfinite(value):
+            raise ValueError("yvalue must be finite.")
+
+        atol = np.finfo(np.float64).eps * max(1.0, abs(value)) * 8.0
+        matches = np.flatnonzero(
+            np.isclose(self.yvalues, value, rtol=0.0, atol=atol),
+        )
+        return matches.tolist()
+
+    @staticmethod
+    def _resolve_unique_match(
+        matches: list[PSDTrace],
+        selector_name: str,
+        selector_value: str | float,
+        plural_hint: str,
+    ) -> PSDTrace:
+        """Return one match or raise a clear selector error."""
+        if len(matches) == 0:
+            raise KeyError(
+                f"{selector_name} {selector_value!r} was not found.",
+            )
+        if len(matches) > 1:
+            raise ValueError(
+                f"{selector_name} {selector_value!r} matches multiple "
+                f"traces. Use index or {plural_hint}(...).",
+            )
+        return matches[0]
+
+
+def _get_psd_arrays(
+    I_nA: NDArray64,
+    V_mV: NDArray64,
+    t_s: NDArray64,
     detrend: bool = True,
     window: str = "hann",
     enforce_uniform: bool = True,
     uniform_rtol: float = 1e-2,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Compute one-sided power spectral densities of ``I(t)`` and ``V(t)``.
-
-    Parameters
-    ----------
-    I_nA : np.ndarray
-        Current time trace in nA.
-    V_mV : np.ndarray
-        Voltage time trace in mV.
-    t_s : np.ndarray
-        Time axis in seconds.
-    detrend : bool, default=True
-        If ``True``, subtract the mean from ``I_nA`` and ``V_mV`` before PSD.
-    window : str, default="hann"
-        Window type. Supported values are ``"hann"`` and ``"none"``.
-    enforce_uniform : bool, default=True
-        If ``True``, require approximately uniform time spacing.
-    uniform_rtol : float, default=1e-2
-        Relative tolerance used in uniform-spacing validation.
-
-    Returns
-    -------
-    tuple[np.ndarray, np.ndarray, np.ndarray]
-        ``(I_psd_nA2_per_Hz, V_psd_mV2_per_Hz, f_Hz)`` where:
-        - ``I_psd_nA2_per_Hz`` is the one-sided current PSD.
-        - ``V_psd_mV2_per_Hz`` is the one-sided voltage PSD.
-        - ``f_Hz`` is the one-sided frequency axis in Hz.
-
-    Raises
-    ------
-    ValueError
-        If inputs have mismatched shapes, non-finite values, invalid time
-        spacing, or unsupported window type.
-    """
+) -> tuple[NDArray64, NDArray64, NDArray64]:
+    """Compute one-sided PSD arrays from one ``I(t)``, ``V(t)`` trace."""
     I_arr = to_1d_float64(I_nA, "I_nA")
     V_arr = to_1d_float64(V_mV, "V_mV")
     t_arr = to_1d_float64(t_s, "t_s")
@@ -118,3 +233,56 @@ def get_psd(
         np.asarray(V_psd_mV2_per_Hz, dtype=np.float64),
         np.asarray(f_Hz, dtype=np.float64),
     )
+
+
+def get_psd(
+    trace: IVTrace,
+    detrend: bool = True,
+    window: str = "hann",
+    enforce_uniform: bool = True,
+    uniform_rtol: float = 1e-2,
+) -> PSDTrace:
+    """Compute one PSD trace from one IV trace."""
+    I_psd_nA2_per_Hz, V_psd_mV2_per_Hz, f_Hz = _get_psd_arrays(
+        I_nA=trace["I_nA"],
+        V_mV=trace["V_mV"],
+        t_s=trace["t_s"],
+        detrend=detrend,
+        window=window,
+        enforce_uniform=enforce_uniform,
+        uniform_rtol=uniform_rtol,
+    )
+
+    return {
+        "specific_key": trace["specific_key"],
+        "index": trace["index"],
+        "yvalue": trace["yvalue"],
+        "I_psd_nA2_per_Hz": I_psd_nA2_per_Hz,
+        "V_psd_mV2_per_Hz": V_psd_mV2_per_Hz,
+        "f_Hz": f_Hz,
+    }
+
+
+def get_psds(
+    traces: IVTraces,
+    detrend: bool = True,
+    window: str = "hann",
+    enforce_uniform: bool = True,
+    uniform_rtol: float = 1e-2,
+) -> PSDTraces:
+    """Compute PSD traces for one collection of IV traces."""
+    return PSDTraces(
+        traces=[
+            get_psd(
+                trace=trace,
+                detrend=detrend,
+                window=window,
+                enforce_uniform=enforce_uniform,
+                uniform_rtol=uniform_rtol,
+            )
+            for trace in traces
+        ],
+    )
+
+
+__all__ = ["PSDTrace", "PSDTraces", "get_psd", "get_psds"]
