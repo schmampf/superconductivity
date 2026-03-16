@@ -63,10 +63,30 @@ from .models.fcs_pbar import get_I_fcs_pbar_nA as get_I_fcs_nA
 from .models.ha_asym import get_I_ha_asym_nA
 
 # import from evaluation
-from .evaluation.offset import get_offset
-from .evaluation.psd import get_psd
-from .evaluation.iv_data import (
-    get_ivt,
+from .evaluation.offset import (
+    OffsetSpec,
+    OffsetTrace,
+    OffsetTraces,
+    get_offset,
+    get_offsets,
+)
+from .evaluation.sampling import (
+    SamplingSpec,
+    SamplingTrace,
+    SamplingTraces,
+    get_sampling,
+    get_samplings,
+)
+from .evaluation.smoothing import (
+    SmoothedSamplingTrace,
+    SmoothedSamplingTraces,
+    SmoothingSpec,
+    get_smoothed_sampling,
+    get_smoothed_samplings,
+)
+from .evaluation.psd import PSDTrace, PSDTraces, get_psd, get_psds
+from .evaluation.ivdata import IVTrace, IVTraces, get_iv, get_ivs
+from .evaluation.keys import (
     list_measurement_keys,
     list_specific_keys,
     list_specific_keys_and_values,
@@ -93,6 +113,7 @@ from .style.cpd5 import (
     seeblau80,
     seeblau100,
     seeblau120,
+    seegrau10,
     seegrau20,
     seegrau35,
     seegrau65,
@@ -116,7 +137,14 @@ from .utilities.types import NDArray64
 
 
 seeblau = [seeblau120, seeblau100, seeblau65, seeblau35, seeblau20]
-seegrau = [seegrau120, seegrau100, seegrau65, seegrau35, seegrau20]
+seegrau = [
+    seegrau120,
+    seegrau100,
+    seegrau65,
+    seegrau35,
+    seegrau20,
+    seegrau10,
+]
 
 # Public API for `from superconductivity.api import *`
 __all__ = [name for name in list(globals().keys()) if not name.startswith("_")]
