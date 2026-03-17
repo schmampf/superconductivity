@@ -26,6 +26,8 @@ from superconductivity.visuals.thesis.latex import (
     export_stacked_waterfall_thesis,
 )
 from superconductivity.visuals.thesis.surface import (
+    _build_surface_trace_bands,
+    _build_surface_trace_strips,
     get_thesis_surface_matplotlib,
 )
 from superconductivity.visuals.thesis.waterfall import (
@@ -146,6 +148,21 @@ def _heatmap_artist(
 ) -> matplotlib.artist.Artist:
     """Return the default warped heatmap artist."""
     return ax.artists[0]
+
+
+def _fake_stack_preview_png(
+    *,
+    main_pgf: Path,
+    png_path: Path,
+    figsize: tuple[float, float] | None = None,
+    dpi: float,
+    latex_command: str | None = None,
+) -> Path:
+    """Write a tiny fake stacked preview PNG for export tests."""
+    del main_pgf, figsize, dpi, latex_command
+    png_path.parent.mkdir(parents=True, exist_ok=True)
+    png_path.write_bytes(b"png")
+    return png_path
 
 
 def _pane_alpha(
@@ -712,6 +729,8 @@ def test_export_stacked_waterfall_thesis_writes_assets(
     saved_rcparams: dict[str, dict[str, object]] = {}
     saved_geometry: dict[str, int] = {}
     displayed: dict[str, object] = {}
+    compiled: dict[str, Path | str] = {}
+    rendered: dict[str, Path | float] = {}
     custom_ticks = (
         (float(x[0]), float(x[-1])),
         (float(y[0]), float(y[-1])),
@@ -785,8 +804,6 @@ def test_export_stacked_waterfall_thesis_writes_assets(
                 "pgf.preamble": matplotlib.rcParams["pgf.preamble"],
             }
 
-    compiled: dict[str, Path | str] = {}
-
     def fake_compile(
         preview_tex: str | Path,
         *,
@@ -799,18 +816,34 @@ def test_export_stacked_waterfall_thesis_writes_assets(
         compiled["latex_command"] = latex_command
         return pdf_path
 
+    def fake_render_preview_png(
+        pdf_path: Path,
+        *,
+        png_path: Path,
+        dpi: float = 200.0,
+    ) -> Path:
+        png_path.parent.mkdir(parents=True, exist_ok=True)
+        png_path.write_bytes(b"png")
+        rendered["pdf_path"] = Path(pdf_path)
+        rendered["png_path"] = Path(png_path)
+        rendered["dpi"] = float(dpi)
+        return png_path
+
     monkeypatch.setattr(Figure, "savefig", fake_savefig)
     monkeypatch.setattr(
         "superconductivity.visuals.thesis.latex.compile_thesis_preview",
         fake_compile,
     )
     monkeypatch.setattr(
-        "superconductivity.visuals.thesis.latex._display_pdf_preview",
-        lambda pdf_path, *, height=720, png_dpi=200.0: displayed.update(
+        "superconductivity.visuals.thesis.latex._render_preview_png",
+        fake_render_preview_png,
+    )
+    monkeypatch.setattr(
+        "superconductivity.visuals.thesis.latex._display_png_preview",
+        lambda png_path, *, height=720: displayed.update(
             {
-                "pdf_path": Path(pdf_path),
+                "png_path": Path(png_path),
                 "height": int(height),
-                "png_dpi": float(png_dpi),
             }
         ),
     )
@@ -835,10 +868,6 @@ def test_export_stacked_waterfall_thesis_writes_assets(
     stale_remote_dir.mkdir(parents=True, exist_ok=True)
     stale_remote_file = stale_remote_dir / "stale.txt"
     stale_remote_file.write_text("stale", encoding="utf-8")
-    stale_remote_pdf = (tmp_path / "remote" / "figures" / "demo_stack").with_suffix(
-        ".pdf"
-    )
-    stale_remote_pdf.write_text("stale", encoding="utf-8")
 
     export = export_stacked_waterfall_thesis(
         x,
@@ -872,42 +901,31 @@ def test_export_stacked_waterfall_thesis_writes_assets(
     )
 
     expected_saved = {
-        export.waterfall_pdf,
-        export.surface_pdf,
-        export.heatmap_pdf,
         export.waterfall_pgf,
         export.surface_pgf,
         export.heatmap_pgf,
     }
     assert expected_saved.issubset(set(saved_files))
-    assert saved_dpi[export.waterfall_pdf.name] == 1800.0
-    assert saved_dpi[export.surface_pdf.name] == 3600.0
-    assert saved_dpi[export.heatmap_pdf.name] == 1800.0
     assert saved_dpi[export.waterfall_pgf.name] == 1800.0
     assert saved_dpi[export.surface_pgf.name] == 3600.0
     assert saved_dpi[export.heatmap_pgf.name] == 1800.0
-    assert saved_backend[export.waterfall_pdf.name] == "pgf"
-    assert saved_backend[export.surface_pdf.name] == "pgf"
-    assert saved_backend[export.heatmap_pdf.name] == "pgf"
     assert saved_backend[export.waterfall_pgf.name] == "pgf"
     assert saved_backend[export.surface_pgf.name] == "pgf"
     assert saved_backend[export.heatmap_pgf.name] == "pgf"
-    assert saved_geometry[export.waterfall_pdf.name] == 4
-    assert saved_geometry[export.surface_pdf.name] == 10 * (
+    assert saved_geometry[export.waterfall_pgf.name] == 4
+    assert saved_geometry[export.surface_pgf.name] == 10 * (
         (z.shape[1] - 1) * (z.shape[0] - 1)
     )
-    assert saved_geometry[export.heatmap_pdf.name] == z.size
+    assert saved_geometry[export.heatmap_pgf.name] == z.size
     assert export.stack_dir == tmp_path / "local" / "figures" / "demo_stack"
     assert export.main_pgf.exists()
-    assert export.main_tex.exists()
-    assert export.main_pdf.exists()
+    assert export.main_png.exists()
     assert export.remote_stack_dir == (
         tmp_path / "remote" / "figures" / "demo_stack"
     )
     assert export.remote_stack_dir.exists()
     assert not stale_local_file.exists()
     assert not stale_remote_file.exists()
-    assert not stale_remote_pdf.exists()
     assert not (tmp_path / "remote" / "figures" / "demo_stack.pdf").exists()
     stack_pgf = export.main_pgf.read_text(encoding="utf-8")
     assert {
@@ -941,118 +959,109 @@ def test_export_stacked_waterfall_thesis_writes_assets(
     waterfall_index = stack_pgf.index(r"\input{waterfall.pgf}")
     assert heatmap_index < surface_index < waterfall_index
 
-    preview = export.main_tex.read_text(encoding="utf-8")
-    assert r"\documentclass[varwidth,border=0pt]{standalone}" in preview
-    assert r"\usepackage{iftex}" in preview
-    assert r"\usepackage{xunicode}" in preview
-    assert r"\usepackage{fontspec}" in preview
-    assert r"\setmainfont{Arial}" in preview
-    assert r"\setsansfont{Arial}" in preview
-    assert r"\usepackage{cmbright}" in preview
-    assert r"\usepackage{pgf}" in preview
-    assert r"\usepackage{varwidth}" in preview
-    assert "main.pgf" in preview
-    assert r"\input{main.pgf}" in preview
     assert not (export.remote_stack_dir / "main.tex").exists()
-    assert r"\usepackage{adjustbox}" not in preview
-    assert compiled["preview_tex"] == export.main_tex
+    assert not (export.stack_dir / "main.tex").exists()
+    assert not (export.stack_dir / "main.pdf").exists()
     assert compiled["latex_command"] == "xelatex"
-    assert displayed["pdf_path"] == export.main_pdf
+    assert Path(compiled["preview_tex"]).name == "main.tex"
+    assert Path(compiled["preview_tex"]).parent != export.stack_dir
+    assert rendered["png_path"] == export.main_png
+    assert rendered["dpi"] == 200.0
+    assert displayed["png_path"] == export.main_png
     assert displayed["height"] == 720
-    assert displayed["png_dpi"] == 200.0
     np.testing.assert_allclose(
-        saved_box_scales[export.waterfall_pdf.name]
-        / saved_box_scales[export.surface_pdf.name],
+        saved_box_scales[export.waterfall_pgf.name]
+        / saved_box_scales[export.surface_pgf.name],
         0.45 / 0.9,
     )
-    assert saved_axis_state[export.waterfall_pdf.name]["xlim"][0] > (
-        saved_axis_state[export.waterfall_pdf.name]["xlim"][1]
+    assert saved_axis_state[export.waterfall_pgf.name]["xlim"][0] > (
+        saved_axis_state[export.waterfall_pgf.name]["xlim"][1]
     )
-    assert saved_axis_state[export.waterfall_pdf.name]["xlabel"] == ""
-    assert saved_axis_state[export.waterfall_pdf.name]["ylabel"] == ""
-    assert saved_axis_state[export.waterfall_pdf.name]["zlabel"] == "Counts"
+    assert saved_axis_state[export.waterfall_pgf.name]["xlabel"] == ""
+    assert saved_axis_state[export.waterfall_pgf.name]["ylabel"] == ""
+    assert saved_axis_state[export.waterfall_pgf.name]["zlabel"] == "Counts"
     assert (
-        saved_axis_state[export.waterfall_pdf.name]["ztext_x"]
-        > saved_axis_state[export.waterfall_pdf.name]["axes_center_x"]
+        saved_axis_state[export.waterfall_pgf.name]["ztext_x"]
+        > saved_axis_state[export.waterfall_pgf.name]["axes_center_x"]
     )
-    assert len(saved_axis_state[export.waterfall_pdf.name]["xticks"]) > 0
-    assert len(saved_axis_state[export.waterfall_pdf.name]["yticks"]) > 0
-    assert len(saved_axis_state[export.waterfall_pdf.name]["zticks"]) > 0
-    assert saved_axis_state[export.surface_pdf.name]["xlabel"] == ""
-    assert saved_axis_state[export.surface_pdf.name]["ylabel"] == ""
-    assert saved_axis_state[export.surface_pdf.name]["zlabel"] == "Counts"
+    assert len(saved_axis_state[export.waterfall_pgf.name]["xticks"]) > 0
+    assert len(saved_axis_state[export.waterfall_pgf.name]["yticks"]) > 0
+    assert len(saved_axis_state[export.waterfall_pgf.name]["zticks"]) > 0
+    assert saved_axis_state[export.surface_pgf.name]["xlabel"] == ""
+    assert saved_axis_state[export.surface_pgf.name]["ylabel"] == ""
+    assert saved_axis_state[export.surface_pgf.name]["zlabel"] == "Counts"
     assert (
-        saved_axis_state[export.surface_pdf.name]["ztext_x"]
-        > saved_axis_state[export.surface_pdf.name]["axes_center_x"]
+        saved_axis_state[export.surface_pgf.name]["ztext_x"]
+        > saved_axis_state[export.surface_pgf.name]["axes_center_x"]
     )
-    assert len(saved_axis_state[export.surface_pdf.name]["xticks"]) > 0
-    assert len(saved_axis_state[export.surface_pdf.name]["yticks"]) > 0
-    assert len(saved_axis_state[export.surface_pdf.name]["zticks"]) > 0
-    assert saved_axis_state[export.surface_pdf.name]["zticklabels"] == (
+    assert len(saved_axis_state[export.surface_pgf.name]["xticks"]) > 0
+    assert len(saved_axis_state[export.surface_pgf.name]["yticks"]) > 0
+    assert len(saved_axis_state[export.surface_pgf.name]["zticks"]) > 0
+    assert saved_axis_state[export.surface_pgf.name]["zticklabels"] == (
         "z lo",
         "z hi",
     )
-    assert saved_axis_state[export.heatmap_pdf.name]["xlabel"] != ""
-    assert saved_axis_state[export.heatmap_pdf.name]["ylabel"] != ""
-    assert saved_axis_state[export.heatmap_pdf.name]["zlabel"] == ""
+    assert saved_axis_state[export.heatmap_pgf.name]["xlabel"] != ""
+    assert saved_axis_state[export.heatmap_pgf.name]["ylabel"] != ""
+    assert saved_axis_state[export.heatmap_pgf.name]["zlabel"] == ""
     np.testing.assert_allclose(
-        saved_axis_state[export.heatmap_pdf.name]["xticks"],
+        saved_axis_state[export.heatmap_pgf.name]["xticks"],
         custom_ticks[0],
     )
     np.testing.assert_allclose(
-        saved_axis_state[export.heatmap_pdf.name]["yticks"],
+        saved_axis_state[export.heatmap_pgf.name]["yticks"],
         custom_ticks[1],
     )
-    assert len(saved_axis_state[export.heatmap_pdf.name]["xticks"]) > 0
-    assert len(saved_axis_state[export.heatmap_pdf.name]["yticks"]) > 0
-    assert len(saved_axis_state[export.heatmap_pdf.name]["zticks"]) == 0
-    assert saved_axis_state[export.heatmap_pdf.name]["xticklabels"] == (
+    assert len(saved_axis_state[export.heatmap_pgf.name]["xticks"]) > 0
+    assert len(saved_axis_state[export.heatmap_pgf.name]["yticks"]) > 0
+    assert len(saved_axis_state[export.heatmap_pgf.name]["zticks"]) == 0
+    assert saved_axis_state[export.heatmap_pgf.name]["xticklabels"] == (
         "x lo",
         "x hi",
     )
-    assert saved_axis_state[export.heatmap_pdf.name]["yticklabels"] == (
+    assert saved_axis_state[export.heatmap_pgf.name]["yticklabels"] == (
         "y lo",
         "y hi",
     )
     np.testing.assert_allclose(
-        saved_axis_padding[export.waterfall_pdf.name]["labelpad"],
+        saved_axis_padding[export.waterfall_pgf.name]["labelpad"],
         (-21.0, -10.5, 0.0),
     )
     np.testing.assert_allclose(
-        saved_axis_padding[export.surface_pdf.name]["ticklabelpad"],
+        saved_axis_padding[export.surface_pgf.name]["ticklabelpad"],
         (-8.0, -4.0, 0.0),
     )
     np.testing.assert_allclose(
-        saved_axes_bounds[export.waterfall_pdf.name],
+        saved_axes_bounds[export.waterfall_pgf.name],
         (0.6 / 6.2, 0.35 / 3.9, 4.8 / 6.2, 2.8 / 3.9),
     )
     assert (
-        saved_rcparams[export.waterfall_pdf.name]["axes.unicode_minus"] is False
+        saved_rcparams[export.waterfall_pgf.name]["axes.unicode_minus"] is False
     )
-    assert saved_rcparams[export.waterfall_pdf.name]["font.family"] == (
+    assert saved_rcparams[export.waterfall_pgf.name]["font.family"] == (
         "sans-serif",
     )
-    assert saved_rcparams[export.waterfall_pdf.name]["font.sans-serif"] == (
+    assert saved_rcparams[export.waterfall_pgf.name]["font.sans-serif"] == (
         "Arial",
         "Helvetica",
         "DejaVu Sans",
     )
-    assert saved_rcparams[export.waterfall_pdf.name]["font.size"] == 8.0
-    assert saved_rcparams[export.waterfall_pdf.name]["axes.labelsize"] == 7.0
-    assert saved_rcparams[export.waterfall_pdf.name]["xtick.labelsize"] == 7.0
-    assert saved_rcparams[export.waterfall_pdf.name]["ytick.labelsize"] == 7.0
-    assert saved_rcparams[export.waterfall_pdf.name]["legend.fontsize"] == 7.0
-    assert saved_rcparams[export.waterfall_pdf.name]["pgf.rcfonts"] is False
+    assert saved_rcparams[export.waterfall_pgf.name]["font.size"] == 8.0
+    assert saved_rcparams[export.waterfall_pgf.name]["axes.labelsize"] == 7.0
+    assert saved_rcparams[export.waterfall_pgf.name]["xtick.labelsize"] == 7.0
+    assert saved_rcparams[export.waterfall_pgf.name]["ytick.labelsize"] == 7.0
+    assert saved_rcparams[export.waterfall_pgf.name]["legend.fontsize"] == 7.0
+    assert saved_rcparams[export.waterfall_pgf.name]["pgf.rcfonts"] is False
     assert (
         r"\usepackage{fontspec}"
-        in saved_rcparams[export.waterfall_pdf.name]["pgf.preamble"]
+        in saved_rcparams[export.waterfall_pgf.name]["pgf.preamble"]
     )
     assert (
         r"\usepackage{cmbright}"
-        in saved_rcparams[export.waterfall_pdf.name]["pgf.preamble"]
+        in saved_rcparams[export.waterfall_pgf.name]["pgf.preamble"]
     )
     assert (
-        saved_rcparams[export.waterfall_pdf.name]["mathtext.fontset"]
+        saved_rcparams[export.waterfall_pgf.name]["mathtext.fontset"]
         == "dejavusans"
     )
     assert matplotlib.rcParams["axes.unicode_minus"] is True
@@ -1141,20 +1150,10 @@ def test_export_stacked_waterfall_thesis_non_subfigure_fonts(
             "legend.fontsize": float(matplotlib.rcParams["legend.fontsize"]),
         }
 
-    def fake_compile(
-        preview_tex: str | Path,
-        *,
-        latex_command: str = "pdflatex",
-    ) -> Path:
-        tex_path = Path(preview_tex)
-        pdf_path = tex_path.with_suffix(".pdf")
-        pdf_path.write_text("compiled", encoding="utf-8")
-        return pdf_path
-
     monkeypatch.setattr(Figure, "savefig", fake_savefig)
     monkeypatch.setattr(
-        "superconductivity.visuals.thesis.latex.compile_thesis_preview",
-        fake_compile,
+        "superconductivity.visuals.thesis.latex._save_stack_preview_png",
+        _fake_stack_preview_png,
     )
 
     export = export_stacked_waterfall_thesis(
@@ -1167,11 +1166,11 @@ def test_export_stacked_waterfall_thesis_non_subfigure_fonts(
         subfigure=False,
     )
 
-    assert saved_rcparams[export.waterfall_pdf.name]["font.size"] == 9.0
-    assert saved_rcparams[export.waterfall_pdf.name]["axes.labelsize"] == 8.0
-    assert saved_rcparams[export.waterfall_pdf.name]["xtick.labelsize"] == 8.0
-    assert saved_rcparams[export.waterfall_pdf.name]["ytick.labelsize"] == 8.0
-    assert saved_rcparams[export.waterfall_pdf.name]["legend.fontsize"] == 8.0
+    assert saved_rcparams[export.waterfall_pgf.name]["font.size"] == 9.0
+    assert saved_rcparams[export.waterfall_pgf.name]["axes.labelsize"] == 8.0
+    assert saved_rcparams[export.waterfall_pgf.name]["xtick.labelsize"] == 8.0
+    assert saved_rcparams[export.waterfall_pgf.name]["ytick.labelsize"] == 8.0
+    assert saved_rcparams[export.waterfall_pgf.name]["legend.fontsize"] == 8.0
 
 
 def test_export_stacked_waterfall_thesis_can_skip_inline_preview(
@@ -1192,25 +1191,15 @@ def test_export_stacked_waterfall_thesis_can_skip_inline_preview(
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("saved", encoding="utf-8")
 
-    def fake_compile(
-        preview_tex: str | Path,
-        *,
-        latex_command: str = "pdflatex",
-    ) -> Path:
-        tex_path = Path(preview_tex)
-        pdf_path = tex_path.with_suffix(".pdf")
-        pdf_path.write_text("compiled", encoding="utf-8")
-        return pdf_path
-
     monkeypatch.setattr(Figure, "savefig", fake_savefig)
     monkeypatch.setattr(
-        "superconductivity.visuals.thesis.latex.compile_thesis_preview",
-        fake_compile,
+        "superconductivity.visuals.thesis.latex._save_stack_preview_png",
+        _fake_stack_preview_png,
     )
     monkeypatch.setattr(
-        "superconductivity.visuals.thesis.latex._display_pdf_preview",
-        lambda pdf_path, *, height=720, png_dpi=200.0: preview_calls.append(
-            Path(pdf_path)
+        "superconductivity.visuals.thesis.latex._display_png_preview",
+        lambda png_path, *, height=720: preview_calls.append(
+            Path(png_path)
         ),
     )
 
@@ -1247,20 +1236,10 @@ def test_export_stacked_waterfall_thesis_allows_surface_x_oversampling(
         if path.name.startswith("surface.") and self.axes:
             saved_surface_faces[path.name] = _surface_face_count(self.axes[0])
 
-    def fake_compile(
-        preview_tex: str | Path,
-        *,
-        latex_command: str = "pdflatex",
-    ) -> Path:
-        tex_path = Path(preview_tex)
-        pdf_path = tex_path.with_suffix(".pdf")
-        pdf_path.write_text("compiled", encoding="utf-8")
-        return pdf_path
-
     monkeypatch.setattr(Figure, "savefig", fake_savefig)
     monkeypatch.setattr(
-        "superconductivity.visuals.thesis.latex.compile_thesis_preview",
-        fake_compile,
+        "superconductivity.visuals.thesis.latex._save_stack_preview_png",
+        _fake_stack_preview_png,
     )
 
     export_stacked_waterfall_thesis(
@@ -1274,7 +1253,6 @@ def test_export_stacked_waterfall_thesis_allows_surface_x_oversampling(
     )
 
     expected_faces = 3 * (len(x) - 1) * (len(y) - 1)
-    assert saved_surface_faces["surface.pdf"] == expected_faces
     assert saved_surface_faces["surface.pgf"] == expected_faces
 
 
@@ -1297,20 +1275,10 @@ def test_export_stacked_waterfall_thesis_allows_surface_pdf_dpi_override(
         path.write_text("saved", encoding="utf-8")
         saved_dpi[path.name] = float(kwargs["dpi"])
 
-    def fake_compile(
-        preview_tex: str | Path,
-        *,
-        latex_command: str = "pdflatex",
-    ) -> Path:
-        tex_path = Path(preview_tex)
-        pdf_path = tex_path.with_suffix(".pdf")
-        pdf_path.write_text("compiled", encoding="utf-8")
-        return pdf_path
-
     monkeypatch.setattr(Figure, "savefig", fake_savefig)
     monkeypatch.setattr(
-        "superconductivity.visuals.thesis.latex.compile_thesis_preview",
-        fake_compile,
+        "superconductivity.visuals.thesis.latex._save_stack_preview_png",
+        _fake_stack_preview_png,
     )
 
     export_stacked_waterfall_thesis(
@@ -1324,9 +1292,6 @@ def test_export_stacked_waterfall_thesis_allows_surface_pdf_dpi_override(
         surface_pdf_dpi=2400.0,
     )
 
-    assert saved_dpi["waterfall.pdf"] == 1200.0
-    assert saved_dpi["surface.pdf"] == 2400.0
-    assert saved_dpi["heatmap.pdf"] == 1200.0
     assert saved_dpi["waterfall.pgf"] == 1200.0
     assert saved_dpi["surface.pgf"] == 2400.0
     assert saved_dpi["heatmap.pgf"] == 1200.0
@@ -1352,20 +1317,10 @@ def test_export_stacked_waterfall_thesis_waterfall_traces_accepts_count(
         if self.axes and path.name.startswith("waterfall."):
             saved_line_counts[path.name] = len(self.axes[0].lines)
 
-    def fake_compile(
-        preview_tex: str | Path,
-        *,
-        latex_command: str = "pdflatex",
-    ) -> Path:
-        tex_path = Path(preview_tex)
-        pdf_path = tex_path.with_suffix(".pdf")
-        pdf_path.write_text("compiled", encoding="utf-8")
-        return pdf_path
-
     monkeypatch.setattr(Figure, "savefig", fake_savefig)
     monkeypatch.setattr(
-        "superconductivity.visuals.thesis.latex.compile_thesis_preview",
-        fake_compile,
+        "superconductivity.visuals.thesis.latex._save_stack_preview_png",
+        _fake_stack_preview_png,
     )
 
     export_stacked_waterfall_thesis(
@@ -1378,7 +1333,6 @@ def test_export_stacked_waterfall_thesis_waterfall_traces_accepts_count(
         waterfall_traces=3,
     )
 
-    assert saved_line_counts["waterfall.pdf"] == 3
     assert saved_line_counts["waterfall.pgf"] == 3
 
 
@@ -1410,20 +1364,10 @@ def test_export_stacked_waterfall_thesis_waterfall_traces_accepts_yvalues(
                 float(np.unique(line.get_data_3d()[1])[0]) for line in self.axes[0].lines
             )
 
-    def fake_compile(
-        preview_tex: str | Path,
-        *,
-        latex_command: str = "pdflatex",
-    ) -> Path:
-        tex_path = Path(preview_tex)
-        pdf_path = tex_path.with_suffix(".pdf")
-        pdf_path.write_text("compiled", encoding="utf-8")
-        return pdf_path
-
     monkeypatch.setattr(Figure, "savefig", fake_savefig)
     monkeypatch.setattr(
-        "superconductivity.visuals.thesis.latex.compile_thesis_preview",
-        fake_compile,
+        "superconductivity.visuals.thesis.latex._save_stack_preview_png",
+        _fake_stack_preview_png,
     )
 
     export_stacked_waterfall_thesis(
@@ -1436,7 +1380,6 @@ def test_export_stacked_waterfall_thesis_waterfall_traces_accepts_yvalues(
         waterfall_traces=requested_y,
     )
 
-    assert saved_yvalues["waterfall.pdf"] == selected_y
     assert saved_yvalues["waterfall.pgf"] == selected_y
 
 
@@ -1507,8 +1450,53 @@ def test_thesis_surface_trace_overlay_includes_first_trace() -> None:
     assert overlay_count > plain_count
 
 
-def test_thesis_surface_trace_overlay_embeds_raster_band() -> None:
-    """Rasterized surface traces should stay inside one surface collection."""
+def test_thesis_surface_first_trace_strip_matches_interior_width() -> None:
+    """Edge trace strips should match interior span and stay centered."""
+    x, y, z = _waterfall_data(nx=9, ny=5)
+
+    first_strip = _build_surface_trace_strips(
+        y,
+        z,
+        trace_y=np.asarray([y[0]], dtype=np.float64),
+        trace_width=0.6,
+    )[0]
+    inner_strip = _build_surface_trace_strips(
+        y,
+        z,
+        trace_y=np.asarray([y[2]], dtype=np.float64),
+        trace_width=0.6,
+    )[0]
+
+    first_span = abs(float(first_strip[0][1] - first_strip[0][0]))
+    inner_span = abs(float(inner_strip[0][1] - inner_strip[0][0]))
+
+    np.testing.assert_allclose(first_span, inner_span)
+    assert float(first_strip[0][0]) < float(y[0]) < float(first_strip[0][1])
+
+
+def test_thesis_surface_first_trace_band_matches_interior_width() -> None:
+    """Edge raster bands should match the interior apparent span."""
+    _, y, _ = _waterfall_data(nx=9, ny=5)
+    first_band = _build_surface_trace_bands(
+        y,
+        trace_y=np.asarray([y[0]], dtype=np.float64),
+        trace_width=0.6,
+    )[0]
+    inner_band = _build_surface_trace_bands(
+        y,
+        trace_y=np.asarray([y[2]], dtype=np.float64),
+        trace_width=0.6,
+    )[0]
+
+    first_span = abs(float(first_band[0][-1] - first_band[0][0]))
+    inner_span = abs(float(inner_band[0][-1] - inner_band[0][0]))
+
+    np.testing.assert_allclose(first_span, inner_span)
+    assert np.isclose(float(first_band[0][0]), float(y[0]))
+
+
+def test_thesis_surface_trace_overlay_refines_raster_surface() -> None:
+    """Rasterized surface traces should refine the single surface mesh."""
     x, y, z = _waterfall_data()
 
     fig_plain, ax_plain = get_thesis_surface_matplotlib(
@@ -1538,7 +1526,7 @@ def test_thesis_surface_trace_overlay_embeds_raster_band() -> None:
     assert plain_count == 1
     assert overlay_count == 1
     assert ax_overlay.collections[0].get_rasterized()
-    assert overlay_faces > plain_faces
+    assert overlay_faces == plain_faces + 4 * (x.shape[0] - 1)
 
 
 def test_export_stacked_waterfall_thesis_waterfall_traces_with_xlim(
@@ -1561,20 +1549,10 @@ def test_export_stacked_waterfall_thesis_waterfall_traces_with_xlim(
         if self.axes and path.name.startswith("waterfall."):
             saved_line_counts[path.name] = len(self.axes[0].lines)
 
-    def fake_compile(
-        preview_tex: str | Path,
-        *,
-        latex_command: str = "pdflatex",
-    ) -> Path:
-        tex_path = Path(preview_tex)
-        pdf_path = tex_path.with_suffix(".pdf")
-        pdf_path.write_text("compiled", encoding="utf-8")
-        return pdf_path
-
     monkeypatch.setattr(Figure, "savefig", fake_savefig)
     monkeypatch.setattr(
-        "superconductivity.visuals.thesis.latex.compile_thesis_preview",
-        fake_compile,
+        "superconductivity.visuals.thesis.latex._save_stack_preview_png",
+        _fake_stack_preview_png,
     )
 
     export_stacked_waterfall_thesis(
@@ -1588,7 +1566,7 @@ def test_export_stacked_waterfall_thesis_waterfall_traces_with_xlim(
         waterfall_traces=3,
     )
 
-    assert saved_line_counts["waterfall.pdf"] == 3
+    assert saved_line_counts["waterfall.pgf"] == 3
 
 
 def test_compile_thesis_preview_reports_missing_latex(
