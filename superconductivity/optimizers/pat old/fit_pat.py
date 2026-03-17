@@ -131,11 +131,12 @@ def fit_I_nA(
     lower = lower_full[free_mask]
     upper = upper_full[free_mask]
 
+    full_params: NDArray64 = guess_full.copy()
+
     def fixed_function(
         V_mV: NDArray64,
         *free_params: tuple[float, ...],
     ) -> NDArray64:
-        full_params = guess_full.copy()
         full_params[free_mask] = free_params
         return function(V_mV, *full_params[parameter_mask])
 
