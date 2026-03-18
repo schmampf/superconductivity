@@ -9,25 +9,21 @@ from .template import register_house_template
 
 register_house_template()
 
+from .html import build_html
 from .maps import (
     get_all,
     get_axis,
-    get_relief,
     get_heatmap,
     get_plain,
     get_slider,
     get_surface,
-    get_surface_relief,
     save_figure,
 )
-from .html import build_html
 from .tuples import get_tuple_slider
 
 __all__ = [
     "get_axis",
     "get_surface",
-    "get_surface_relief",
-    "get_relief",
     "get_plain",
     "get_slider",
     "get_heatmap",

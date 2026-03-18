@@ -10,13 +10,7 @@ from matplotlib.colors import ListedColormap
 from superconductivity.style.cpd4 import cmap
 from superconductivity.utilities.types import LIM, NDArray64
 
-from ..relief import extract_visible_relief
-from ..helper import (
-    check_xyz,
-    get_clim,
-    get_compressed_indices,
-    get_xylim_indices,
-)
+from ..helper import check_xyz, get_clim, get_compressed_indices, get_xylim_indices
 from .helper import mpl_cmap_to_plotly
 
 
