@@ -10,8 +10,8 @@ from scipy.optimize import curve_fit
 
 from ...utilities.safety import (
     require_all_finite,
-    require_same_shape,
     require_min_size,
+    require_same_shape,
     to_1d_float64,
 )
 from ...utilities.types import NDArray64
@@ -19,56 +19,56 @@ from .models import get_model
 
 
 @dataclass
-class Parameter:
+class ParameterSpec:
     name: str
-    description: str
+    label: str
     lower: float
     upper: float
     guess: float
     fixed: bool = False
-    fit_value: Optional[float] = None
-    fit_error: Optional[float] = None
+    value: Optional[float] = None
+    error: Optional[float] = None
 
 
-_DEFAULT_PARAMETERS: tuple[Parameter, ...] = (
-    Parameter(
+_DEFAULT_PARAMETERS: tuple[ParameterSpec, ...] = (
+    ParameterSpec(
         name="GN_G0",
-        description="Normal-state conductance",
+        label="<i>G</i><sub>N</sub> (<i>G</i><sub>0</sub>)",
         lower=0.0,
         upper=10.0,
         guess=1.0,
     ),
-    Parameter(
+    ParameterSpec(
         name="T_K",
-        description="Temperature (K)",
+        label="<i>T</i> (K)",
         lower=0.0,
         upper=1.5,
         guess=0.2,
     ),
-    Parameter(
-        name="Delta_mEV",
-        description="Energy gap (meV)",
+    ParameterSpec(
+        name="Δ (meV)",
+        label="Energy gap (meV)",
         lower=0.18,
         upper=0.21,
         guess=0.195,
     ),
-    Parameter(
-        name="gamma_meV",
-        description="Dynes broadening (meV)",
+    ParameterSpec(
+        name="γ (meV)",
+        label="Dynes broadening (meV)",
         lower=1e-3,
         upper=25e-3,
         guess=1e-3,
     ),
-    Parameter(
+    ParameterSpec(
         name="A_mV",
-        description="PAT amplitude (mV)",
+        label="<i>A</i> (mV)",
         lower=0.0,
         upper=10.0,
         guess=1.0,
     ),
-    Parameter(
+    ParameterSpec(
         name="nu_GHz",
-        description="PAT frequency (GHz)",
+        label="ν (GHz)",
         lower=1.0,
         upper=20.0,
         guess=7.8,
@@ -76,7 +76,7 @@ _DEFAULT_PARAMETERS: tuple[Parameter, ...] = (
 )
 
 PARAMETER_NAMES: tuple[str, ...] = tuple(param.name for param in _DEFAULT_PARAMETERS)
-DEFAULT_PARAMETERS: tuple[Parameter, ...] = _DEFAULT_PARAMETERS
+DEFAULT_PARAMETERS: tuple[ParameterSpec, ...] = _DEFAULT_PARAMETERS
 
 
 class SolutionDict(TypedDict):
@@ -84,19 +84,23 @@ class SolutionDict(TypedDict):
     I_exp_nA: NDArray64
     I_ini_nA: NDArray64
     I_fit_nA: NDArray64
-    params: Sequence[Parameter]
+    params: Sequence[ParameterSpec]
     weights: Optional[NDArray64]
     maxfev: Optional[int]
 
 
-def _clone_parameters(parameters: Optional[Sequence[Parameter]] = None) -> list[Parameter]:
+def _clone_parameters(
+    parameters: Optional[Sequence[ParameterSpec]] = None,
+) -> list[ParameterSpec]:
     if parameters is None:
         return [replace(param) for param in _DEFAULT_PARAMETERS]
 
     if len(parameters) != len(_DEFAULT_PARAMETERS):
-        raise ValueError("Parameter list must contain six entries in the expected order.")
+        raise ValueError(
+            "Parameter list must contain six entries in the expected order."
+        )
 
-    cloned: list[Parameter] = []
+    cloned: list[ParameterSpec] = []
     for expected, provided in zip(_DEFAULT_PARAMETERS, parameters):
         if expected.name != provided.name:
             raise ValueError(
@@ -107,7 +111,7 @@ def _clone_parameters(parameters: Optional[Sequence[Parameter]] = None) -> list[
 
 
 def _parameters_to_arrays(
-    parameters: Sequence[Parameter],
+    parameters: Sequence[ParameterSpec],
 ) -> tuple[NDArray64, NDArray64, NDArray64, NDArray64]:
     guess = np.array([param.guess for param in parameters], dtype=np.float64)
     lower = np.array([param.lower for param in parameters], dtype=np.float64)
@@ -132,11 +136,12 @@ def _weights_to_sigma(
     sigma[mask] = 1.0 / np.sqrt(arr[mask])
     return sigma, mask
 
+
 def fit_pat(
     V_mV: NDArray64,
     I_nA: NDArray64,
     *,
-    parameters: Optional[Sequence[Parameter]] = None,
+    parameters: Optional[Sequence[ParameterSpec]] = None,
     weights: Optional[NDArray64] = None,
     maxfev: Optional[int] = None,
     E_mV: Optional[NDArray64] = None,
@@ -184,7 +189,11 @@ def fit_pat(
         )
         popt_free = np.array(popt, dtype=np.float64)
         cov_free = np.array(pcov, dtype=np.float64)
-    perr_free = np.sqrt(np.diag(cov_free)) if cov_free.size else np.zeros((0,), dtype=np.float64)
+    perr_free = (
+        np.sqrt(np.diag(cov_free))
+        if cov_free.size
+        else np.zeros((0,), dtype=np.float64)
+    )
 
     popt_full = guess_full.copy()
     popt_full[free_mask] = popt_free
@@ -196,8 +205,8 @@ def fit_pat(
     I_fit = function(V, *popt_full[parameter_mask])
 
     for idx, param in enumerate(parameter_list):
-        param.fit_value = float(popt_full[idx])
-        param.fit_error = float(perr_full[idx])
+        param.value = float(popt_full[idx])
+        param.error = float(perr_full[idx])
 
     solution: SolutionDict = {
         "V_mV": V,

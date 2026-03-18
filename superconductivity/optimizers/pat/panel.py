@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import time
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Callable, Optional
 
@@ -8,20 +10,32 @@ import numpy as np
 import plotly.graph_objects as go
 from numpy.typing import NDArray
 
+from superconductivity.style.cpd5 import schwarz, seeblau100, seegrau100
 from superconductivity.utilities.safety import (
     require_all_finite,
     require_min_size,
     to_1d_float64,
 )
 from superconductivity.utilities.types import NDArray64
+from superconductivity.visuals.plotly.helper import mpl_color_to_plotly
 
-from .fit_pat import DEFAULT_PARAMETERS, PARAMETER_NAMES, Parameter, SolutionDict, fit_pat
+from .fit_pat import (
+    DEFAULT_PARAMETERS,
+    PARAMETER_NAMES,
+    ParameterSpec,
+    SolutionDict,
+    fit_pat,
+)
 from .models import get_model
 
 try:
     from panel.util import _NoValue
 except (ImportError, ModuleNotFoundError):
     _NoValue = object()
+
+schwarz = mpl_color_to_plotly(schwarz)
+seeblau100 = mpl_color_to_plotly(seeblau100)
+seegrau100 = mpl_color_to_plotly(seegrau100)
 
 
 def _pat_trace(V_mV: NDArray64, params: NDArray64) -> NDArray64:
@@ -76,9 +90,7 @@ class PatFitPanel:
         *,
         weights: Optional[NDArray64] = None,
         maxfev: Optional[int] = None,
-        on_solution_changed: Optional[
-            Callable[[Optional[SolutionDict]], None]
-        ] = None,
+        on_solution_changed: Optional[Callable[[Optional[SolutionDict]], None]] = None,
     ) -> None:
         self._pn = _import_panel()
         self.V_mV: NDArray64 = to_1d_float64(V_mV, "V_mV")
@@ -121,7 +133,26 @@ class PatFitPanel:
         self._iv_figure = self._create_iv_figure()
         self._derivative_figure = self._create_derivative_figure()
         self._fit_button = self._pn.widgets.Button(name="Fit", button_type="primary")
+        self._fit_running = False
+        self._executor = ThreadPoolExecutor(max_workers=1)
+        self._running_indicator = self._pn.indicators.LoadingSpinner(
+            value=False,
+            width=20,
+            height=20,
+        )
+        self._fit_state_text = self._pn.pane.Markdown(
+            "Idle",
+            sizing_mode="stretch_width",
+        )
+        self._fit_started_at: float | None = None
+        self._fit_elapsed_text = self._pn.pane.Markdown(
+            "Elapsed: 0.0 s",
+            sizing_mode="stretch_width",
+        )
         self._fit_button.on_click(self._on_fit_click)
+        self._fit_future = None
+        self._fit_timer = None
+        self._syncing_xrange = False
 
         self._solution: Optional[SolutionDict] = None
 
@@ -137,14 +168,22 @@ class PatFitPanel:
             sizing_mode="stretch_width",
             height=350,
             config={"responsive": True},
+            viewport_update_policy="continuous",
+            viewport_update_throttle=100,
         )
         self._derivative_pane = self._pn.pane.Plotly(
             self._derivative_figure,
             sizing_mode="stretch_width",
             height=350,
             config={"responsive": True},
+            viewport_update_policy="continuous",
+            viewport_update_throttle=100,
         )
-
+        self._iv_pane.param.watch(self._on_iv_viewport_changed, "viewport")
+        self._derivative_pane.param.watch(
+            self._on_derivative_viewport_changed,
+            "viewport",
+        )
         self._update_plot_traces()
 
         self.layout = self.get_layout()
@@ -165,7 +204,13 @@ class PatFitPanel:
             self._trace_header,
             self._trace_selector,
             *self._slider_rows,
-            self._fit_button,
+            self._pn.Row(
+                self._fit_button,
+                self._running_indicator,
+                self._fit_state_text,
+                self._fit_elapsed_text,
+                sizing_mode="stretch_width",
+            ),
             self._parameter_table,
             self._status_panel,
             sizing_mode="stretch_width",
@@ -195,7 +240,7 @@ class PatFitPanel:
         for spec in self._parameter_templates:
             step = max((spec.upper - spec.lower) / 200.0, 1e-6)
             slider = self._pn.widgets.FloatSlider(
-                name=f"{spec.name} ({spec.description})",
+                name=f"{spec.name} ({spec.label})",
                 start=spec.lower,
                 end=spec.upper,
                 value=spec.guess,
@@ -225,7 +270,7 @@ class PatFitPanel:
                 y=self.I_nA,
                 name="Data",
                 mode="markers",
-                marker=dict(size=4, opacity=0.6),
+                marker=dict(size=4, opacity=0.6, color=schwarz),
             )
         )
         fig.add_trace(
@@ -233,7 +278,7 @@ class PatFitPanel:
                 x=self.V_mV,
                 y=self._initial_curve,
                 name="Initial",
-                line=dict(dash="dash", width=2),
+                line=dict(dash="dash", width=2, color=seegrau100),
             )
         )
         fig.add_trace(
@@ -241,16 +286,16 @@ class PatFitPanel:
                 x=self.V_mV,
                 y=self._fit_curve,
                 name="Fit",
-                line=dict(width=2),
+                line=dict(width=2, color=seeblau100),
             )
         )
         fig.update_layout(
-            title="I-V trace",
-            xaxis_title="Voltage (mV)",
-            yaxis_title="Current (nA)",
-            legend=dict(orientation="h", y=-0.2),
-            margin=dict(l=30, r=20, t=30, b=30),
+            yaxis_title="<i>I</i> (nA)",
+            showlegend=False,
+            margin=dict(l=85, r=20, t=30, b=10),
         )
+        fig.update_xaxes(showticklabels=False, title_text=None)
+        fig.update_yaxes(automargin=False, title_standoff=8)
         return fig
 
     def _create_derivative_figure(self) -> go.Figure:
@@ -260,8 +305,8 @@ class PatFitPanel:
                 x=self.V_mV,
                 y=self._data_derivative,
                 name="Data",
-                mode="lines",
-                line=dict(color="grey", width=2),
+                mode="markers",
+                marker=dict(size=4, opacity=0.6, color=schwarz),
             )
         )
         fig.add_trace(
@@ -269,7 +314,7 @@ class PatFitPanel:
                 x=self.V_mV,
                 y=self._initial_derivative,
                 name="Initial",
-                line=dict(dash="dash", width=2),
+                line=dict(dash="dash", width=2, color=seegrau100),
             )
         )
         fig.add_trace(
@@ -277,16 +322,16 @@ class PatFitPanel:
                 x=self.V_mV,
                 y=self._fit_derivative,
                 name="Fit",
-                line=dict(width=2),
+                line=dict(width=2, color=seeblau100),
             )
         )
         fig.update_layout(
-            title="dI/dV",
-            xaxis_title="Voltage (mV)",
-            yaxis_title="Current derivative",
+            xaxis_title="<i>V</i> (mV)",
+            yaxis_title="d<i>I</i>/d<i>V</i> (<i>G<sub>0</sub></i>)",
             legend=dict(orientation="h", y=-0.2),
-            margin=dict(l=30, r=20, t=30, b=30),
+            margin=dict(l=85, r=20, t=30, b=30),
         )
+        fig.update_yaxes(automargin=False, title_standoff=8)
         return fig
 
     def _on_slider_changed(self, event: "pn.parameterized.Event") -> None:
@@ -313,6 +358,11 @@ class PatFitPanel:
         self._fit_derivative = self._gradient(self._fit_curve)
         self._update_plot_traces()
         self._parameter_table.object = self._format_parameter_table()
+        if self._fit_timer is not None:
+            self._fit_timer.stop()
+            self._fit_timer = None
+        self._fit_state_text.object = "Idle"
+        self._fit_elapsed_text.object = "Elapsed: 0.0 s"
         self._status_panel.object = self._format_status_text()
 
     def _on_lock_toggled(self, event: "pn.parameterized.Event", *, key: str) -> None:
@@ -321,14 +371,149 @@ class PatFitPanel:
         self._parameter_table.object = self._format_parameter_table()
 
     def _on_fit_click(self, _: object) -> None:
-        solution = fit_pat(
+        if self._fit_running:
+            return
+
+        self._fit_running = True
+        self._fit_started_at = time.perf_counter()
+        self._fit_button.disabled = True
+        self._running_indicator.value = True
+        self._fit_state_text.object = "Fit running for 0.0 s ..."
+        self._fit_elapsed_text.object = "Elapsed: 0.0 s"
+        self._status_panel.object = "Fit running ..."
+        self._start_fit_timer()
+
+        parameters = self._current_parameters()
+        self._fit_future = self._executor.submit(
+            fit_pat,
             self.V_mV,
             self.I_nA,
-            parameters=self._current_parameters(),
+            parameters=parameters,
             weights=self.weights,
             maxfev=self.maxfev,
         )
-        self.update_solution(solution)
+        self._fit_future.add_done_callback(self._on_fit_finished)
+
+    def _on_fit_finished(self, future: object) -> None:
+        def finalize() -> None:
+            elapsed_s = 0.0
+            if self._fit_started_at is not None:
+                elapsed_s = time.perf_counter() - self._fit_started_at
+            try:
+                solution = future.result()
+            except Exception as exc:
+                self._set_solution(None)
+                self._status_panel.object = (
+                    "Fit failed with error: " f"`{type(exc).__name__}: {exc}`"
+                )
+            else:
+                self.update_solution(solution)
+            finally:
+                self._fit_running = False
+                if self._fit_timer is not None:
+                    self._fit_timer.stop()
+                    self._fit_timer = None
+                self._fit_button.disabled = False
+                self._running_indicator.value = False
+                self._fit_state_text.object = "Idle"
+                self._fit_elapsed_text.object = f"Elapsed: {elapsed_s:.1f} s"
+                self._fit_started_at = None
+
+        self._pn.state.execute(finalize)
+
+    def _start_fit_timer(self) -> None:
+        if self._fit_timer is not None:
+            self._fit_timer.stop()
+            self._fit_timer = None
+
+        self._fit_timer = self._pn.state.add_periodic_callback(
+            self._update_fit_elapsed,
+            period=200,
+            start=True,
+        )
+
+    def _update_fit_elapsed(self) -> None:
+        if not self._fit_running or self._fit_started_at is None:
+            if self._fit_timer is not None:
+                self._fit_timer.stop()
+                self._fit_timer = None
+            return
+
+        elapsed_s = time.perf_counter() - self._fit_started_at
+        self._fit_state_text.object = f"Fit running for {elapsed_s:.1f} s..."
+
+    def _on_iv_viewport_changed(self, event: "pn.parameterized.Event") -> None:
+        self._sync_xrange_from_viewport(
+            viewport=event.new,
+            source="iv",
+        )
+
+    def _on_derivative_viewport_changed(
+        self,
+        event: "pn.parameterized.Event",
+    ) -> None:
+        self._sync_xrange_from_viewport(
+            viewport=event.new,
+            source="derivative",
+        )
+
+    def _sync_xrange_from_viewport(
+        self,
+        *,
+        viewport: object,
+        source: str,
+    ) -> None:
+        if self._syncing_xrange:
+            return
+
+        x_range = self._extract_xrange_from_viewport(viewport)
+        if x_range is None:
+            if self._viewport_requests_autorange(viewport):
+                self._syncing_xrange = True
+                try:
+                    if source == "iv":
+                        self._derivative_figure.update_xaxes(autorange=True)
+                    else:
+                        self._iv_figure.update_xaxes(autorange=True)
+                finally:
+                    self._syncing_xrange = False
+            return
+
+        self._syncing_xrange = True
+        try:
+            if source == "iv":
+                self._derivative_figure.update_xaxes(
+                    range=list(x_range),
+                    autorange=False,
+                )
+            else:
+                self._iv_figure.update_xaxes(
+                    range=list(x_range),
+                    autorange=False,
+                )
+        finally:
+            self._syncing_xrange = False
+
+    def _extract_xrange_from_viewport(
+        self,
+        viewport: object,
+    ) -> tuple[float, float] | None:
+        if not isinstance(viewport, dict):
+            return None
+
+        range_pair = viewport.get("xaxis.range")
+        if isinstance(range_pair, (list, tuple)) and len(range_pair) == 2:
+            return (float(range_pair[0]), float(range_pair[1]))
+
+        lower = viewport.get("xaxis.range[0]")
+        upper = viewport.get("xaxis.range[1]")
+        if lower is not None and upper is not None:
+            return (float(lower), float(upper))
+
+        return None
+
+    def _viewport_requests_autorange(self, viewport: object) -> bool:
+        return isinstance(viewport, dict) and bool(viewport.get("xaxis.autorange"))
 
     def _format_parameter_table(self) -> str:
         rows = ["| Parameter | Locked | Guess | Fit |", "| --- | --- | --- | --- |"]
@@ -336,7 +521,7 @@ class PatFitPanel:
         results = self._solution["params"] if self._solution else None
         for idx, display in enumerate(self._display_keys):
             locked = "✅" if self._lock_checkboxes[display].value else ""
-            fit_value = results[idx].fit_value if results is not None else guess[idx]
+            fit_value = results[idx].value if results is not None else guess[idx]
             rows.append(
                 f"| {display} | {locked} | {guess[idx]:.4g} | {fit_value:.4g} |"
             )
@@ -347,10 +532,12 @@ class PatFitPanel:
             return "No fit performed yet. Click **Fit** to start optimization."
         sol = self._solution
         chi2 = float(np.sum((sol["I_fit_nA"] - sol["I_exp_nA"]) ** 2))
-        param_text = ", ".join(
-            f"{param.name}={param.fit_value:.3g}±{param.fit_error:.3g}"
-            for param in sol["params"]
-        )
+        formatted_params: list[str] = []
+        for param in sol["params"]:
+            value_text = f"{param.value:.3g}" if param.value is not None else "n/a"
+            error_text = f"{param.error:.3g}" if param.error is not None else "n/a"
+            formatted_params.append(f"{param.name}={value_text}±{error_text}")
+        param_text = ", ".join(formatted_params)
         maxfev = sol.get("maxfev")
         maxfev_text = str(maxfev) if maxfev is not None else "∞"
         return (
@@ -359,15 +546,15 @@ class PatFitPanel:
             f"**Parameters:** {param_text}"
         )
 
-    def _current_parameters(self) -> list[Parameter]:
-        result: list[Parameter] = []
+    def _current_parameters(self) -> list[ParameterSpec]:
+        result: list[ParameterSpec] = []
         for template in self._parameter_templates:
             value = self._sliders[template.name].value
             locked = bool(self._lock_checkboxes[template.name].value)
             result.append(
-                Parameter(
+                ParameterSpec(
                     name=template.name,
-                    description=template.description,
+                    label=template.label,
                     lower=template.lower,
                     upper=template.upper,
                     guess=float(value),

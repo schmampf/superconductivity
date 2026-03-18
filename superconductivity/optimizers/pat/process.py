@@ -16,7 +16,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from .fit_pat import Parameter, SolutionDict
+from .fit_pat import ParameterSpec, SolutionDict
 
 
 def _arrays_path(directory: Path) -> Path:
@@ -79,7 +79,7 @@ def load_solution(directory: Path) -> Optional[SolutionDict]:
         if metadata["has_weights"]:
             weights = np.asarray(data["weights"], dtype=np.float64)
 
-        params = tuple(Parameter(**param) for param in metadata["params"])
+        params = tuple(ParameterSpec(**param) for param in metadata["params"])
         return {
             "V_mV": np.asarray(data["V_mV"], dtype=np.float64),
             "I_exp_nA": np.asarray(data["I_exp_nA"], dtype=np.float64),
