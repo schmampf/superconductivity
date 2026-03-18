@@ -1,37 +1,40 @@
 import numpy as np
 import pytest
+from dataclasses import replace
+from pathlib import Path
 
 pytest.importorskip("panel")
 
-from superconductivity.optimizers.gui.pat_panel import PatFitPanel
+from superconductivity.optimizers.pat.process import (
+    clear_solution,
+    load_solution,
+    save_solution,
+)
+from superconductivity.optimizers.pat.panel import PatFitPanel
+from superconductivity.optimizers.pat import DEFAULT_PARAMETERS
 
 
 def _make_solution(V: np.ndarray, I: np.ndarray) -> dict:
     guess = np.array([1.0, 0.2, 0.195, 1e-3, 1.0, 7.8], dtype=np.float64)
     popt = guess + np.array([0.1, 0.05, 0.005, 1e-3, 0.2, 0.5], dtype=np.float64)
+    params = []
+    for idx, base in enumerate(DEFAULT_PARAMETERS):
+        params.append(
+            replace(
+                base,
+                guess=float(guess[idx]),
+                fit_value=float(popt[idx]),
+                fit_error=0.1,
+            )
+        )
     return {
-        "optimizer": "curve_fit",
-        "model": "pat",
         "V_mV": V,
         "I_exp_nA": I,
         "I_ini_nA": I,
         "I_fit_nA": I + 0.2,
-        "guess": guess,
-        "lower": guess * 0.5,
-        "upper": guess * 1.5,
-        "fixed": np.zeros_like(guess, dtype=bool),
-        "popt": popt,
-        "pcov": np.eye(6, dtype=np.float64) * 0.01,
-        "perr": np.full_like(popt, 0.1),
-        "E_mV": None,
+        "params": tuple(params),
         "weights": None,
         "maxfev": None,
-        "G_N": popt[0],
-        "T_K": popt[1],
-        "Delta_mV": popt[2],
-        "gamma_mV": popt[3],
-        "A_mV": popt[4],
-        "nu_GHz": popt[5],
     }
 
 
@@ -57,7 +60,7 @@ def test_fit_button_triggers_optimizer(monkeypatch) -> None:
         captured["kwargs"] = kwargs
         return _make_solution(V, I)
 
-    monkeypatch.setattr("superconductivity.optimizers.gui.pat_panel.fit_I_nA", fake_fit)
+    monkeypatch.setattr("superconductivity.optimizers.pat.panel.fit_pat", fake_fit)
     widget._on_fit_click(None)
 
     assert captured, "fit_I_nA was not called"
@@ -78,3 +81,32 @@ def test_trace_selector_switches_rows() -> None:
     assert not np.allclose(start, widget._iv_figure.data[0].y)
     assert np.allclose(widget.I_nA, second)
     assert "trace 2 of 2" in widget._trace_header.object
+
+
+def test_solution_callback_persists_and_clears(monkeypatch, tmp_path: Path) -> None:
+    V = np.linspace(-2.0, 2.0, 61)
+    I = V**2 * 0.01
+
+    def callback(solution):
+        if solution is None:
+            clear_solution(tmp_path)
+        else:
+            save_solution(tmp_path, solution)
+
+    widget = PatFitPanel(
+        V,
+        np.vstack((I, I + 0.1)),
+        on_solution_changed=callback,
+    )
+
+    monkeypatch.setattr(
+        "superconductivity.optimizers.pat.panel.fit_pat",
+        lambda *args, **kwargs: _make_solution(V, I),
+    )
+
+    widget._on_fit_click(None)
+    saved = load_solution(tmp_path)
+    assert saved is not None
+
+    widget._trace_selector.value = 1
+    assert load_solution(tmp_path) is None
