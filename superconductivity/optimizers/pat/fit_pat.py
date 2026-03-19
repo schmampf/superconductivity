@@ -146,6 +146,7 @@ def fit_pat(
     weights: Optional[NDArray64] = None,
     maxfev: Optional[int] = None,
     E_mV: Optional[NDArray64] = None,
+    model: str = "pat",
 ) -> SolutionDict:
     V = to_1d_float64(V_mV, "V_mV")
     require_all_finite(V, "V_mV")
@@ -166,7 +167,7 @@ def fit_pat(
 
     sigma, mask = _weights_to_sigma(weights, length=I.size)
 
-    function, parameter_mask = get_model(model="pat", E_mV=E_mV)
+    function, parameter_mask = get_model(model=model, E_mV=E_mV)
     free_mask = parameter_mask & mask_full
 
     def fixed_function(V_mV: NDArray64, *free_params: tuple[float, ...]) -> NDArray64:
