@@ -7,6 +7,7 @@ from functools import partial
 from typing import Callable, Optional
 
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 from numpy.typing import NDArray
 
@@ -53,7 +54,7 @@ def _import_panel() -> "panel":
         ) from exc
 
     try:
-        pn.extension("plotly")
+        pn.extension("plotly", "mathjax")
     except Exception as exc:
         raise RuntimeError("Failed to initialize Panel Plotly extension.") from exc
 
@@ -156,10 +157,13 @@ class PatFitPanel:
 
         self._solution: Optional[SolutionDict] = None
 
-        self._parameter_table = self._pn.pane.Markdown(
-            self._format_parameter_table(), sizing_mode="stretch_width"
-        )
+        self._parameter_table = self._build_parameter_table_widget()
         self._status_panel = self._pn.pane.Markdown(self._format_status_text())
+        self._model_panel = self._pn.pane.LaTeX(
+            self._format_model_text(),
+            sizing_mode="stretch_width",
+            styles={"padding": "0.5rem"},
+        )
 
         self._solution: Optional[SolutionDict] = None
 
@@ -201,9 +205,6 @@ class PatFitPanel:
         """Return the control column for sliders, button, and readouts."""
         return self._pn.Column(
             self._pn.pane.Markdown("### PAT controls"),
-            self._trace_header,
-            self._trace_selector,
-            *self._slider_rows,
             self._pn.Row(
                 self._fit_button,
                 self._running_indicator,
@@ -213,6 +214,12 @@ class PatFitPanel:
             ),
             self._parameter_table,
             self._status_panel,
+            self._pn.Spacer(height=10),
+            self._trace_header,
+            self._trace_selector,
+            self._pn.Spacer(height=15),
+            self._pn.pane.Markdown("### Model"),
+            self._model_panel,
             sizing_mode="stretch_width",
         )
 
@@ -233,7 +240,7 @@ class PatFitPanel:
         self._derivative_figure.data[2].y = self._fit_derivative
         self._iv_pane.object = self._iv_figure
         self._derivative_pane.object = self._derivative_figure
-        self._parameter_table.object = self._format_parameter_table()
+        self._refresh_parameter_table()
         self._status_panel.object = self._format_status_text()
 
     def _build_sliders(self) -> None:
@@ -342,7 +349,7 @@ class PatFitPanel:
         self._iv_figure.data[1].y = self._initial_curve
         self._derivative_figure.data[1].y = self._initial_derivative
         self._update_plot_traces()
-        self._parameter_table.object = self._format_parameter_table()
+        self._refresh_parameter_table()
 
     def _on_trace_selected(self, event: "pn.parameterized.Event") -> None:
         if event.new == event.old:
@@ -357,7 +364,7 @@ class PatFitPanel:
         self._initial_derivative = self._gradient(self._initial_curve)
         self._fit_derivative = self._gradient(self._fit_curve)
         self._update_plot_traces()
-        self._parameter_table.object = self._format_parameter_table()
+        self._refresh_parameter_table()
         if self._fit_timer is not None:
             self._fit_timer.stop()
             self._fit_timer = None
@@ -368,7 +375,158 @@ class PatFitPanel:
     def _on_lock_toggled(self, event: "pn.parameterized.Event", *, key: str) -> None:
         slider = self._sliders[key]
         slider.disabled = bool(event.new)
-        self._parameter_table.object = self._format_parameter_table()
+        self._refresh_parameter_table()
+
+    def _build_parameter_table_widget(self) -> "pn.widgets.Tabulator":
+        table = self._pn.widgets.Tabulator(
+            self._parameter_table_frame(),
+            show_index=False,
+            disabled=False,
+            editors={
+                "Label": None,
+                "Guess": {"type": "number"},
+                "Lower": {"type": "number"},
+                "Upper": {"type": "number"},
+                "Fixed": {"type": "tickCross"},
+                "Fit": None,
+            },
+            formatters={
+                "Label": {"type": "html"},
+                "Fixed": {"type": "tickCross"},
+            },
+            widths={
+                "Label": 80,
+                "Guess": 100,
+                "Lower": 100,
+                "Upper": 100,
+                "Fixed": 80,
+                "Fit": 200,
+            },
+            selectable=False,
+            sortable=False,
+            layout="fit_columns",
+            sizing_mode="stretch_width",
+            height=220,
+        )
+        table.on_edit(self._on_parameter_table_edit)
+        return table
+
+    def _parameter_table_frame(self) -> pd.DataFrame:
+        guess = self._current_guess()
+        results = self._solution["params"] if self._solution else None
+        rows: list[dict[str, object]] = []
+        for idx, display in enumerate(self._display_keys):
+            spec = self._parameter_templates[idx]
+            if results is None:
+                fit_text = self._format_fit_value_with_error(guess[idx], None)
+            else:
+                fit_text = self._format_fit_value_with_error(
+                    results[idx].value,
+                    results[idx].error,
+                )
+            rows.append(
+                {
+                    "Label": spec.label,
+                    "Guess": float(guess[idx]),
+                    "Lower": float(spec.lower),
+                    "Upper": float(spec.upper),
+                    "Fixed": bool(self._lock_checkboxes[display].value),
+                    "Fit": fit_text,
+                }
+            )
+        return pd.DataFrame(rows)
+
+    def _format_fit_value_with_error(
+        self,
+        value: float | None,
+        error: float | None,
+    ) -> str:
+        if value is None:
+            return "n/a"
+
+        value_f = float(value)
+        if error is None or not np.isfinite(error) or float(error) <= 0.0:
+            return f"{value_f:.6g}"
+
+        error_f = float(error)
+        exponent = int(np.floor(np.log10(error_f)))
+        decimals = max(0, 1 - exponent)
+        rounded_error = round(error_f, decimals)
+        rounded_value = round(value_f, decimals)
+
+        if rounded_error >= 10 ** (2 - decimals):
+            decimals = max(0, decimals - 1)
+            rounded_error = round(error_f, decimals)
+            rounded_value = round(value_f, decimals)
+
+        if decimals > 0:
+            error_digits = int(round(rounded_error * (10**decimals)))
+            value_text = f"{rounded_value:.{decimals}f}"
+        else:
+            error_digits = int(round(rounded_error))
+            value_text = f"{rounded_value:.0f}"
+
+        return f"{value_text}({error_digits})"
+
+    def _refresh_parameter_table(self) -> None:
+        self._parameter_table.value = self._parameter_table_frame()
+
+    def _on_parameter_table_edit(self, event: object) -> None:
+        column = getattr(event, "column", None)
+        row = int(event.row)
+        key = self._display_keys[row]
+
+        if column == "Guess":
+            slider = self._sliders[key]
+            value = float(event.value)
+            clipped = min(max(value, slider.start), slider.end)
+            slider.value = clipped
+            if clipped != value:
+                self._refresh_parameter_table()
+            return
+
+        if column == "Fixed":
+            checkbox = self._lock_checkboxes[key]
+            checkbox.value = bool(event.value)
+            self._refresh_parameter_table()
+            return
+
+        if column in {"Lower", "Upper"}:
+            slider = self._sliders[key]
+            spec_index = self._display_keys.index(key)
+            spec = self._parameter_templates[spec_index]
+            value = float(event.value)
+
+            if column == "Lower":
+                new_lower = min(value, spec.upper)
+                self._parameter_templates[spec_index] = ParameterSpec(
+                    name=spec.name,
+                    label=spec.label,
+                    lower=float(new_lower),
+                    upper=float(spec.upper),
+                    guess=float(slider.value),
+                    fixed=bool(self._lock_checkboxes[key].value),
+                )
+                slider.start = float(new_lower)
+                if slider.value < slider.start:
+                    slider.value = slider.start
+                self._refresh_parameter_table()
+                return
+
+            new_upper = max(value, spec.lower)
+            self._parameter_templates[spec_index] = ParameterSpec(
+                name=spec.name,
+                label=spec.label,
+                lower=float(spec.lower),
+                upper=float(new_upper),
+                guess=float(slider.value),
+                fixed=bool(self._lock_checkboxes[key].value),
+            )
+            slider.end = float(new_upper)
+            if slider.value > slider.end:
+                slider.value = slider.end
+            self._refresh_parameter_table()
+            return
 
     def _on_fit_click(self, _: object) -> None:
         if self._fit_running:
@@ -624,3 +782,22 @@ class PatFitPanel:
     def _gradient(self, values: NDArray, axis: Optional[NDArray] = None) -> NDArray64:
         axis_values = axis if axis is not None else self.V_mV
         return np.gradient(values, axis_values)
+
+    def _format_model_text(self) -> str:
+        return r"""
+\[
+I_\mathrm{BCS}(V) = \int_{-\infty}^{\infty} N(E) \cdot N(E+eV) \cdot \left(f(E)-f(E+eV)\right)\mathrm{d}E \qquad (A=0)
+\]
+
+\[
+N(E) = \Re\!\left( \frac{E+i\gamma}{\sqrt{(E+i\gamma)^{2}-\Delta^{2}(T)}} \right)\,, \quad
+f(E) = \frac{1}{1+\exp\!\left(\frac{E}{k_\mathrm{B}T}\right)}\,, \quad
+\frac{\Delta(T)}{\Delta_0} \approx \tanh\!\left( 1.74\,\sqrt{\frac{\Delta_0}{1.764\,k_\mathrm{B}T} - 1} \right)
+\]
+
+\[
+I_\mathrm{PAT}(V)=\sum_{n=-\infty}^{\infty}
+J_n^2\!\left(\frac{eA}{h \nu}\right)
+I_\mathrm{BCS}\!\left(V + n\,\frac{h \nu}{e}\right) \qquad (A>0)
+\]
+"""
