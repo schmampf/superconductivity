@@ -271,7 +271,7 @@
 \begin{pgfscope}%
 \pgfpathrectangle{\pgfqpoint{0.000000in}{0.000000in}}{\pgfqpoint{1.850000in}{1.850000in}}%
 \pgfusepath{clip}%
-\pgfsys@transformshift{0.106391in}{0.210199in}%
+\pgfsys@transformshift{0.106389in}{0.210199in}%
 \pgftext[left,bottom]{\includegraphics[interpolate=true,width=1.682222in,height=0.641667in]{heatmap-img0.png}}%
 \end{pgfscope}%
 \begin{pgfscope}%
