@@ -57,6 +57,8 @@ def get_dos_jnp(
     # Calculate denominator safely
     dos = E_meV_complex / jnp.sqrt(E_meV_complex**2 - Delta_meV**2)
     dos = jnp.abs(jnp.real(dos))
+    # dos = jnp.real(dos)
+    # dos = jnp.maximum(dos, 0.0)
 
     # Clip unphysical values and set NaNs to 0
     dos = jnp.nan_to_num(dos, nan=0.0, posinf=100.0, neginf=0.0)
