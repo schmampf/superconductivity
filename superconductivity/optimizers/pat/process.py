@@ -108,6 +108,7 @@ def start_fit_pat_gui_process(
     solution_dir: Path,
     weights_path: Optional[Path] = None,
     maxfev: Optional[int] = None,
+    model: str = "pat",
     python_executable: Optional[Path] = None,
 ) -> subprocess.Popen[bytes]:
     script_path = _find_run_fit_pat_gui_script()
@@ -128,6 +129,7 @@ def start_fit_pat_gui_process(
         cmd += ["--weights", str(weights_path)]
     if maxfev is not None:
         cmd += ["--maxfev", str(maxfev)]
+    cmd += ["--model", model]
 
     return subprocess.Popen(cmd, start_new_session=True)
 
@@ -206,6 +208,7 @@ def run_fit_pat_gui_server(
     *,
     weights=None,
     maxfev=None,
+    model: str = "pat",
     solution_dir: Optional[Path] = None,
     port: int = 0,
     autoreload: bool = False,
@@ -238,6 +241,7 @@ def run_fit_pat_gui_server(
         I_nA=I_nA,
         weights=weights,
         maxfev=maxfev,
+        model=model,
         on_solution_changed=callback,
     )
     layout = pn.panel(panel_widget.layout, sizing_mode="stretch_both")

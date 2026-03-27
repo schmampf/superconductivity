@@ -39,8 +39,8 @@ seeblau100 = mpl_color_to_plotly(seeblau100)
 seegrau100 = mpl_color_to_plotly(seegrau100)
 
 
-def _pat_trace(V_mV: NDArray64, params: NDArray64) -> NDArray64:
-    function, parameter_mask = get_model(model="pat")
+def _pat_trace(V_mV: NDArray64, params: NDArray64, *, model: str) -> NDArray64:
+    function, parameter_mask = get_model(model=model)
     return function(V_mV, *params[parameter_mask])
 
 
@@ -74,6 +74,9 @@ class PatFitPanel:
         Optional per-point reliability weights for the optimizer. Defaults to None.
     maxfev : int | None, optional
         Upper limit for the optimizer iterations.
+    model : str, optional
+        Active fit model. Supported GUI options are ``"pat"`` and
+        ``"conv_pat"``.
     on_solution_changed : callable | None, optional
         Callback invoked whenever the active fit solution is updated or cleared.
 
@@ -91,6 +94,7 @@ class PatFitPanel:
         *,
         weights: Optional[NDArray64] = None,
         maxfev: Optional[int] = None,
+        model: str = "pat",
         on_solution_changed: Optional[Callable[[Optional[SolutionDict]], None]] = None,
     ) -> None:
         self._pn = _import_panel()
@@ -116,6 +120,18 @@ class PatFitPanel:
         self.I_nA: NDArray64 = self._trace_matrix[0]
         self.weights: Optional[NDArray64] = weights
         self.maxfev = maxfev
+        self.model = model
+        self._model_selector_sync = False
+        self._model_selector = self._pn.widgets.Select(
+            name="Model",
+            options={
+                "Integral PAT": "pat",
+                "Convolution PAT": "conv_pat",
+            },
+            value=self.model,
+            width=180,
+        )
+        self._model_selector.param.watch(self._on_model_selected, "value")
         self._on_solution_changed = on_solution_changed
 
         self._parameter_templates = DEFAULT_PARAMETERS
@@ -206,6 +222,7 @@ class PatFitPanel:
         return self._pn.Column(
             self._pn.pane.Markdown("### PAT controls"),
             self._pn.Row(
+                self._model_selector,
                 self._fit_button,
                 self._running_indicator,
                 self._fit_state_text,
@@ -370,6 +387,28 @@ class PatFitPanel:
             self._fit_timer = None
         self._fit_state_text.object = "Idle"
         self._fit_elapsed_text.object = "Elapsed: 0.0 s"
+        self._status_panel.object = self._format_status_text()
+
+    def _on_model_selected(self, event: "pn.parameterized.Event") -> None:
+        if event.new == event.old or self._model_selector_sync:
+            return
+        if self._fit_running:
+            self._model_selector_sync = True
+            try:
+                self._model_selector.value = event.old
+            finally:
+                self._model_selector_sync = False
+            return
+
+        self.model = str(event.new)
+        self._set_solution(None)
+        self._initial_curve = self._compute_curve_from_guess()
+        self._fit_curve = self._initial_curve.copy()
+        self._initial_derivative = self._gradient(self._initial_curve)
+        self._fit_derivative = self._gradient(self._fit_curve)
+        self._update_plot_traces()
+        self._refresh_parameter_table()
+        self._model_panel.object = self._format_model_text()
         self._status_panel.object = self._format_status_text()
 
     def _on_lock_toggled(self, event: "pn.parameterized.Event", *, key: str) -> None:
@@ -549,6 +588,7 @@ class PatFitPanel:
             parameters=parameters,
             weights=self.weights,
             maxfev=self.maxfev,
+            model=self.model,
         )
         self._fit_future.add_done_callback(self._on_fit_finished)
 
@@ -733,7 +773,7 @@ class PatFitPanel:
             self._on_solution_changed(solution)
 
     def _compute_curve_from_guess(self) -> NDArray64:
-        return _pat_trace(self.V_mV, self._current_guess())
+        return _pat_trace(self.V_mV, self._current_guess(), model=self.model)
 
     def _clean_numeric_trace(self, arr: NDArray) -> NDArray64:
         try:
@@ -784,6 +824,29 @@ class PatFitPanel:
         return np.gradient(values, axis_values)
 
     def _format_model_text(self) -> str:
+        if self.model in {"conv", "conv_pat", "conv+pat", "conv_dynes"}:
+            return r"""
+\[
+I_\mathrm{BCS}(V)=G_\mathrm{N}\left[
+N_2(1-f_2)\otimes N_1 -
+N_1 f_1 \otimes N_2
+\right](eV) \qquad (A=0)
+\]
+
+\[
+N_i(E)=\Re\!\left(
+\frac{E+i\gamma_i}{\sqrt{(E+i\gamma_i)^2-\Delta_i^2(T)}}
+\right), \qquad
+f_i(E)=\frac{1}{1+\exp\!\left(\frac{E}{k_\mathrm{B}T}\right)}
+\]
+
+\[
+I_\mathrm{PAT}(V)=\sum_{n=-\infty}^{\infty}
+J_n^2\!\left(\frac{eA}{h \nu}\right)
+I_\mathrm{BCS}\!\left(V + n\,\frac{h \nu}{e}\right) \qquad (A>0)
+\]
+"""
+
         return r"""
 \[
 I_\mathrm{BCS}(V) = \int_{-\infty}^{\infty} N(E) \cdot N(E+eV) \cdot \left(f(E)-f(E+eV)\right)\mathrm{d}E \qquad (A=0)

@@ -30,6 +30,7 @@ def fit_pat_gui(
     *,
     weights: Optional[np.ndarray] = None,
     maxfev: Optional[int] = None,
+    model: str = "pat",
     python_executable: Optional[Path] = None,
     wait_interval: float = 1.0,
 ) -> Optional[SolutionDict]:
@@ -45,6 +46,9 @@ def fit_pat_gui(
         Optional optimizer weights.
     maxfev : int | None, optional
         Maximum optimizer evaluations.
+    model : str, optional
+        Model identifier forwarded to the GUI fitter. Use ``"pat"`` for the
+        integral-based model or ``"conv_pat"`` for the convolution variant.
     python_executable : Path | None, optional
         Interpreter used for the child process. Defaults to the shared project
         virtual environment.
@@ -75,6 +79,7 @@ def fit_pat_gui(
             solution_dir=temp_dir,
             weights_path=weights_path,
             maxfev=maxfev,
+            model=model,
             python_executable=python_executable,
         )
     except Exception:
