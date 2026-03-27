@@ -23,8 +23,8 @@ def _make_solution(V: np.ndarray, I: np.ndarray) -> dict:
             replace(
                 base,
                 guess=float(base.guess),
-                fit_value=float(base.guess + idx + 0.1),
-                fit_error=0.1,
+                value=float(base.guess + idx + 0.1),
+                error=0.1,
             )
         )
     return {
@@ -61,15 +61,17 @@ def test_solution_round_trip(tmp_path: Path) -> None:
     assert np.allclose(loaded["I_fit_nA"], solution["I_fit_nA"])
     assert loaded["maxfev"] == solution["maxfev"]
     assert loaded["params"][0].name == solution["params"][0].name
-    assert loaded["params"][0].fit_value == solution["params"][0].fit_value
+    assert loaded["params"][0].value == solution["params"][0].value
 
 
 def test_fit_pat_gui_returns_solution_after_normal_exit(monkeypatch) -> None:
     V = np.linspace(-1.0, 1.0, 11)
     I = np.cos(V)
     created: dict[str, _FakeProcess] = {}
+    captured: dict[str, object] = {}
 
     def fake_start(**kwargs) -> _FakeProcess:
+        captured.update(kwargs)
         process = _FakeProcess(kwargs["solution_dir"])
         created["process"] = process
         return process
@@ -79,14 +81,15 @@ def test_fit_pat_gui_returns_solution_after_normal_exit(monkeypatch) -> None:
         process.returncode = 0
         return 0
 
-    monkeypatch.setattr(fit_pat_gui_module, "_start_fit_pat_gui_process", fake_start)
+    monkeypatch.setattr(fit_pat_gui_module, "start_fit_pat_gui_process", fake_start)
     monkeypatch.setattr(fit_pat_gui_module, "_wait_for_worker", fake_wait)
 
-    solution = fit_pat_gui(V_mV=V, I_nA=I)
+    solution = fit_pat_gui(V_mV=V, I_nA=I, model="conv_pat")
 
     assert solution is not None
     assert np.allclose(solution["I_exp_nA"], I)
     assert created["process"].returncode == 0
+    assert captured["model"] == "conv_pat"
 
 
 def test_fit_pat_gui_interrupt_returns_last_solution(monkeypatch) -> None:
@@ -104,18 +107,18 @@ def test_fit_pat_gui_interrupt_returns_last_solution(monkeypatch) -> None:
         process.returncode = 0
         return 0
 
-    monkeypatch.setattr(fit_pat_gui_module, "_start_fit_pat_gui_process", fake_start)
+    monkeypatch.setattr(fit_pat_gui_module, "start_fit_pat_gui_process", fake_start)
     monkeypatch.setattr(fit_pat_gui_module, "_wait_for_worker", fake_wait)
     monkeypatch.setattr(
         fit_pat_gui_module,
-        "_shutdown_fit_pat_gui_process",
+        "shutdown_fit_pat_gui_process",
         fake_shutdown,
     )
 
     solution = fit_pat_gui(V_mV=V, I_nA=I)
 
     assert solution is not None
-    assert solution["params"][0].fit_error == 0.1
+    assert solution["params"][0].error == 0.1
 
 
 def test_fit_pat_gui_interrupt_without_fit_returns_none(monkeypatch) -> None:
@@ -132,11 +135,11 @@ def test_fit_pat_gui_interrupt_without_fit_returns_none(monkeypatch) -> None:
         process.returncode = 0
         return 0
 
-    monkeypatch.setattr(fit_pat_gui_module, "_start_fit_pat_gui_process", fake_start)
+    monkeypatch.setattr(fit_pat_gui_module, "start_fit_pat_gui_process", fake_start)
     monkeypatch.setattr(fit_pat_gui_module, "_wait_for_worker", fake_wait)
     monkeypatch.setattr(
         fit_pat_gui_module,
-        "_shutdown_fit_pat_gui_process",
+        "shutdown_fit_pat_gui_process",
         fake_shutdown,
     )
 
@@ -154,7 +157,7 @@ def test_fit_pat_gui_nonzero_exit_without_solution_raises(monkeypatch) -> None:
         process.returncode = 2
         return 2
 
-    monkeypatch.setattr(fit_pat_gui_module, "_start_fit_pat_gui_process", fake_start)
+    monkeypatch.setattr(fit_pat_gui_module, "start_fit_pat_gui_process", fake_start)
     monkeypatch.setattr(fit_pat_gui_module, "_wait_for_worker", fake_wait)
 
     with pytest.raises(RuntimeError, match="exited with status 2"):

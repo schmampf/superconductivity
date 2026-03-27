@@ -23,8 +23,8 @@ def _make_solution(V: np.ndarray, I: np.ndarray) -> dict:
             replace(
                 base,
                 guess=float(guess[idx]),
-                fit_value=float(popt[idx]),
-                fit_error=0.1,
+                value=float(popt[idx]),
+                error=0.1,
             )
         )
     return {
@@ -51,19 +51,32 @@ def test_slider_change_updates_initial_curve() -> None:
 def test_fit_button_triggers_optimizer(monkeypatch) -> None:
     V = np.linspace(-2.0, 2.0, 61)
     I = V**2 * 0.01
-    widget = PatFitPanel(V, I)
+    widget = PatFitPanel(V, I, model="conv_pat")
 
     captured: dict[str, object] = {}
 
-    def fake_fit(*args, **kwargs):
+    class FakeFuture:
+        def __init__(self, solution: dict) -> None:
+            self._solution = solution
+
+        def result(self) -> dict:
+            return self._solution
+
+        def add_done_callback(self, callback) -> None:
+            callback(self)
+
+    def fake_submit(*args, **kwargs) -> FakeFuture:
         captured["args"] = args
         captured["kwargs"] = kwargs
-        return _make_solution(V, I)
+        return FakeFuture(_make_solution(V, I))
 
-    monkeypatch.setattr("superconductivity.optimizers.pat.panel.fit_pat", fake_fit)
+    monkeypatch.setattr(widget._executor, "submit", fake_submit)
+    monkeypatch.setattr(widget, "_start_fit_timer", lambda: None)
+    monkeypatch.setattr(widget._pn.state, "execute", lambda callback: callback())
     widget._on_fit_click(None)
 
     assert captured, "fit_I_nA was not called"
+    assert captured["kwargs"]["model"] == "conv_pat"
     assert np.allclose(widget._iv_figure.data[2].y, I + 0.2)
     assert widget._solution is not None
 
@@ -83,6 +96,20 @@ def test_trace_selector_switches_rows() -> None:
     assert "trace 2 of 2" in widget._trace_header.object
 
 
+def test_model_selector_updates_panel_state() -> None:
+    V = np.linspace(-1.0, 1.0, 61)
+    I = np.sin(V) * 0.1
+    widget = PatFitPanel(V, I)
+    widget._set_solution(_make_solution(V, I))
+
+    widget._sliders["A_mV"].value = 0.3
+    widget._model_selector.value = "conv_pat"
+
+    assert widget.model == "conv_pat"
+    assert widget._solution is None
+    assert "N_2(1-f_2)\\otimes N_1" in widget._model_panel.object
+
+
 def test_solution_callback_persists_and_clears(monkeypatch, tmp_path: Path) -> None:
     V = np.linspace(-2.0, 2.0, 61)
     I = V**2 * 0.01
@@ -99,10 +126,23 @@ def test_solution_callback_persists_and_clears(monkeypatch, tmp_path: Path) -> N
         on_solution_changed=callback,
     )
 
+    class FakeFuture:
+        def __init__(self, solution: dict) -> None:
+            self._solution = solution
+
+        def result(self) -> dict:
+            return self._solution
+
+        def add_done_callback(self, callback) -> None:
+            callback(self)
+
     monkeypatch.setattr(
-        "superconductivity.optimizers.pat.panel.fit_pat",
-        lambda *args, **kwargs: _make_solution(V, I),
+        widget._executor,
+        "submit",
+        lambda *args, **kwargs: FakeFuture(_make_solution(V, I)),
     )
+    monkeypatch.setattr(widget, "_start_fit_timer", lambda: None)
+    monkeypatch.setattr(widget._pn.state, "execute", lambda callback: callback())
 
     widget._on_fit_click(None)
     saved = load_solution(tmp_path)

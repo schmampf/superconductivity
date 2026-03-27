@@ -37,6 +37,7 @@ from .evaluation.sampling import (
     SamplingTrace,
     SamplingTraces,
     fill_sampling_spec_from_offset,
+    fill_sampling_spec_from_offsets,
     fill_sampling_specs_from_offsets,
     get_sampling,
     get_samplings,

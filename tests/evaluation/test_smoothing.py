@@ -15,7 +15,6 @@ from superconductivity.evaluation.sampling import (
 
 def _make_sampling_spec() -> SamplingSpec:
     return SamplingSpec(
-        nu_Hz=20.0,
         upsample=4,
         Vbin_mV=np.linspace(-1.0, 1.0, 9),
         Ibin_nA=np.linspace(-2.0, 2.0, 11),
