@@ -6,14 +6,13 @@ from matplotlib.colors import ListedColormap
 
 from superconductivity.style.cpd4 import cmap
 from superconductivity.style.cpd5 import (
-    mpl_cmap_to_plotly,
-    mpl_color_to_plotly,
     seeblau100,
     seegrau35,
     seegrau65,
     seegrau100,
     weiss,
 )
+from superconductivity.style.plotly import mpl_cmap_to_plotly, mpl_color_to_plotly
 from superconductivity.utilities.types import COLOR
 
 
