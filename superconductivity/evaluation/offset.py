@@ -505,5 +505,3 @@ __all__ = [
     "get_offset",
     "get_offsets",
 ]
-]
-]
