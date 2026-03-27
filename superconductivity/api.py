@@ -15,6 +15,40 @@ implemented in `superconductivity/__init__.py` and forwards missing attributes
 to this module.
 """
 
+from .evaluation.ivdata import IVTrace, IVTraces, get_iv, get_ivs
+from .evaluation.keys import (
+    list_measurement_keys,
+    list_specific_keys,
+    list_specific_keys_and_values,
+    sort_specific_keys_by_value,
+)
+
+# import from evaluation
+from .evaluation.offset import (
+    OffsetSpec,
+    OffsetTrace,
+    OffsetTraces,
+    get_offset,
+    get_offsets,
+)
+from .evaluation.psd import PSDSpec, PSDTrace, PSDTraces, get_psd, get_psds
+from .evaluation.sampling import (
+    SamplingSpec,
+    SamplingTrace,
+    SamplingTraces,
+    fill_sampling_spec_from_offset,
+    fill_sampling_specs_from_offsets,
+    get_sampling,
+    get_samplings,
+)
+from .evaluation.smoothing import (
+    SmoothedSamplingTrace,
+    SmoothedSamplingTraces,
+    SmoothingSpec,
+    get_smoothed_sampling,
+    get_smoothed_samplings,
+)
+
 # import from abs
 from .models.abs import (
     get_cpr_ab,
@@ -47,13 +81,7 @@ from .models.abs import (
 )
 
 # imports from bcs
-from .models.bcs_np import (
-    get_Delta_meV,
-    get_I_bcs_nA,
-    get_T_c_K,
-    get_dos,
-    get_f,
-)
+from .models.bcs_np import get_Delta_meV, get_dos, get_f, get_I_bcs_nA, get_T_c_K
 
 # imports from btk
 from .models.btk import get_AB_btk, get_I_btk_nA, get_Z_btk
@@ -61,37 +89,6 @@ from .models.btk import get_AB_btk, get_I_btk_nA, get_Z_btk
 # import from fcs
 from .models.fcs_pbar import get_I_fcs_pbar_nA as get_I_fcs_nA
 from .models.ha_asym import get_I_ha_asym_nA
-
-# import from evaluation
-from .evaluation.offset import (
-    OffsetSpec,
-    OffsetTrace,
-    OffsetTraces,
-    get_offset,
-    get_offsets,
-)
-from .evaluation.sampling import (
-    SamplingSpec,
-    SamplingTrace,
-    SamplingTraces,
-    get_sampling,
-    get_samplings,
-)
-from .evaluation.smoothing import (
-    SmoothedSamplingTrace,
-    SmoothedSamplingTraces,
-    SmoothingSpec,
-    get_smoothed_sampling,
-    get_smoothed_samplings,
-)
-from .evaluation.psd import PSDTrace, PSDTraces, get_psd, get_psds
-from .evaluation.ivdata import IVTrace, IVTraces, get_iv, get_ivs
-from .evaluation.keys import (
-    list_measurement_keys,
-    list_specific_keys,
-    list_specific_keys_and_values,
-    sort_specific_keys_by_value,
-)
 
 # import from ha
 from .models.ha_sym import get_I_ha_sym_nA as get_I_ha_nA
@@ -123,7 +120,6 @@ from .style.cpd5 import (
 )
 
 # import styles
-from .style.man import man
 from .style.thesislayout import get_ext, get_figure, map_layout, theory_layout
 
 # import utilities
