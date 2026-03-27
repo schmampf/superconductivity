@@ -12,14 +12,11 @@ import numpy as np
 from ..utilities.constants import G_0_muS
 from ..utilities.functions import bin_y_over_x, fill_nans
 from ..utilities.functions import upsample as upsample_xy
-from ..utilities.safety import (
-    require_all_finite,
-    require_min_size,
-    require_same_shape,
-    to_1d_float64,
-)
+from ..utilities.safety import (require_all_finite, require_min_size,
+                                to_1d_float64)
 from ..utilities.types import NDArray64
 from .ivdata import IVTrace, IVTraces
+from .psd import _downsample_iv_trace
 
 
 def _import_tqdm():
@@ -120,10 +117,10 @@ class OffsetSpec:
 
         Notes
         -----
-        The spacing follows the existing project convention
-        ``dt_s = 0.5 / nu_Hz``.
+        ``nu_Hz`` is interpreted as the literal sampling rate, so the
+        spacing is ``dt_s = 1 / nu_Hz``.
         """
-        return 0.5 / self.nu_Hz
+        return 1.0 / self.nu_Hz
 
 
 class OffsetTrace(TypedDict):
@@ -303,48 +300,10 @@ def _prepare_trace_for_offset(
     spec: OffsetSpec,
 ) -> tuple[NDArray64, NDArray64]:
     """Downsample in time, then upsample in index for offset analysis."""
-    label = trace["specific_key"]
-    t_raw = to_1d_float64(trace["t_s"], f"{label}.t_s")
-    v_raw_mV = to_1d_float64(trace["V_mV"], f"{label}.V_mV")
-    i_raw_nA = to_1d_float64(trace["I_nA"], f"{label}.I_nA")
-
-    require_same_shape(
-        t_raw,
-        v_raw_mV,
-        name_a=f"{label}.t_s",
-        name_b=f"{label}.V_mV",
+    _, v_down_mV, i_down_nA = _downsample_iv_trace(
+        trace=trace,
+        nu_Hz=spec.nu_Hz,
     )
-    require_same_shape(
-        t_raw,
-        i_raw_nA,
-        name_a=f"{label}.t_s",
-        name_b=f"{label}.I_nA",
-    )
-    require_min_size(t_raw, 2, name=f"{label}.t_s")
-    require_all_finite(t_raw, name=f"{label}.t_s")
-    require_all_finite(v_raw_mV, name=f"{label}.V_mV")
-    require_all_finite(i_raw_nA, name=f"{label}.I_nA")
-
-    t_min = float(np.min(t_raw))
-    t_max = float(np.max(t_raw))
-    if not np.isfinite(t_min) or not np.isfinite(t_max) or t_max <= t_min:
-        raise ValueError(f"{label}.t_s must span at least two time points.")
-
-    t_bins_s = np.arange(
-        t_min,
-        t_max + 0.5 * spec.dt_s,
-        spec.dt_s,
-        dtype=np.float64,
-    )
-    if t_bins_s.size < 2:
-        t_bins_s = np.linspace(t_min, t_max, 2, dtype=np.float64)
-
-    v_down_mV = bin_y_over_x(x=t_raw, y=v_raw_mV, x_bins=t_bins_s)
-    i_down_nA = bin_y_over_x(x=t_raw, y=i_raw_nA, x_bins=t_bins_s)
-    finite = np.isfinite(v_down_mV) & np.isfinite(i_down_nA)
-    v_down_mV = v_down_mV[finite]
-    i_down_nA = i_down_nA[finite]
-    require_min_size(v_down_mV, 2, name=f"{label} downsampled trace")
 
     v_mV, i_nA = upsample_xy(
         x=v_down_mV,
@@ -502,7 +461,7 @@ def get_offsets(
     traces: IVTraces,
     spec: OffsetSpec,
     show_progress: bool = True,
-    backend: str = "numpy",
+    backend: str = "jax",
     workers: int = 1,
 ) -> OffsetTraces:
     """Find offsets for one collection of IV traces.
@@ -545,4 +504,6 @@ __all__ = [
     "OffsetTraces",
     "get_offset",
     "get_offsets",
+]
+]
 ]
