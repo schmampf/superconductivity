@@ -12,13 +12,13 @@ import plotly.graph_objects as go
 from numpy.typing import NDArray
 
 from superconductivity.style.cpd5 import schwarz, seeblau100, seegrau100
+from superconductivity.style.plotly import mpl_color_to_plotly
 from superconductivity.utilities.safety import (
     require_all_finite,
     require_min_size,
     to_1d_float64,
 )
 from superconductivity.utilities.types import NDArray64
-from superconductivity.visuals.plotly.helper import mpl_color_to_plotly
 
 from .fit_pat import (
     DEFAULT_PARAMETERS,
