@@ -19,6 +19,7 @@ from .maps import (
     get_surface,
     save_figure,
 )
+from superconductivity.style.plotly import mpl_cmap_to_plotly, mpl_color_to_plotly
 from .tuples import get_tuple_slider
 
 __all__ = [
@@ -31,4 +32,6 @@ __all__ = [
     "save_figure",
     "build_html",
     "get_tuple_slider",
+    "mpl_cmap_to_plotly",
+    "mpl_color_to_plotly",
 ]

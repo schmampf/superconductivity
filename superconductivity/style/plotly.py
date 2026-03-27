@@ -1,4 +1,4 @@
-"""Helpers specific to Plotly rendering."""
+"""Plotly-specific style helpers."""
 
 from typing import List, Tuple
 

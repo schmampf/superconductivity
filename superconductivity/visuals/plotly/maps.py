@@ -8,10 +8,10 @@ import plotly.graph_objects as go
 from matplotlib.colors import ListedColormap
 
 from superconductivity.style.cpd4 import cmap
+from superconductivity.style.plotly import mpl_cmap_to_plotly
 from superconductivity.utilities.types import LIM, NDArray64
 
 from ..helper import check_xyz, get_clim, get_compressed_indices, get_xylim_indices
-from .helper import mpl_cmap_to_plotly
 
 
 def get_axis(
