@@ -1,4 +1,4 @@
-from .psd import PSDTrace, PSDTraces, get_psd, get_psds
+from .psd import PSDSpec, PSDTrace, PSDTraces, get_psd, get_psds
 from .ivdata import IVTrace, IVTraces, get_iv, get_ivs
 from .keys import (
     list_measurement_keys,
@@ -11,8 +11,18 @@ from .sampling import (
     SamplingSpec,
     SamplingTrace,
     SamplingTraces,
+    fill_sampling_spec_from_offset,
+    fill_sampling_spec_from_offsets,
+    fill_sampling_specs_from_offsets,
     get_sampling,
     get_samplings,
+)
+from .shunt import (
+    ShuntSpec,
+    ShuntTrace,
+    ShuntTraces,
+    get_shunt,
+    get_shunt_traces,
 )
 from .smoothing import (
     SmoothedSamplingTrace,
@@ -31,13 +41,22 @@ __all__ = [
     "SamplingSpec",
     "SamplingTrace",
     "SamplingTraces",
+    "fill_sampling_spec_from_offset",
+    "fill_sampling_spec_from_offsets",
+    "fill_sampling_specs_from_offsets",
     "get_sampling",
     "get_samplings",
+    "ShuntSpec",
+    "ShuntTrace",
+    "ShuntTraces",
+    "get_shunt",
+    "get_shunt_traces",
     "SmoothingSpec",
     "SmoothedSamplingTrace",
     "SmoothedSamplingTraces",
     "get_smoothed_sampling",
     "get_smoothed_samplings",
+    "PSDSpec",
     "get_psd",
     "get_psds",
     "PSDTrace",
