@@ -6,14 +6,15 @@ from typing import Optional, Sequence, TypedDict
 import numpy as np
 from numpy.typing import NDArray
 
-from ..utilities.safety import (
+from ...utilities.safety import (
     require_all_finite,
     require_min_size,
     require_same_shape,
     to_1d_float64,
 )
-from ..utilities.types import NDArray64
-from .models import ParameterSpec, get_model_spec
+from ...utilities.types import NDArray64
+from .parameters import ParameterSpec
+from .registry import BCSModelConfig, get_model_spec
 
 
 class SolutionDict(TypedDict):
@@ -28,7 +29,7 @@ class SolutionDict(TypedDict):
 
 def _clone_parameters(
     *,
-    model: str,
+    model: str | BCSModelConfig,
     parameters: Optional[Sequence[ParameterSpec]] = None,
 ) -> list[ParameterSpec]:
     model_spec = get_model_spec(model)
@@ -91,7 +92,7 @@ def fit_model(
     V_mV: NDArray64,
     I_nA: NDArray64,
     *,
-    model: str,
+    model: str | BCSModelConfig,
     parameters: Optional[Sequence[ParameterSpec]] = None,
     weights: Optional[NDArray64] = None,
     maxfev: Optional[int] = None,

@@ -6,7 +6,7 @@ import numpy as np
 
 from ...utilities.constants import G_0_muS, k_B_meV
 from ...utilities.types import NDArray64
-from ._bcs import get_delta_np
+from .bcs_np import get_delta_np
 
 jax.config.update("jax_enable_x64", True)
 
@@ -140,7 +140,7 @@ def _interpolate_convolution_trace(
     return result
 
 
-def sis_integral_jax(
+def integral_jax(
     V_mV: NDArray64,
     E_mV: NDArray64,
     G_N: float,
@@ -163,30 +163,7 @@ def sis_integral_jax(
     )
 
 
-def sin_integral_jax(
-    V_mV: NDArray64,
-    E_mV: NDArray64,
-    G_N: float,
-    T_K: float,
-    Delta_meV: float,
-    gamma_meV: float,
-) -> NDArray64:
-    return np.asarray(
-        integral_current_jnp(
-            jnp.asarray(V_mV, dtype=jnp.float64),
-            jnp.asarray(E_mV, dtype=jnp.float64),
-            G_N=jnp.asarray(G_N, dtype=jnp.float64),
-            T_K=jnp.asarray(T_K, dtype=jnp.float64),
-            Delta_1_meV=jnp.asarray(Delta_meV, dtype=jnp.float64),
-            Delta_2_meV=jnp.asarray(0.0, dtype=jnp.float64),
-            gamma_1_meV=jnp.asarray(gamma_meV, dtype=jnp.float64),
-            gamma_2_meV=jnp.asarray(0.0, dtype=jnp.float64),
-        ),
-        dtype=np.float64,
-    )
-
-
-def sis_convolution_jax(
+def convolution_jax(
     V_mV: NDArray64,
     E_mV: NDArray64,
     G_N: float,
@@ -210,38 +187,6 @@ def sis_convolution_jax(
         ),
         dtype=np.float64,
     )
-    return _interpolate_convolution_trace(
-        np.asarray(V_mV, dtype=np.float64),
-        np.asarray(E_mV, dtype=np.float64),
-        current_nA,
-        G_N=G_N,
-    )
-
-
-def sin_convolution_jax(
-    V_mV: NDArray64,
-    E_mV: NDArray64,
-    G_N: float,
-    T_K: float,
-    Delta_meV: float,
-    gamma_meV: float,
-) -> NDArray64:
-    delta_meV = get_delta_np(Delta_meV, T_K)
-    current_nA = np.asarray(
-        convolution_spectrum_jnp(
-            jnp.asarray(E_mV, dtype=jnp.float64),
-            G_N=jnp.asarray(G_N, dtype=jnp.float64),
-            T_K=jnp.asarray(T_K, dtype=jnp.float64),
-            Delta_1_meV=jnp.asarray(Delta_meV, dtype=jnp.float64),
-            Delta_2_meV=jnp.asarray(0.0, dtype=jnp.float64),
-            gamma_1_meV=jnp.asarray(gamma_meV, dtype=jnp.float64),
-            gamma_2_meV=jnp.asarray(0.0, dtype=jnp.float64),
-        ),
-        dtype=np.float64,
-    )
-    if delta_meV == 0.0:
-        return np.asarray(V_mV, dtype=np.float64) * (G_N * _G0)
-
     return _interpolate_convolution_trace(
         np.asarray(V_mV, dtype=np.float64),
         np.asarray(E_mV, dtype=np.float64),
