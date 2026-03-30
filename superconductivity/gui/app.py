@@ -16,8 +16,17 @@ from ..evaluation.sampling import (
     get_sampling,
 )
 from ..evaluation.smoothing import SmoothingSpec, get_smoothed_sampling
-from ..optimizers.fit_model import SolutionDict
-from ..optimizers.models import ParameterSpec, get_model_spec
+from ..optimizers.bcs import (
+    BCSModelConfig,
+    ParameterSpec,
+    SolutionDict,
+    get_model_config,
+    get_model_key,
+    get_model_spec,
+    make_bcs_parameters,
+    make_noise_parameters,
+    make_pat_addon_parameters,
+)
 from ..utilities.types import NDArray64
 from .common import _import_panel
 from .display import GUILeftMixin
@@ -39,9 +48,11 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
         traces: IVTraces,
         *,
         model: str = _DEFAULT_MODEL,
+        psd_spec: Optional[PSDSpec] = None,
         psd_nu_Hz: float = 13.7,
         offset_spec: Optional[OffsetSpec] = None,
         sampling_spec: Optional[SamplingSpec] = None,
+        smoothing_spec: Optional[SmoothingSpec] = None,
         maxfev: Optional[int] = None,
         on_state_changed: Optional[
             Callable[[GUIStateDict], None]
@@ -53,10 +64,17 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
 
         self.traces = traces
         self.active_index = 0
-        self.model_key = model
+        self._fit_model_config = get_model_config(model)
+        self.model_key = get_model_key(self._fit_model_config)
         self.maxfev = maxfev
         self._on_state_changed = on_state_changed
-        self._shared_nu_Hz = float(psd_nu_Hz)
+        resolved_psd_spec = (
+            PSDSpec(nu_Hz=psd_nu_Hz)
+            if psd_spec is None
+            else replace(psd_spec)
+        )
+        self._shared_nu_Hz = float(resolved_psd_spec.nu_Hz)
+        self._experimental_detrend = bool(resolved_psd_spec.detrend)
         self._offset_spec = (
             _default_offset_spec(self._shared_nu_Hz)
             if offset_spec is None
@@ -66,6 +84,11 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
             _default_sampling_spec()
             if sampling_spec is None
             else replace(sampling_spec)
+        )
+        self._smoothing_spec = (
+            SmoothingSpec(smooth=False)
+            if smoothing_spec is None
+            else replace(smoothing_spec)
         )
         self._sampling_offset_override_enabled = np.zeros(
             len(traces),
@@ -98,10 +121,18 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
         self._downsampled_V_mV = np.empty((0,), dtype=np.float64)
         self._downsampled_I_nA = np.empty((0,), dtype=np.float64)
 
-        self._parameters = self._default_parameters()
-        self._experimental_detrend = True
-        self._smoothing_enabled = False
-        self._smoothing_spec = SmoothingSpec()
+        self._bcs_parameters = [
+            replace(parameter) for parameter in make_bcs_parameters()
+        ]
+        self._pat_parameters = [
+            replace(parameter) for parameter in make_pat_addon_parameters()
+        ]
+        self._noise_parameters = [
+            replace(parameter) for parameter in make_noise_parameters()
+        ]
+        self._parameters: list[ParameterSpec] = []
+        self._sync_active_fit_model()
+        self._smoothing_enabled = bool(self._smoothing_spec.smooth)
         self._initial_curve = np.empty((0,), dtype=np.float64)
         self._fit_curve = np.empty((0,), dtype=np.float64)
         self._fit_running = False
@@ -122,12 +153,12 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
         )
 
         self._build_control_widgets()
+        self._build_left_controls()
         self._recompute_pipeline(clear_fit=True)
         self._sync_control_widgets_from_specs()
 
         self._build_fit_widgets()
         self._build_plot_panes()
-        self._build_left_controls()
         self._refresh_all_views()
 
         self.layout = self.get_layout()
@@ -150,18 +181,18 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
     def get_layout(self):
         left_tabs = self._pn.Tabs(
             (
-                "I(V)",
+                "(V)",
                 self._pn.Column(
+                    self._left_v_quantity_selector,
                     self._iv_pane,
-                    self._didv_pane,
                     sizing_mode="stretch_width",
                 ),
             ),
             (
-                "V(I)",
+                "(I)",
                 self._pn.Column(
+                    self._left_i_quantity_selector,
                     self._vi_pane,
-                    self._dvdi_pane,
                     sizing_mode="stretch_width",
                 ),
             ),
@@ -171,7 +202,7 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
             ("PSD Analysis", self._experimental_tab()),
             ("Offset Analysis", self._offset_tab()),
             ("Sampling", self._sampling_tab()),
-            ("Fitting", self._fit_tab()),
+            ("BCS fitting", self._fit_tab()),
             sizing_mode="stretch_width",
         )
         return self._pn.Row(
@@ -195,11 +226,14 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
         return self.traces[self.active_index]
 
 
-    def _default_parameters(self) -> list[ParameterSpec]:
-        return [
-            replace(parameter)
-            for parameter in get_model_spec(self.model_key).parameters
-        ]
+    def _sync_active_fit_model(self) -> None:
+        self.model_key = get_model_key(self._fit_model_config)
+        parameters = list(self._bcs_parameters)
+        if self._fit_model_config.pat_enabled:
+            parameters.extend(self._pat_parameters)
+        if self._fit_model_config.noise_enabled:
+            parameters.extend(self._noise_parameters)
+        self._parameters = parameters
 
 
     def _sampling_offset_values(
@@ -300,7 +334,7 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
 
 
     def _require_sampling(self) -> SamplingTrace:
-        if self._smoothing_enabled and self._smoothed_sampling is not None:
+        if self._smoothing_spec.smooth and self._smoothed_sampling is not None:
             return self._smoothed_sampling
         return self._require_raw_sampling()
 
@@ -358,7 +392,8 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
             self._require_downsampled_trace(),
             spec=self._active_sampling_spec(),
         )
-        if self._smoothing_enabled:
+        self._smoothing_enabled = bool(self._smoothing_spec.smooth)
+        if self._smoothing_spec.smooth:
             self._smoothed_sampling = get_smoothed_sampling(
                 self._require_raw_sampling(),
                 spec=self._smoothing_spec,
@@ -370,7 +405,7 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
     def _recompute_fit_curves(self) -> None:
         sampling = self._require_sampling()
         V_mV = np.asarray(sampling["Vbin_mV"], dtype=np.float64)
-        function = get_model_spec(self.model_key).function
+        function = get_model_spec(self._fit_model_config).function
         self._initial_curve = np.asarray(
             function(V_mV, *self._current_guess()),
             dtype=np.float64,
@@ -439,18 +474,22 @@ def gui_app(
     traces: IVTraces,
     *,
     model: str = _DEFAULT_MODEL,
+    psd_spec: Optional[PSDSpec] = None,
     psd_nu_Hz: float = 13.7,
     offset_spec: Optional[OffsetSpec] = None,
     sampling_spec: Optional[SamplingSpec] = None,
+    smoothing_spec: Optional[SmoothingSpec] = None,
     maxfev: Optional[int] = None,
     on_state_changed: Optional[Callable[[GUIStateDict], None]] = None,
 ):
     panel = GUIPanel(
         traces,
         model=model,
+        psd_spec=psd_spec,
         psd_nu_Hz=psd_nu_Hz,
         offset_spec=offset_spec,
         sampling_spec=sampling_spec,
+        smoothing_spec=smoothing_spec,
         maxfev=maxfev,
         on_state_changed=on_state_changed,
     )
@@ -463,9 +502,11 @@ def serve_gui(
     traces: IVTraces,
     *,
     model: str = _DEFAULT_MODEL,
+    psd_spec: Optional[PSDSpec] = None,
     psd_nu_Hz: float = 13.7,
     offset_spec: Optional[OffsetSpec] = None,
     sampling_spec: Optional[SamplingSpec] = None,
+    smoothing_spec: Optional[SmoothingSpec] = None,
     maxfev: Optional[int] = None,
     port: int = 0,
     open_browser: bool = True,
@@ -489,9 +530,11 @@ def serve_gui(
     app = gui_app(
         traces,
         model=model,
+        psd_spec=psd_spec,
         psd_nu_Hz=psd_nu_Hz,
         offset_spec=offset_spec,
         sampling_spec=sampling_spec,
+        smoothing_spec=smoothing_spec,
         maxfev=maxfev,
     )
     _ACTIVE_GUI_PANEL = getattr(app, "_gui_panel")
@@ -510,9 +553,11 @@ def run_gui(
     traces: IVTraces,
     *,
     model: str = _DEFAULT_MODEL,
+    psd_spec: Optional[PSDSpec] = None,
     psd_nu_Hz: float = 13.7,
     offset_spec: Optional[OffsetSpec] = None,
     sampling_spec: Optional[SamplingSpec] = None,
+    smoothing_spec: Optional[SmoothingSpec] = None,
     maxfev: Optional[int] = None,
     port: int = 0,
     open_browser: bool = True,
@@ -528,9 +573,11 @@ def run_gui(
     server = serve_gui(
         traces,
         model=model,
+        psd_spec=psd_spec,
         psd_nu_Hz=psd_nu_Hz,
         offset_spec=offset_spec,
         sampling_spec=sampling_spec,
+        smoothing_spec=smoothing_spec,
         maxfev=maxfev,
         port=port,
         open_browser=open_browser,
@@ -555,9 +602,11 @@ def gui(
     traces: IVTraces,
     *,
     model: str = _DEFAULT_MODEL,
+    psd_spec: Optional[PSDSpec] = None,
     psd_nu_Hz: float = 13.7,
     offset_spec: Optional[OffsetSpec] = None,
     sampling_spec: Optional[SamplingSpec] = None,
+    smoothing_spec: Optional[SmoothingSpec] = None,
     maxfev: Optional[int] = None,
     port: int = 0,
     open_browser: bool = True,
@@ -567,14 +616,16 @@ def gui(
     stop_existing: bool = True,
     wait: bool = True,
     poll_interval: float = 0.5,
-) -> Optional[GUIStateDict]:
+):
     if wait:
         return run_gui(
             traces,
             model=model,
+            psd_spec=psd_spec,
             psd_nu_Hz=psd_nu_Hz,
             offset_spec=offset_spec,
             sampling_spec=sampling_spec,
+            smoothing_spec=smoothing_spec,
             maxfev=maxfev,
             port=port,
             open_browser=open_browser,
@@ -589,9 +640,11 @@ def gui(
     serve_gui(
         traces,
         model=model,
+        psd_spec=psd_spec,
         psd_nu_Hz=psd_nu_Hz,
         offset_spec=offset_spec,
         sampling_spec=sampling_spec,
+        smoothing_spec=smoothing_spec,
         maxfev=maxfev,
         port=port,
         open_browser=open_browser,

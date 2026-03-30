@@ -42,6 +42,9 @@ class SmoothingSpec:
 
     Parameters
     ----------
+    smooth
+        Whether smoothing is enabled. If ``False``,
+        :func:`get_smoothed_sampling` returns the input trace unchanged.
     median_bins
         Median filter window in bins. Use ``0`` or ``1`` to disable the median
         step. Values larger than ``1`` must be odd.
@@ -53,12 +56,15 @@ class SmoothingSpec:
         robust default for finite supported segments.
     """
 
+    smooth: bool = True
     median_bins: int = 3
     sigma_bins: float = 2.0
     mode: str = "nearest"
 
     def __post_init__(self) -> None:
         """Validate smoothing parameters."""
+        self.smooth = bool(self.smooth)
+
         median_bins = int(self.median_bins)
         if median_bins < 0:
             raise ValueError("median_bins must be >= 0.")
@@ -300,6 +306,33 @@ def get_smoothed_sampling(
     spec: SmoothingSpec,
 ) -> SmoothedSamplingTrace:
     """Smooth one sampled IV trace and recompute derivatives."""
+    if not spec.smooth:
+        return {
+            "specific_key": sampling_trace["specific_key"],
+            "index": sampling_trace["index"],
+            "yvalue": sampling_trace["yvalue"],
+            "Voff_mV": float(sampling_trace["Voff_mV"]),
+            "Ioff_nA": float(sampling_trace["Ioff_nA"]),
+            "Vbin_mV": np.asarray(
+                sampling_trace["Vbin_mV"],
+                dtype=np.float64,
+            ),
+            "Ibin_nA": np.asarray(
+                sampling_trace["Ibin_nA"],
+                dtype=np.float64,
+            ),
+            "I_nA": np.asarray(sampling_trace["I_nA"], dtype=np.float64),
+            "V_mV": np.asarray(sampling_trace["V_mV"], dtype=np.float64),
+            "dG_G0": np.asarray(
+                sampling_trace["dG_G0"],
+                dtype=np.float64,
+            ),
+            "dR_R0": np.asarray(
+                sampling_trace["dR_R0"],
+                dtype=np.float64,
+            ),
+        }
+
     vbin_mV = np.asarray(sampling_trace["Vbin_mV"], dtype=np.float64)
     ibin_nA = np.asarray(sampling_trace["Ibin_nA"], dtype=np.float64)
     i_smooth_nA = _smooth_supported_segment(sampling_trace["I_nA"], spec=spec)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
+from typing import Callable
 
 import numpy as np
 import plotly.graph_objects as go
@@ -19,6 +20,32 @@ _LEFT_STAGE_BUTTON_ORDER = (
 )
 _LEFT_STAGE_TRACE_ORDER = _LEFT_STAGE_BUTTON_ORDER
 _LEFT_STAGE_DEFAULTS = ["binned", "initial", "fit"]
+_LEFT_V_QUANTITY_ORDER = (
+    "iv_v",
+    "didv_v",
+    "i_over_v_v",
+    "dvdi_v",
+)
+_LEFT_I_QUANTITY_ORDER = (
+    "vi_i",
+    "dvdi_i",
+    "v_over_i_i",
+    "didv_i",
+)
+_LEFT_V_QUANTITY_DEFAULTS = ["iv_v", "didv_v"]
+_LEFT_I_QUANTITY_DEFAULTS = ["vi_i", "dvdi_i"]
+_LEFT_V_QUANTITY_LABELS = {
+    "iv_v": "I (V)",
+    "didv_v": "dI/dV (V)",
+    "i_over_v_v": "I/V (V)",
+    "dvdi_v": "dV/dI (V)",
+}
+_LEFT_I_QUANTITY_LABELS = {
+    "vi_i": "V (I)",
+    "dvdi_i": "dV/dI (I)",
+    "v_over_i_i": "V/I (I)",
+    "didv_i": "dI/dV (I)",
+}
 
 
 class GUILeftMixin:
@@ -38,15 +65,56 @@ class GUILeftMixin:
             self._on_left_stage_changed,
             "value",
         )
+        self._left_v_quantity_selector = self._pn.widgets.CheckButtonGroup(
+            options=OrderedDict(
+                (
+                    _LEFT_V_QUANTITY_LABELS[key],
+                    key,
+                )
+                for key in _LEFT_V_QUANTITY_ORDER
+            ),
+            value=list(_LEFT_V_QUANTITY_DEFAULTS),
+            sizing_mode="stretch_width",
+        )
+        self._left_v_quantity_selector.param.watch(
+            self._on_left_quantity_changed,
+            "value",
+        )
+        self._left_i_quantity_selector = self._pn.widgets.CheckButtonGroup(
+            options=OrderedDict(
+                (
+                    _LEFT_I_QUANTITY_LABELS[key],
+                    key,
+                )
+                for key in _LEFT_I_QUANTITY_ORDER
+            ),
+            value=list(_LEFT_I_QUANTITY_DEFAULTS),
+            sizing_mode="stretch_width",
+        )
+        self._left_i_quantity_selector.param.watch(
+            self._on_left_quantity_changed,
+            "value",
+        )
 
     def _on_left_stage_changed(self, _: object) -> None:
         self._refresh_left_plots()
 
+    def _on_left_quantity_changed(self, _: object) -> None:
+        self._refresh_left_plots()
+
     def _build_plot_panes(self) -> None:
-        self._iv_figure = self._build_iv_figure()
-        self._didv_figure = self._build_didv_figure()
-        self._vi_figure = self._build_vi_figure()
-        self._dvdi_figure = self._build_dvdi_figure()
+        self._left_v_view_state: dict[str, object] = {
+            "x_range": None,
+            "y_ranges": {},
+        }
+        self._left_i_view_state: dict[str, object] = {
+            "x_range": None,
+            "y_ranges": {},
+        }
+        self._left_v_row_keys: list[str] = []
+        self._left_i_row_keys: list[str] = []
+        self._iv_figure = self._build_left_stack_figure(axis_kind="V")
+        self._vi_figure = self._build_left_stack_figure(axis_kind="I")
 
         self._experimental_time_figure = self._build_experimental_time_figure()
         self._experimental_psd_figure = self._build_experimental_psd_figure()
@@ -60,27 +128,17 @@ class GUILeftMixin:
         self._iv_pane = self._pn.pane.Plotly(
             self._iv_figure,
             sizing_mode="stretch_width",
-            height=320,
-            config={"responsive": True},
-        )
-        self._didv_pane = self._pn.pane.Plotly(
-            self._didv_figure,
-            sizing_mode="stretch_width",
-            height=320,
+            height=self._left_figure_height(axis_kind="V"),
             config={"responsive": True},
         )
         self._vi_pane = self._pn.pane.Plotly(
             self._vi_figure,
             sizing_mode="stretch_width",
-            height=320,
+            height=self._left_figure_height(axis_kind="I"),
             config={"responsive": True},
         )
-        self._dvdi_pane = self._pn.pane.Plotly(
-            self._dvdi_figure,
-            sizing_mode="stretch_width",
-            height=320,
-            config={"responsive": True},
-        )
+        self._iv_pane.param.watch(self._on_left_v_relayout, "relayout_data")
+        self._vi_pane.param.watch(self._on_left_i_relayout, "relayout_data")
         self._experimental_time_pane = self._pn.pane.Plotly(
             self._experimental_time_figure,
             sizing_mode="stretch_width",
@@ -136,6 +194,18 @@ class GUILeftMixin:
             return False
         return stage in self._left_stage_selector.value
 
+    def _on_left_v_relayout(self, event: object) -> None:
+        self._update_left_view_state(
+            axis_kind="V",
+            relayout_data=getattr(event, "new", None),
+        )
+
+    def _on_left_i_relayout(self, event: object) -> None:
+        self._update_left_view_state(
+            axis_kind="I",
+            relayout_data=getattr(event, "new", None),
+        )
+
     def _left_iv_stage_data(self, stage: str) -> tuple[NDArray64, NDArray64]:
         trace = self._active_trace()
         sampling = self._require_sampling()
@@ -168,12 +238,6 @@ class GUILeftMixin:
         self,
         stage: str,
     ) -> tuple[NDArray64, NDArray64]:
-        sampling = self._require_sampling()
-        if stage == "binned":
-            return (
-                np.asarray(sampling["Vbin_mV"], dtype=np.float64),
-                np.asarray(sampling["dG_G0"], dtype=np.float64),
-            )
         V_mV, I_nA = self._left_iv_stage_data(stage)
         return V_mV, self._gradient(V_mV, I_nA) / G_0_muS
 
@@ -202,79 +266,289 @@ class GUILeftMixin:
         )
         return unique_x, unique_y
 
-    def _left_vi_stage_data(self, stage: str) -> tuple[NDArray64, NDArray64]:
-        sampling = self._require_sampling()
-        if stage == "binned":
-            return (
-                np.asarray(sampling["Ibin_nA"], dtype=np.float64),
-                np.asarray(sampling["V_mV"], dtype=np.float64),
-            )
-        V_mV, I_nA = self._left_iv_stage_data(stage)
-        return self._sorted_unique_curve(I_nA, V_mV)
-
-    def _left_dvdi_stage_data(
+    def _left_iv_over_v_stage_data(
         self,
         stage: str,
     ) -> tuple[NDArray64, NDArray64]:
-        sampling = self._require_sampling()
-        if stage == "binned":
-            return (
-                np.asarray(sampling["Ibin_nA"], dtype=np.float64),
-                np.asarray(sampling["dR_R0"], dtype=np.float64),
-            )
+        V_mV, I_nA = self._left_iv_stage_data(stage)
+        return V_mV, self._safe_divide(I_nA, V_mV) / G_0_muS
+
+    def _left_dvdi_vs_v_stage_data(
+        self,
+        stage: str,
+    ) -> tuple[NDArray64, NDArray64]:
+        V_mV, didv_G0 = self._left_didv_stage_data(stage)
+        return V_mV, self._safe_divide(1.0, didv_G0)
+
+    def _left_vi_stage_data(self, stage: str) -> tuple[NDArray64, NDArray64]:
+        V_mV, I_nA = self._left_iv_stage_data(stage)
+        return self._sorted_unique_curve(I_nA, V_mV)
+
+    def _left_dvdi_vs_i_stage_data(
+        self,
+        stage: str,
+    ) -> tuple[NDArray64, NDArray64]:
         I_nA, V_mV = self._left_vi_stage_data(stage)
         return I_nA, self._gradient(I_nA, V_mV) * G_0_muS
 
-    def _build_iv_figure(self) -> go.Figure:
-        figure = go.Figure()
-        for stage in _LEFT_STAGE_TRACE_ORDER:
-            figure.add_trace(self._left_trace(stage))
-        figure.update_layout(
-            margin={"l": 80, "r": 20, "t": 20, "b": 20},
-            yaxis_title="I (nA)",
-            showlegend=False,
+    def _left_v_over_i_stage_data(
+        self,
+        stage: str,
+    ) -> tuple[NDArray64, NDArray64]:
+        I_nA, V_mV = self._left_vi_stage_data(stage)
+        return I_nA, self._safe_divide(V_mV, I_nA) * G_0_muS
+
+    def _left_didv_vs_i_stage_data(
+        self,
+        stage: str,
+    ) -> tuple[NDArray64, NDArray64]:
+        I_nA, dvdi_R0 = self._left_dvdi_vs_i_stage_data(stage)
+        return I_nA, self._safe_divide(1.0, dvdi_R0)
+
+    @staticmethod
+    def _safe_divide(
+        numerator: NDArray64 | float,
+        denominator: NDArray64 | float,
+    ) -> NDArray64:
+        numerator_array = np.asarray(numerator, dtype=np.float64)
+        denominator_array = np.asarray(denominator, dtype=np.float64)
+        out = np.full(
+            np.broadcast_shapes(
+                numerator_array.shape,
+                denominator_array.shape,
+            ),
+            np.nan,
+            dtype=np.float64,
         )
-        figure.update_xaxes(showticklabels=False)
-        return figure
+        return np.divide(
+            numerator_array,
+            denominator_array,
+            out=out,
+            where=np.isfinite(denominator_array) & (denominator_array != 0.0),
+        )
 
+    def _left_quantity_keys(self, *, axis_kind: str) -> list[str]:
+        if axis_kind == "V":
+            return list(self._left_v_quantity_selector.value)
+        return list(self._left_i_quantity_selector.value)
 
-    def _build_didv_figure(self) -> go.Figure:
-        figure = go.Figure()
-        for stage in _LEFT_STAGE_TRACE_ORDER:
-            figure.add_trace(self._left_trace(stage))
+    def _left_view_state(self, *, axis_kind: str) -> dict[str, object]:
+        if axis_kind == "V":
+            return self._left_v_view_state
+        return self._left_i_view_state
+
+    def _left_row_keys(self, *, axis_kind: str) -> list[str]:
+        if axis_kind == "V":
+            return list(self._left_v_row_keys)
+        return list(self._left_i_row_keys)
+
+    @staticmethod
+    def _axis_name(prefix: str, row_index: int) -> str:
+        if row_index == 1:
+            return prefix
+        return f"{prefix}{row_index}"
+
+    @staticmethod
+    def _extract_axis_range(
+        relayout_data: dict[str, object],
+        *,
+        axis_name: str,
+    ) -> tuple[float, float] | None:
+        combined = relayout_data.get(f"{axis_name}.range")
+        if (
+            isinstance(combined, (list, tuple))
+            and len(combined) == 2
+        ):
+            return (float(combined[0]), float(combined[1]))
+        key0 = f"{axis_name}.range[0]"
+        key1 = f"{axis_name}.range[1]"
+        if key0 in relayout_data and key1 in relayout_data:
+            return (
+                float(relayout_data[key0]),
+                float(relayout_data[key1]),
+            )
+        return None
+
+    def _update_left_view_state(
+        self,
+        *,
+        axis_kind: str,
+        relayout_data: object,
+    ) -> None:
+        if not isinstance(relayout_data, dict) or len(relayout_data) == 0:
+            return
+        state = self._left_view_state(axis_kind=axis_kind)
+        row_keys = self._left_row_keys(axis_kind=axis_kind)
+
+        x_range = None
+        x_autorange = False
+        for row_index in range(1, max(1, len(row_keys)) + 1):
+            axis_name = self._axis_name("xaxis", row_index)
+            if bool(relayout_data.get(f"{axis_name}.autorange", False)):
+                x_autorange = True
+            extracted = self._extract_axis_range(
+                relayout_data,
+                axis_name=axis_name,
+            )
+            if extracted is not None:
+                x_range = extracted
+        if x_autorange:
+            state["x_range"] = None
+        elif x_range is not None:
+            state["x_range"] = x_range
+
+        y_ranges = dict(state["y_ranges"])
+        for row_index, key in enumerate(row_keys, start=1):
+            axis_name = self._axis_name("yaxis", row_index)
+            if bool(relayout_data.get(f"{axis_name}.autorange", False)):
+                y_ranges.pop(key, None)
+                continue
+            extracted = self._extract_axis_range(
+                relayout_data,
+                axis_name=axis_name,
+            )
+            if extracted is not None:
+                y_ranges[key] = extracted
+        state["y_ranges"] = y_ranges
+
+    def _left_quantity_specs(
+        self,
+        *,
+        axis_kind: str,
+    ) -> list[
+        tuple[
+            str,
+            str,
+            Callable[[str], tuple[NDArray64, NDArray64]],
+        ]
+    ]:
+        if axis_kind == "V":
+            return [
+                ("iv_v", "<i>I</i> (nA)", self._left_iv_stage_data),
+                (
+                    "didv_v",
+                    "<i>dI/dV</i> (<i>G</i><sub>0</sub>)",
+                    self._left_didv_stage_data,
+                ),
+                (
+                    "i_over_v_v",
+                    "<i>I/V</i> (<i>G</i><sub>0</sub>)",
+                    self._left_iv_over_v_stage_data,
+                ),
+                (
+                    "dvdi_v",
+                    "<i>dV/dI</i> (<i>R</i><sub>0</sub>)",
+                    self._left_dvdi_vs_v_stage_data,
+                ),
+            ]
+        return [
+            ("vi_i", "<i>V</i> (mV)", self._left_vi_stage_data),
+            (
+                "dvdi_i",
+                "<i>dV/dI</i> (<i>R</i><sub>0</sub>)",
+                self._left_dvdi_vs_i_stage_data,
+            ),
+            (
+                "v_over_i_i",
+                "<i>V/I</i> (<i>R</i><sub>0</sub>)",
+                self._left_v_over_i_stage_data,
+            ),
+            (
+                "didv_i",
+                "<i>dI/dV</i> (<i>G</i><sub>0</sub>)",
+                self._left_didv_vs_i_stage_data,
+            ),
+        ]
+
+    def _left_figure_height(self, *, axis_kind: str) -> int:
+        row_count = max(1, len(self._left_quantity_keys(axis_kind=axis_kind)))
+        return max(620, 220 * row_count + 40)
+
+    def _build_left_stack_figure(self, *, axis_kind: str) -> go.Figure:
+        quantity_map = OrderedDict(
+            (key, (ylabel, getter))
+            for key, ylabel, getter in self._left_quantity_specs(
+                axis_kind=axis_kind
+            )
+        )
+        selected_keys = [
+            key
+            for key in self._left_quantity_keys(axis_kind=axis_kind)
+            if key in quantity_map
+        ]
+        if not selected_keys:
+            selected_keys = [
+                _LEFT_V_QUANTITY_ORDER[0]
+                if axis_kind == "V"
+                else _LEFT_I_QUANTITY_ORDER[0]
+            ]
+        if axis_kind == "V":
+            self._left_v_row_keys = list(selected_keys)
+        else:
+            self._left_i_row_keys = list(selected_keys)
+        row_count = len(selected_keys)
+        figure = make_subplots(
+            rows=row_count,
+            cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.08,
+        )
+        for row_index, key in enumerate(selected_keys, start=1):
+            ylabel, getter = quantity_map[key]
+            for stage in _LEFT_STAGE_TRACE_ORDER:
+                x, y = getter(stage)
+                figure.add_trace(
+                    go.Scatter(
+                        x=x,
+                        y=y,
+                        name=gui_trace_label(stage),
+                        mode=gui_trace_style(stage)["mode"],
+                        line=gui_trace_style(stage).get("line"),
+                        marker=gui_trace_style(stage).get("marker"),
+                        visible=self._left_trace_visible(stage),
+                        showlegend=False,
+                    ),
+                    row=row_index,
+                    col=1,
+                )
+            figure.update_yaxes(title_text=ylabel, row=row_index, col=1)
+
         figure.update_layout(
             margin={"l": 80, "r": 20, "t": 20, "b": 40},
-            xaxis_title="V (mV)",
-            yaxis_title="dI/dV (G/G0)",
             showlegend=False,
+            uirevision=f"left-{axis_kind}",
+        )
+        figure.update_xaxes(
+            title_text="<i>V</i> (mV)" if axis_kind == "V" else "<i>I</i> (nA)",
+            row=row_count,
+            col=1,
+        )
+        self._apply_left_view_state(
+            figure=figure,
+            axis_kind=axis_kind,
+            selected_keys=selected_keys,
         )
         return figure
 
-
-    def _build_vi_figure(self) -> go.Figure:
-        figure = go.Figure()
-        for stage in _LEFT_STAGE_TRACE_ORDER:
-            figure.add_trace(self._left_trace(stage))
-        figure.update_layout(
-            margin={"l": 80, "r": 20, "t": 20, "b": 20},
-            yaxis_title="V (mV)",
-            showlegend=False,
-        )
-        figure.update_xaxes(showticklabels=False)
-        return figure
-
-
-    def _build_dvdi_figure(self) -> go.Figure:
-        figure = go.Figure()
-        for stage in _LEFT_STAGE_TRACE_ORDER:
-            figure.add_trace(self._left_trace(stage))
-        figure.update_layout(
-            margin={"l": 80, "r": 20, "t": 20, "b": 40},
-            xaxis_title="I (nA)",
-            yaxis_title="dV/dI (R/R0)",
-            showlegend=False,
-        )
-        return figure
+    def _apply_left_view_state(
+        self,
+        *,
+        figure: go.Figure,
+        axis_kind: str,
+        selected_keys: list[str],
+    ) -> None:
+        state = self._left_view_state(axis_kind=axis_kind)
+        x_range = state.get("x_range")
+        if x_range is not None:
+            for row_index in range(1, len(selected_keys) + 1):
+                figure.update_xaxes(range=list(x_range), row=row_index, col=1)
+        y_ranges = state.get("y_ranges", {})
+        if not isinstance(y_ranges, dict):
+            return
+        for row_index, key in enumerate(selected_keys, start=1):
+            y_range = y_ranges.get(key)
+            if y_range is not None:
+                figure.update_yaxes(range=list(y_range), row=row_index, col=1)
 
 
     def _build_experimental_time_figure(self) -> go.Figure:
@@ -562,32 +836,20 @@ class GUILeftMixin:
 
 
     def _refresh_left_plots(self) -> None:
-        for index, stage in enumerate(_LEFT_STAGE_TRACE_ORDER):
-            visible = self._left_trace_visible(stage)
-            x, y = self._left_iv_stage_data(stage)
-            self._iv_figure.data[index].x = x
-            self._iv_figure.data[index].y = y
-            self._iv_figure.data[index].visible = visible
-
-            x, y = self._left_didv_stage_data(stage)
-            self._didv_figure.data[index].x = x
-            self._didv_figure.data[index].y = y
-            self._didv_figure.data[index].visible = visible
-
-            x, y = self._left_vi_stage_data(stage)
-            self._vi_figure.data[index].x = x
-            self._vi_figure.data[index].y = y
-            self._vi_figure.data[index].visible = visible
-
-            x, y = self._left_dvdi_stage_data(stage)
-            self._dvdi_figure.data[index].x = x
-            self._dvdi_figure.data[index].y = y
-            self._dvdi_figure.data[index].visible = visible
-
+        self._update_left_view_state(
+            axis_kind="V",
+            relayout_data=self._iv_pane.relayout_data,
+        )
+        self._update_left_view_state(
+            axis_kind="I",
+            relayout_data=self._vi_pane.relayout_data,
+        )
+        self._iv_figure = self._build_left_stack_figure(axis_kind="V")
+        self._vi_figure = self._build_left_stack_figure(axis_kind="I")
         self._iv_pane.object = self._iv_figure
-        self._didv_pane.object = self._didv_figure
+        self._iv_pane.height = self._left_figure_height(axis_kind="V")
         self._vi_pane.object = self._vi_figure
-        self._dvdi_pane.object = self._dvdi_figure
+        self._vi_pane.height = self._left_figure_height(axis_kind="I")
 
 
     def _refresh_experimental_views(self) -> None:

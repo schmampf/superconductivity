@@ -110,7 +110,7 @@ class GUISamplingTabMixin:
         )
         self._sampling_smooth_toggle = self._pn.widgets.Checkbox(
             name="Smooth",
-            value=bool(self._smoothing_enabled),
+            value=bool(self._smoothing_spec.smooth),
             sizing_mode="stretch_width",
         )
         self._sampling_apply_button = self._pn.widgets.Button(
@@ -228,31 +228,29 @@ class GUISamplingTabMixin:
 
     def _build_smoothing_state_from_tables(
         self,
-    ) -> tuple[bool, SmoothingSpec]:
+    ) -> SmoothingSpec:
         smoothing_frame = (
             self._sampling_smoothing_table.value.reset_index(drop=True).set_index(
                 "key"
             )
         )
-        enabled = bool(self._sampling_smooth_toggle.value)
-        spec = SmoothingSpec(
+        return SmoothingSpec(
+            smooth=bool(self._sampling_smooth_toggle.value),
             median_bins=int(smoothing_frame.at["median_bins", "value"]),
             sigma_bins=float(smoothing_frame.at["sigma_bins", "value"]),
             mode=self._smoothing_spec.mode,
         )
-        return enabled, spec
 
     def _sync_sampling_widgets_from_spec(self) -> None:
-        self._sampling_smooth_toggle.value = bool(self._smoothing_enabled)
+        self._sampling_smooth_toggle.value = bool(self._smoothing_spec.smooth)
         self._sampling_grid_table.value = self._sampling_grid_frame()
         self._sampling_info_table.value = self._sampling_info_frame()
         self._sampling_smoothing_table.value = self._sampling_smoothing_frame()
 
     def _on_sampling_apply(self, _: object) -> None:
         self._sampling_spec = self._build_sampling_spec_from_tables()
-        self._smoothing_enabled, self._smoothing_spec = (
-            self._build_smoothing_state_from_tables()
-        )
+        self._smoothing_spec = self._build_smoothing_state_from_tables()
+        self._smoothing_enabled = bool(self._smoothing_spec.smooth)
         self._recompute_pipeline(
             clear_fit=True,
             recompute_psd=False,

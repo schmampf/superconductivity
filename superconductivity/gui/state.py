@@ -8,11 +8,16 @@ from ..evaluation.ivdata import IVTrace
 from ..evaluation.offset import OffsetSpec, OffsetTrace
 from ..evaluation.psd import PSDTrace
 from ..evaluation.sampling import SamplingSpec, SamplingTrace
-from ..optimizers.fit_model import SolutionDict, fit_model
-from ..optimizers.models import ParameterSpec, get_model_spec
+from ..optimizers.bcs import (
+    BCSModelConfig,
+    ParameterSpec,
+    SolutionDict,
+    fit_model,
+    get_model_spec,
+)
 from ..utilities.types import NDArray64
 
-_DEFAULT_MODEL = "pat_sis_int_jax"
+_DEFAULT_MODEL = "bcs_conv_jax"
 _EXPERIMENTAL_TITLES = {
     "nu_Hz": "<i>&nu;</i> (Hz)",
     "detrend": "Detrend",
@@ -79,7 +84,7 @@ def _linspace_from_values(
 def _fit_sampling_trace(
     sampling: SamplingTrace,
     *,
-    model: str,
+    model: str | BCSModelConfig,
     parameters: list[ParameterSpec],
     maxfev: Optional[int],
 ) -> SolutionDict:
@@ -87,9 +92,7 @@ def _fit_sampling_trace(
     I_full = np.asarray(sampling["I_nA"], dtype=np.float64)
     finite = np.isfinite(V_full) & np.isfinite(I_full)
     if int(np.sum(finite)) < 3:
-        raise ValueError(
-            "Not enough finite sampled I(V) points for fitting."
-        )
+        raise ValueError("Not enough finite sampled I(V) points for fitting.")
 
     solution = fit_model(
         V_full[finite],
