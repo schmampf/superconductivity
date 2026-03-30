@@ -3,12 +3,12 @@ from dataclasses import replace
 import numpy as np
 
 from superconductivity.optimizers import fit_model
-from superconductivity.optimizers.models import get_model_spec
+from superconductivity.optimizers.bcs import BCSModelConfig, get_model_spec
 
 
 def test_fit_model_returns_compact_solution() -> None:
     V_mV = np.linspace(-1.0, 1.0, 41)
-    spec = get_model_spec("bcs_sis_int")
+    spec = get_model_spec("bcs_int")
     guess = [parameter.guess for parameter in spec.parameters]
     I_nA = spec.function(V_mV, *guess)
     parameters = [
@@ -19,7 +19,7 @@ def test_fit_model_returns_compact_solution() -> None:
     solution = fit_model(
         V_mV,
         I_nA,
-        model="bcs_sis_int",
+        model="bcs_int",
         parameters=parameters,
         maxfev=20,
     )
@@ -39,3 +39,26 @@ def test_fit_model_returns_compact_solution() -> None:
     assert np.allclose(solution["I_ini_nA"], I_nA)
     assert np.isclose(solution["params"][0].value, guess[0])
     assert solution["params"][1].value == guess[1]
+
+
+def test_fit_model_supports_composed_bcs_config() -> None:
+    V_mV = np.linspace(-1.0, 1.0, 41)
+    model = BCSModelConfig(
+        "conv",
+        "np",
+        pat_enabled=True,
+        noise_enabled=True,
+    )
+    spec = get_model_spec(model)
+    guess = [parameter.guess for parameter in spec.parameters]
+    I_nA = spec.function(V_mV, *guess)
+
+    solution = fit_model(
+        V_mV,
+        I_nA,
+        model=model,
+        maxfev=20,
+    )
+
+    assert len(solution["params"]) == 7
+    assert np.max(np.abs(solution["I_fit_nA"] - I_nA)) < 1e-6

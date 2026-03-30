@@ -74,7 +74,11 @@ def _roughness(y: np.ndarray) -> float:
 def test_get_smoothed_sampling_preserves_nan_edges_and_metadata() -> None:
     """Smoothing should keep metadata and unsupported edges unchanged."""
     trace = _make_sampling_trace("a", 0, 1.0)
-    spec = smoothing.SmoothingSpec(median_bins=3, sigma_bins=1.0)
+    spec = smoothing.SmoothingSpec(
+        smooth=True,
+        median_bins=3,
+        sigma_bins=1.0,
+    )
 
     out = smoothing.get_smoothed_sampling(trace, spec)
 
@@ -96,7 +100,11 @@ def test_get_smoothed_sampling_preserves_nan_edges_and_metadata() -> None:
 def test_get_smoothed_sampling_reduces_curve_roughness() -> None:
     """The default median->gaussian pipeline should damp roughness."""
     trace = _make_sampling_trace("a", 0, 1.0)
-    spec = smoothing.SmoothingSpec(median_bins=3, sigma_bins=1.2)
+    spec = smoothing.SmoothingSpec(
+        smooth=True,
+        median_bins=3,
+        sigma_bins=1.2,
+    )
 
     out = smoothing.get_smoothed_sampling(trace, spec)
 
@@ -114,7 +122,11 @@ def test_get_smoothed_samplings_returns_collection_with_lookup_methods() -> None
             _make_sampling_trace("b", 1, 5.0),
         ],
     )
-    smooth_spec = smoothing.SmoothingSpec(median_bins=3, sigma_bins=1.0)
+    smooth_spec = smoothing.SmoothingSpec(
+        smooth=True,
+        median_bins=3,
+        sigma_bins=1.0,
+    )
 
     out = smoothing.get_smoothed_samplings(
         samplings=samplings,
@@ -139,4 +151,25 @@ def test_get_smoothed_samplings_returns_collection_with_lookup_methods() -> None
 def test_smoothing_spec_rejects_even_median_window() -> None:
     """Median smoothing should use a centered odd-sized window."""
     with pytest.raises(ValueError, match="must be odd"):
-        smoothing.SmoothingSpec(median_bins=4, sigma_bins=1.0)
+        smoothing.SmoothingSpec(
+            smooth=True,
+            median_bins=4,
+            sigma_bins=1.0,
+        )
+
+
+def test_get_smoothed_sampling_returns_identity_when_disabled() -> None:
+    """Disabled smoothing should preserve the sampled trace exactly."""
+    trace = _make_sampling_trace("a", 0, 1.0)
+    spec = smoothing.SmoothingSpec(
+        smooth=False,
+        median_bins=3,
+        sigma_bins=1.2,
+    )
+
+    out = smoothing.get_smoothed_sampling(trace, spec)
+
+    assert np.allclose(out["I_nA"], trace["I_nA"], equal_nan=True)
+    assert np.allclose(out["V_mV"], trace["V_mV"], equal_nan=True)
+    assert np.allclose(out["dG_G0"], trace["dG_G0"], equal_nan=True)
+    assert np.allclose(out["dR_R0"], trace["dR_R0"], equal_nan=True)
