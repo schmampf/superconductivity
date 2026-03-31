@@ -5,8 +5,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-import superconductivity.evaluation.offset as offset
-from superconductivity.evaluation.ivdata import IVTrace, IVTraces
+import superconductivity.evaluation.analysis.offset as offset
+from superconductivity.evaluation.traces import TraceMeta
+from superconductivity.evaluation.traces import Trace, Traces
 
 
 def _make_iv_trace(
@@ -15,14 +16,16 @@ def _make_iv_trace(
     yvalue: float,
     v_shift_mV: float,
     i_shift_nA: float,
-) -> IVTrace:
+) -> Trace:
     t_s = np.linspace(0.0, 10.0, 401, dtype=np.float64)
     v_true_mV = np.linspace(-2.0, 2.0, t_s.size, dtype=np.float64)
     i_true_nA = v_true_mV + 0.2 * v_true_mV**3
     return {
-        "specific_key": specific_key,
-        "index": index,
-        "yvalue": yvalue,
+        "meta": TraceMeta(
+            specific_key=specific_key,
+            index=index,
+            yvalue=yvalue,
+        ),
         "V_mV": v_true_mV + v_shift_mV,
         "I_nA": i_true_nA + i_shift_nA,
         "t_s": t_s,
@@ -41,7 +44,7 @@ def _make_spec() -> offset.OffsetSpec:
 
 
 def test_get_offset_returns_offsettrace_for_single_trace() -> None:
-    """Single-trace offset search should keep metadata and best offsets."""
+    """Single-trace offset search should return the best offsets."""
     trace = _make_iv_trace(
         specific_key="a",
         index=0,
@@ -50,46 +53,56 @@ def test_get_offset_returns_offsettrace_for_single_trace() -> None:
         i_shift_nA=0.3,
     )
 
-    out = offset.get_offset(trace=trace, spec=_make_spec())
+    out = offset.offset_analysis(traces=trace, spec=_make_spec())
 
-    assert out["specific_key"] == "a"
-    assert out["index"] == 0
-    assert out["yvalue"] == pytest.approx(1.0)
     assert out["Voff_mV"] == pytest.approx(0.4)
     assert out["Ioff_nA"] == pytest.approx(0.3)
     assert out["dGerr_G0"].shape == (4,)
     assert out["dRerr_R0"].shape == (4,)
 
 
-def test_get_offsets_returns_collection_with_lookup_methods() -> None:
-    """Collection offset search should mirror the IV/PSD container API."""
-    traces = IVTraces(
+def test_offset_analysis_dispatches_single_trace() -> None:
+    """The public offset-analysis entrypoint should accept one trace."""
+    trace = _make_iv_trace(
+        specific_key="a",
+        index=0,
+        yvalue=1.0,
+        v_shift_mV=0.4,
+        i_shift_nA=0.3,
+    )
+
+    out = offset.offset_analysis(trace, spec=_make_spec())
+
+    assert out["Voff_mV"] == pytest.approx(0.4)
+    assert out["Ioff_nA"] == pytest.approx(0.3)
+
+
+def test_offset_analysis_returns_collection_with_lookup_methods() -> None:
+    """Collection offset search should return stacked offset arrays."""
+    traces = Traces(
         traces=[
             _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3),
             _make_iv_trace("b", 1, 5.0, v_shift_mV=0.2, i_shift_nA=0.1),
         ],
     )
 
-    out = offset.get_offsets(
+    out = offset.offset_analysis(
         traces=traces,
         spec=_make_spec(),
         show_progress=False,
     )
 
-    assert out.spec.nu_Hz == pytest.approx(20.0)
-    assert out.keys == ["a", "b"]
-    assert np.allclose(out.yvalues, np.asarray([1.0, 5.0]))
     assert np.allclose(out.Voff_mV, np.asarray([0.4, 0.2]))
     assert np.allclose(out.Ioff_nA, np.asarray([0.3, 0.1]))
     assert out.dGerr_G0.shape == (2, 4)
     assert out.dRerr_R0.shape == (2, 4)
-    assert out.by_key("a")["Voff_mV"] == pytest.approx(0.4)
-    assert out.by_value(5.0)["specific_key"] == "b"
+    assert out[0]["Voff_mV"] == pytest.approx(0.4)
+    assert out[1]["Voff_mV"] == pytest.approx(0.2)
 
 
-def test_get_offsets_parallel_matches_single_worker() -> None:
+def test_offset_analysis_parallel_matches_single_worker() -> None:
     """Trace-level parallelism should preserve numerical results."""
-    traces = IVTraces(
+    traces = Traces(
         traces=[
             _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3),
             _make_iv_trace("b", 1, 5.0, v_shift_mV=0.2, i_shift_nA=0.1),
@@ -97,14 +110,14 @@ def test_get_offsets_parallel_matches_single_worker() -> None:
     )
     spec_obj = _make_spec()
 
-    serial = offset.get_offsets(
+    serial = offset.offset_analysis(
         traces=traces,
         spec=spec_obj,
         show_progress=False,
         backend="numpy",
         workers=1,
     )
-    parallel = offset.get_offsets(
+    parallel = offset.offset_analysis(
         traces=traces,
         spec=spec_obj,
         show_progress=False,
@@ -118,24 +131,17 @@ def test_get_offsets_parallel_matches_single_worker() -> None:
     assert np.allclose(parallel.dRerr_R0, serial.dRerr_R0)
 
 
-def test_offsettraces_by_value_rejects_ambiguous_matches() -> None:
-    """Duplicate yvalues should require the plural lookup method."""
+def test_offsettraces_accepts_plain_payload_traces() -> None:
+    """OffsetTraces should only need the per-trace payload."""
     traces = offset.OffsetTraces(
-        spec=_make_spec(),
         traces=[
             {
-                "specific_key": "a",
-                "index": 0,
-                "yvalue": 1.0,
                 "dGerr_G0": np.asarray([0.0]),
                 "dRerr_R0": np.asarray([0.0]),
                 "Voff_mV": 0.0,
                 "Ioff_nA": 0.0,
             },
             {
-                "specific_key": "b",
-                "index": 1,
-                "yvalue": 1.0,
                 "dGerr_G0": np.asarray([0.0]),
                 "dRerr_R0": np.asarray([0.0]),
                 "Voff_mV": 0.0,
@@ -144,11 +150,8 @@ def test_offsettraces_by_value_rejects_ambiguous_matches() -> None:
         ],
     )
 
-    with pytest.raises(ValueError, match="matches multiple traces"):
-        traces.by_value(1.0)
-
-    matches = traces.all_by_value(1.0)
-    assert [trace["specific_key"] for trace in matches] == ["a", "b"]
+    assert len(traces) == 2
+    assert np.allclose(traces.Voff_mV, np.asarray([0.0, 0.0]))
 
 
 def test_resolve_backend_auto_uses_numpy_for_parallel_workers(
@@ -204,7 +207,7 @@ def test_get_offset_dispatches_to_jax_backend(
 
     monkeypatch.setattr(offset, "_compute_offset_errors_jax", _fake_jax_metrics)
 
-    out = offset.get_offset(trace=trace, spec=spec_obj, backend="jax")
+    out = offset.offset_analysis(traces=trace, spec=spec_obj, backend="jax")
 
     assert out["Voff_mV"] == pytest.approx(0.2)
     assert out["Ioff_nA"] == pytest.approx(0.0)
