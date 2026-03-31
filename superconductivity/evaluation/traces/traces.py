@@ -1,25 +1,25 @@
-"""Helpers for extracting IV traces from HDF5 data."""
+"""Helpers for extracting traces from HDF5 data."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Iterator, Sequence, TypedDict
 
 import numpy as np
 
-from ..utilities.safety import require_all_finite
-from ..utilities.types import NDArray64
+from ...utilities.safety import require_all_finite
+from ...utilities.types import NDArray64
+from .file import FileSpec, _import_h5py, _require_measurement, _to_measurement_path
 from .keys import (
+    Keys,
+    KeysSpec,
     _extract_value_from_specific_key,
-    _import_h5py,
-    _to_measurement_path,
-    list_specific_keys_and_values,
+    get_keys,
 )
 
 
-class IVTrace(TypedDict):
-    """One IV trace with metadata and time axis."""
+class Trace(TypedDict):
+    """One trace with metadata and time axis."""
 
     specific_key: str
     index: int | None
@@ -30,10 +30,23 @@ class IVTrace(TypedDict):
 
 
 @dataclass(slots=True)
-class IVTraces:
-    """Container for multiple IV traces with lookup helpers."""
+class TraceSpec:
+    """Configuration for loading traces from one measurement."""
 
-    traces: list[IVTrace]
+    amp_voltage: float = 1.0
+    amp_current: float = 1.0
+    r_ref_ohm: float = 51.689e3
+    trigger_values: int | Sequence[int] | None = 1
+    skip: int | tuple[int, int] = 0
+    subtract_offset: bool = True
+    time_relative: bool = True
+
+
+@dataclass(slots=True)
+class Traces:
+    """Container for multiple traces with lookup helpers."""
+
+    traces: list[Trace]
     keys: list[str] = field(init=False)
     yvalues: NDArray64 = field(init=False)
     I_nA: list[NDArray64] = field(init=False)
@@ -70,21 +83,21 @@ class IVTraces:
         """Return number of traces."""
         return len(self.traces)
 
-    def __iter__(self) -> Iterator[IVTrace]:
+    def __iter__(self) -> Iterator[Trace]:
         """Iterate over traces."""
         return iter(self.traces)
 
     def __getitem__(
         self,
         index: int | slice,
-    ) -> IVTrace | list[IVTrace]:
+    ) -> Trace | list[Trace]:
         """Return trace(s) by positional index."""
         return self.traces[index]
 
     def all_by_key(
         self,
         specific_key: str,
-    ) -> list[IVTrace]:
+    ) -> list[Trace]:
         """Return all traces with one exact specific key."""
         indices = self._indices_by_key.get(specific_key, [])
         return [self.traces[index] for index in indices]
@@ -92,7 +105,7 @@ class IVTraces:
     def by_key(
         self,
         specific_key: str,
-    ) -> IVTrace:
+    ) -> Trace:
         """Return one trace for one exact specific key."""
         return self._resolve_unique_match(
             matches=self.all_by_key(specific_key),
@@ -104,7 +117,7 @@ class IVTraces:
     def all_by_value(
         self,
         yvalue: float,
-    ) -> list[IVTrace]:
+    ) -> list[Trace]:
         """Return all traces with one y-value."""
         indices = self._find_indices_by_value(yvalue)
         return [self.traces[index] for index in indices]
@@ -112,7 +125,7 @@ class IVTraces:
     def by_value(
         self,
         yvalue: float,
-    ) -> IVTrace:
+    ) -> Trace:
         """Return one trace for one y-value."""
         return self._resolve_unique_match(
             matches=self.all_by_value(yvalue),
@@ -138,11 +151,11 @@ class IVTraces:
 
     @staticmethod
     def _resolve_unique_match(
-        matches: list[IVTrace],
+        matches: list[Trace],
         selector_name: str,
         selector_value: str | float,
         plural_hint: str,
-    ) -> IVTrace:
+    ) -> Trace:
         """Return one match or raise a clear selector error."""
         if len(matches) == 0:
             raise KeyError(
@@ -229,21 +242,16 @@ def _find_index_for_value(
     if matches.size > 1:
         raise ValueError(
             f"yvalue {yvalue!r} matches multiple traces. "
-            "Use index or get_ivs(...).all_by_value(...).",
+            "Use index or Traces.all_by_value(...).",
         )
     return int(matches[0])
 
 
-def _resolve_iv_reference(
-    h5path: str | Path,
-    measurement: str,
+def _resolve_trace_reference(
+    keys: Keys,
     specific_key: str | None = None,
     yvalue: float | None = None,
     index: int | None = None,
-    strip0: str = "=",
-    strip1: str | None = None,
-    remove_key: str | Sequence[str] | None = None,
-    add_key: tuple[str, float] | Sequence[tuple[str, float]] | None = None,
 ) -> tuple[str, int | None, float | None]:
     """Resolve selectors into ``(specific_key, index, yvalue)``."""
     if specific_key is None and yvalue is None and index is None:
@@ -251,19 +259,8 @@ def _resolve_iv_reference(
             "Provide at least one of specific_key, yvalue, or index.",
         )
 
-    keys_sorted: list[str] | None = None
-    yvalues_sorted: NDArray64 | None = None
-    if index is not None or yvalue is not None:
-        keys_raw, yvalues_raw = list_specific_keys_and_values(
-            h5path=h5path,
-            measurement=measurement,
-            strip0=strip0,
-            strip1=strip1,
-            remove_key=remove_key,
-            add_key=add_key,
-        )
-        keys_sorted = list(keys_raw)
-        yvalues_sorted = np.asarray(yvalues_raw, dtype=np.float64)
+    keys_sorted = list(keys.specific_keys)
+    yvalues_sorted = np.asarray(keys.yvalues, dtype=np.float64)
 
     resolved_key = specific_key
     resolved_index: int | None = None
@@ -295,10 +292,7 @@ def _resolve_iv_reference(
             raise ValueError(
                 "specific_key and yvalue refer to different traces.",
             )
-        if (
-            resolved_index is not None
-            and resolved_index != index_from_value
-        ):
+        if resolved_index is not None and resolved_index != index_from_value:
             raise ValueError(
                 "index and yvalue refer to different traces.",
             )
@@ -309,8 +303,7 @@ def _resolve_iv_reference(
 
     if resolved_key is None:
         raise ValueError(
-            "Could not resolve a trace. Provide specific_key, yvalue, "
-            "or index.",
+            "Could not resolve a trace. Provide specific_key, yvalue, or index.",
         )
 
     if resolved_value is None and specific_key is not None:
@@ -318,8 +311,8 @@ def _resolve_iv_reference(
             resolved_value = float(
                 _extract_value_from_specific_key(
                     specific_key=specific_key,
-                    strip0=strip0,
-                    strip1=strip1,
+                    strip0=keys._spec.strip0,
+                    strip1=keys._spec.strip1,
                 ),
             )
         except ValueError:
@@ -341,7 +334,7 @@ def _load_trace_from_file(
     skip: tuple[int, int],
     subtract_offset: bool,
     time_relative: bool,
-) -> IVTrace:
+) -> Trace:
     """Load one trace from one open HDF5 file."""
     if full_path not in file:
         raise KeyError(f"Dataset path not found: '{full_path}'.")
@@ -406,179 +399,38 @@ def _load_trace_from_file(
     }
 
 
-def get_iv(
-    h5path: str | Path,
-    measurement: str,
-    specific_key: str | None = None,
-    yvalue: float | None = None,
-    index: int | None = None,
-    amp_voltage: float = 1.0,
-    amp_current: float = 1.0,
-    r_ref_ohm: float = 51.689e3,
-    trigger_values: int | Sequence[int] | None = 1,
-    skip: int | tuple[int, int] = 0,
-    subtract_offset: bool = True,
-    time_relative: bool = True,
-    strip0: str = "=",
-    strip1: str | None = None,
-    remove_key: str | Sequence[str] | None = None,
-    add_key: tuple[str, float] | Sequence[tuple[str, float]] | None = None,
-) -> IVTrace:
-    """Load one IV trace, optionally resolved by yvalue or index.
-
-    Parameters
-    ----------
-    h5path : str | pathlib.Path
-        HDF5 file path.
-    measurement : str
-        Measurement name, e.g. ``"frequency_at_15GHz"``.
-    specific_key : str | None, default=None
-        Exact dataset key below the measurement group.
-    yvalue : float | None, default=None
-        Numeric y-value used to resolve one trace.
-    index : int | None, default=None
-        Trace index in the y-sorted order returned by
-        :func:`list_specific_keys_and_values`.
-    amp_voltage : float, default=1.0
-        Voltage-channel amplification factor.
-    amp_current : float, default=1.0
-        Current-channel amplification factor.
-    r_ref_ohm : float, default=51.689e3
-        Reference resistor in ohms used for current conversion.
-    trigger_values : int | Sequence[int] | None, default=1
-        Trigger value(s) to keep from ``sweep/adwin/trigger``.
-    skip : int | tuple[int, int], default=0
-        Number of points to trim from the filtered trace edges.
-    subtract_offset : bool, default=True
-        If ``True``, subtract mean offset from ``offset/adwin``.
-    time_relative : bool, default=True
-        If ``True``, shift the time axis so ``t_s[0] == 0``.
-    strip0 : str, default="="
-        Start delimiter used to parse y-values from specific keys.
-    strip1 : str | None, default=None
-        End delimiter used to parse y-values from specific keys.
-    remove_key : str or sequence of str, optional
-        Exact specific-key names to ignore during selector resolution.
-    add_key : tuple or sequence of tuple, optional
-        Exact specific-key additions as ``(key, value)`` pairs.
-
-    Returns
-    -------
-    IVTrace
-        One trace with metadata, current, voltage, and time arrays.
-    """
-    if amp_voltage <= 0.0 or not np.isfinite(amp_voltage):
-        raise ValueError("amp_voltage must be finite and > 0.")
-    if amp_current <= 0.0 or not np.isfinite(amp_current):
-        raise ValueError("amp_current must be finite and > 0.")
-    if r_ref_ohm <= 0.0 or not np.isfinite(r_ref_ohm):
-        raise ValueError("r_ref_ohm must be finite and > 0.")
-
-    skip_pair = _normalize_skip(skip)
-    resolved_key, resolved_index, resolved_value = _resolve_iv_reference(
-        h5path=h5path,
-        measurement=measurement,
-        specific_key=specific_key,
-        yvalue=yvalue,
-        index=index,
-        strip0=strip0,
-        strip1=strip1,
-        remove_key=remove_key,
-        add_key=add_key,
-    )
-
-    h5py = _import_h5py()
-    path = Path(h5path).expanduser()
-    full_path = _to_measurement_path(
-        measurement=measurement,
-        specific_key=resolved_key,
-    )
-
-    with h5py.File(path, "r") as file:
-        return _load_trace_from_file(
-            file=file,
-            full_path=full_path,
-            specific_key=resolved_key,
-            index=resolved_index,
-            yvalue=resolved_value,
-            amp_voltage=amp_voltage,
-            amp_current=amp_current,
-            r_ref_ohm=r_ref_ohm,
-            trigger_values=trigger_values,
-            skip=skip_pair,
-            subtract_offset=subtract_offset,
-            time_relative=time_relative,
-        )
-
-
-def get_ivs(
-    h5path: str | Path,
-    measurement: str,
+def _load_traces_from_keys(
+    *,
+    filespec: FileSpec,
     keys: Sequence[str],
     yvalues: Sequence[float] | np.ndarray,
-    amp_voltage: float = 1.0,
-    amp_current: float = 1.0,
-    r_ref_ohm: float = 51.689e3,
-    trigger_values: int | Sequence[int] | None = 1,
-    skip: int | tuple[int, int] = 0,
-    subtract_offset: bool = True,
-    time_relative: bool = True,
-) -> IVTraces:
-    """Load IV traces for one measurement in the provided order.
-
-    Parameters
-    ----------
-    h5path : str | pathlib.Path
-        HDF5 file path.
-    measurement : str
-        Measurement name, e.g. ``"frequency_at_15GHz"``.
-    keys : Sequence[str]
-        Exact dataset keys below the measurement group. Order is preserved.
-    yvalues : sequence of float or np.ndarray
-        Y-values paired with ``keys``. Must have the same length and contain
-        only finite values.
-    amp_voltage : float, default=1.0
-        Voltage-channel amplification factor.
-    amp_current : float, default=1.0
-        Current-channel amplification factor.
-    r_ref_ohm : float, default=51.689e3
-        Reference resistor in ohms used for current conversion.
-    trigger_values : int | Sequence[int] | None, default=1
-        Trigger value(s) to keep from ``sweep/adwin/trigger``.
-    skip : int | tuple[int, int], default=0
-        Number of points to trim from the filtered trace edges.
-    subtract_offset : bool, default=True
-        If ``True``, subtract mean offset from ``offset/adwin``.
-    time_relative : bool, default=True
-        If ``True``, shift each time axis so ``t_s[0] == 0``.
-
-    Returns
-    -------
-    IVTraces
-        Collection with list views and lookup helpers.
-    """
-    if amp_voltage <= 0.0 or not np.isfinite(amp_voltage):
+    tracespec: TraceSpec,
+) -> Traces:
+    """Load traces for one measurement in the provided order."""
+    if tracespec.amp_voltage <= 0.0 or not np.isfinite(tracespec.amp_voltage):
         raise ValueError("amp_voltage must be finite and > 0.")
-    if amp_current <= 0.0 or not np.isfinite(amp_current):
+    if tracespec.amp_current <= 0.0 or not np.isfinite(tracespec.amp_current):
         raise ValueError("amp_current must be finite and > 0.")
-    if r_ref_ohm <= 0.0 or not np.isfinite(r_ref_ohm):
+    if tracespec.r_ref_ohm <= 0.0 or not np.isfinite(tracespec.r_ref_ohm):
         raise ValueError("r_ref_ohm must be finite and > 0.")
 
-    skip_pair = _normalize_skip(skip)
+    path, resolved_measurement = _require_measurement(
+        h5path=filespec,
+    )
+    skip_pair = _normalize_skip(tracespec.skip)
     keys_list, yvalues_array = _normalize_keys_and_yvalues(
         keys=keys,
         yvalues=yvalues,
     )
 
     h5py = _import_h5py()
-    path = Path(h5path).expanduser()
-    traces: list[IVTrace] = []
+    traces: list[Trace] = []
     with h5py.File(path, "r") as file:
         for index, (specific_key, value) in enumerate(
             zip(keys_list, yvalues_array),
         ):
             full_path = _to_measurement_path(
-                measurement=measurement,
+                measurement=resolved_measurement,
                 specific_key=specific_key,
             )
             trace = _load_trace_from_file(
@@ -587,17 +439,68 @@ def get_ivs(
                 specific_key=specific_key,
                 index=index,
                 yvalue=float(value),
-                amp_voltage=amp_voltage,
-                amp_current=amp_current,
-                r_ref_ohm=r_ref_ohm,
-                trigger_values=trigger_values,
+                amp_voltage=tracespec.amp_voltage,
+                amp_current=tracespec.amp_current,
+                r_ref_ohm=tracespec.r_ref_ohm,
+                trigger_values=tracespec.trigger_values,
                 skip=skip_pair,
-                subtract_offset=subtract_offset,
-                time_relative=time_relative,
+                subtract_offset=tracespec.subtract_offset,
+                time_relative=tracespec.time_relative,
             )
             traces.append(trace)
 
-    return IVTraces(traces=traces)
+    return Traces(traces=traces)
 
 
-__all__ = ["IVTrace", "IVTraces", "get_iv", "get_ivs"]
+def get_traces(
+    *,
+    filespec: FileSpec,
+    keys: Keys | None = None,
+    keysspec: KeysSpec | None = None,
+    tracespec: TraceSpec | None = None,
+    specific_key: str | None = None,
+    yvalue: float | None = None,
+    index: int | None = None,
+) -> Traces:
+    """Load traces from file, key, and trace specifications."""
+    resolved_tracespec = TraceSpec() if tracespec is None else tracespec
+    has_selector = specific_key is not None or yvalue is not None or index is not None
+    if keys is not None and keysspec is not None:
+        raise ValueError("Provide either keys or keysspec, not both.")
+    if keys is not None and has_selector:
+        raise ValueError(
+            "Provide either keys or trace selectors, not both.",
+        )
+
+    resolved_keys = (
+        get_keys(filespec=filespec, keysspec=keysspec) if keys is None else keys
+    )
+    if has_selector:
+        resolved_key, resolved_index, resolved_value = _resolve_trace_reference(
+            resolved_keys,
+            specific_key=specific_key,
+            yvalue=yvalue,
+            index=index,
+        )
+        resolved_keys = Keys(
+            specific_keys=[resolved_key],
+            indices=np.asarray(
+                [0 if resolved_index is None else resolved_index],
+                dtype=np.int64,
+            ),
+            yvalues=np.asarray(
+                [np.nan if resolved_value is None else resolved_value],
+                dtype=np.float64,
+            ),
+            _spec=resolved_keys._spec,
+        )
+
+    return _load_traces_from_keys(
+        filespec=filespec,
+        keys=resolved_keys.specific_keys,
+        yvalues=resolved_keys.yvalues,
+        tracespec=resolved_tracespec,
+    )
+
+
+__all__ = ["TraceSpec", "Trace", "Traces", "get_traces"]
