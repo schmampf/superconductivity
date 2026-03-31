@@ -47,37 +47,30 @@ class Traces:
     """Container for multiple traces with lookup helpers."""
 
     traces: list[Trace]
-    keys: list[str] = field(init=False)
+    specific_keys: list[str] = field(init=False)
     yvalues: NDArray64 = field(init=False)
     I_nA: list[NDArray64] = field(init=False)
     V_mV: list[NDArray64] = field(init=False)
     t_s: list[NDArray64] = field(init=False)
-    _indices_by_key: dict[str, list[int]] = field(
-        init=False,
-        repr=False,
-    )
 
     def __post_init__(self) -> None:
         """Build list views and lookup tables from ``traces``."""
-        self.keys = []
+        self.specific_keys = []
         self.I_nA = []
         self.V_mV = []
         self.t_s = []
         yvalues: list[float] = []
-        indices_by_key: dict[str, list[int]] = {}
 
         for index, trace in enumerate(self.traces):
             specific_key = trace["specific_key"]
-            self.keys.append(specific_key)
+            self.specific_keys.append(specific_key)
             self.I_nA.append(trace["I_nA"])
             self.V_mV.append(trace["V_mV"])
             self.t_s.append(trace["t_s"])
             yvalue = trace["yvalue"]
             yvalues.append(np.nan if yvalue is None else float(yvalue))
-            indices_by_key.setdefault(specific_key, []).append(index)
 
         self.yvalues = np.asarray(yvalues, dtype=np.float64)
-        self._indices_by_key = indices_by_key
 
     def __len__(self) -> int:
         """Return number of traces."""
@@ -93,80 +86,6 @@ class Traces:
     ) -> Trace | list[Trace]:
         """Return trace(s) by positional index."""
         return self.traces[index]
-
-    def all_by_key(
-        self,
-        specific_key: str,
-    ) -> list[Trace]:
-        """Return all traces with one exact specific key."""
-        indices = self._indices_by_key.get(specific_key, [])
-        return [self.traces[index] for index in indices]
-
-    def by_key(
-        self,
-        specific_key: str,
-    ) -> Trace:
-        """Return one trace for one exact specific key."""
-        return self._resolve_unique_match(
-            matches=self.all_by_key(specific_key),
-            selector_name="specific_key",
-            selector_value=specific_key,
-            plural_hint="all_by_key",
-        )
-
-    def all_by_value(
-        self,
-        yvalue: float,
-    ) -> list[Trace]:
-        """Return all traces with one y-value."""
-        indices = self._find_indices_by_value(yvalue)
-        return [self.traces[index] for index in indices]
-
-    def by_value(
-        self,
-        yvalue: float,
-    ) -> Trace:
-        """Return one trace for one y-value."""
-        return self._resolve_unique_match(
-            matches=self.all_by_value(yvalue),
-            selector_name="yvalue",
-            selector_value=yvalue,
-            plural_hint="all_by_value",
-        )
-
-    def _find_indices_by_value(
-        self,
-        yvalue: float,
-    ) -> list[int]:
-        """Return positional indices that match one y-value."""
-        value = float(yvalue)
-        if not np.isfinite(value):
-            raise ValueError("yvalue must be finite.")
-
-        atol = np.finfo(np.float64).eps * max(1.0, abs(value)) * 8.0
-        matches = np.flatnonzero(
-            np.isclose(self.yvalues, value, rtol=0.0, atol=atol),
-        )
-        return matches.tolist()
-
-    @staticmethod
-    def _resolve_unique_match(
-        matches: list[Trace],
-        selector_name: str,
-        selector_value: str | float,
-        plural_hint: str,
-    ) -> Trace:
-        """Return one match or raise a clear selector error."""
-        if len(matches) == 0:
-            raise KeyError(
-                f"{selector_name} {selector_value!r} was not found.",
-            )
-        if len(matches) > 1:
-            raise ValueError(
-                f"{selector_name} {selector_value!r} matches multiple "
-                f"traces. Use index or {plural_hint}(...).",
-            )
-        return matches[0]
 
 
 def _normalize_skip(
@@ -241,8 +160,7 @@ def _find_index_for_value(
         raise KeyError(f"yvalue {yvalue!r} was not found.")
     if matches.size > 1:
         raise ValueError(
-            f"yvalue {yvalue!r} matches multiple traces. "
-            "Use index or Traces.all_by_value(...).",
+            f"yvalue {yvalue!r} matches multiple traces. Use index or specific_key.",
         )
     return int(matches[0])
 
