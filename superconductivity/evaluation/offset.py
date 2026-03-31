@@ -5,15 +5,14 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from functools import lru_cache, partial
-from typing import Iterator, Sequence, TypedDict
+from typing import Iterator, Sequence, TypedDict, overload
 
 import numpy as np
 
 from ..utilities.constants import G_0_muS
 from ..utilities.functions import bin_y_over_x, fill_nans
 from ..utilities.functions import upsample as upsample_xy
-from ..utilities.safety import (require_all_finite, require_min_size,
-                                to_1d_float64)
+from ..utilities.safety import require_all_finite, require_min_size, to_1d_float64
 from ..utilities.types import NDArray64
 from .ivdata import IVTrace, IVTraces
 from .psd import _downsample_iv_trace
@@ -124,11 +123,8 @@ class OffsetSpec:
 
 
 class OffsetTrace(TypedDict):
-    """One offset-analysis result with metadata."""
+    """One offset-analysis result."""
 
-    specific_key: str
-    index: int | None
-    yvalue: float | None
     dGerr_G0: NDArray64
     dRerr_R0: NDArray64
     Voff_mV: float
@@ -139,49 +135,32 @@ class OffsetTrace(TypedDict):
 class OffsetTraces:
     """Container for multiple offset-analysis results."""
 
-    spec: OffsetSpec
     traces: list[OffsetTrace]
-    keys: list[str] = field(init=False)
-    yvalues: NDArray64 = field(init=False)
     dGerr_G0: NDArray64 = field(init=False)
     dRerr_R0: NDArray64 = field(init=False)
     Voff_mV: NDArray64 = field(init=False)
     Ioff_nA: NDArray64 = field(init=False)
-    _indices_by_key: dict[str, list[int]] = field(
-        init=False,
-        repr=False,
-    )
 
     def __post_init__(self) -> None:
-        """Build stacked arrays and lookup tables from ``traces``."""
+        """Build stacked arrays from ``traces``."""
         if len(self.traces) == 0:
             raise ValueError("traces must not be empty.")
 
-        self.keys = []
-        yvalues: list[float] = []
         voffs_mV: list[float] = []
         ioffs_nA: list[float] = []
         dg_rows: list[NDArray64] = []
         dr_rows: list[NDArray64] = []
-        indices_by_key: dict[str, list[int]] = {}
 
-        for index, trace in enumerate(self.traces):
-            specific_key = trace["specific_key"]
-            self.keys.append(specific_key)
-            yvalue = trace["yvalue"]
-            yvalues.append(np.nan if yvalue is None else float(yvalue))
+        for trace in self.traces:
             voffs_mV.append(float(trace["Voff_mV"]))
             ioffs_nA.append(float(trace["Ioff_nA"]))
             dg_rows.append(np.asarray(trace["dGerr_G0"], dtype=np.float64))
             dr_rows.append(np.asarray(trace["dRerr_R0"], dtype=np.float64))
-            indices_by_key.setdefault(specific_key, []).append(index)
 
-        self.yvalues = np.asarray(yvalues, dtype=np.float64)
         self.Voff_mV = np.asarray(voffs_mV, dtype=np.float64)
         self.Ioff_nA = np.asarray(ioffs_nA, dtype=np.float64)
         self.dGerr_G0 = np.vstack(dg_rows)
         self.dRerr_R0 = np.vstack(dr_rows)
-        self._indices_by_key = indices_by_key
 
     def __len__(self) -> int:
         """Return number of traces."""
@@ -197,80 +176,6 @@ class OffsetTraces:
     ) -> OffsetTrace | list[OffsetTrace]:
         """Return trace(s) by positional index."""
         return self.traces[index]
-
-    def all_by_key(
-        self,
-        specific_key: str,
-    ) -> list[OffsetTrace]:
-        """Return all traces with one exact specific key."""
-        indices = self._indices_by_key.get(specific_key, [])
-        return [self.traces[index] for index in indices]
-
-    def by_key(
-        self,
-        specific_key: str,
-    ) -> OffsetTrace:
-        """Return one trace for one exact specific key."""
-        return self._resolve_unique_match(
-            matches=self.all_by_key(specific_key),
-            selector_name="specific_key",
-            selector_value=specific_key,
-            plural_hint="all_by_key",
-        )
-
-    def all_by_value(
-        self,
-        yvalue: float,
-    ) -> list[OffsetTrace]:
-        """Return all traces with one y-value."""
-        indices = self._find_indices_by_value(yvalue)
-        return [self.traces[index] for index in indices]
-
-    def by_value(
-        self,
-        yvalue: float,
-    ) -> OffsetTrace:
-        """Return one trace for one y-value."""
-        return self._resolve_unique_match(
-            matches=self.all_by_value(yvalue),
-            selector_name="yvalue",
-            selector_value=yvalue,
-            plural_hint="all_by_value",
-        )
-
-    def _find_indices_by_value(
-        self,
-        yvalue: float,
-    ) -> list[int]:
-        """Return positional indices that match one y-value."""
-        value = float(yvalue)
-        if not np.isfinite(value):
-            raise ValueError("yvalue must be finite.")
-
-        atol = np.finfo(np.float64).eps * max(1.0, abs(value)) * 8.0
-        matches = np.flatnonzero(
-            np.isclose(self.yvalues, value, rtol=0.0, atol=atol),
-        )
-        return matches.tolist()
-
-    @staticmethod
-    def _resolve_unique_match(
-        matches: list[OffsetTrace],
-        selector_name: str,
-        selector_value: str | float,
-        plural_hint: str,
-    ) -> OffsetTrace:
-        """Return one match or raise a clear selector error."""
-        if len(matches) == 0:
-            raise KeyError(
-                f"{selector_name} {selector_value!r} was not found.",
-            )
-        if len(matches) > 1:
-            raise ValueError(
-                f"{selector_name} {selector_value!r} matches multiple "
-                f"traces. Use index or {plural_hint}(...).",
-            )
-        return matches[0]
 
 
 def _bin_y_over_x_offsets(
@@ -416,7 +321,7 @@ def _compute_offset_errors_jax(
     )
 
 
-def get_offset(
+def _offset_analysis_one(
     trace: IVTrace,
     spec: OffsetSpec,
     backend: str = "numpy",
@@ -443,13 +348,9 @@ def get_offset(
             i_nA=i_nA,
             spec=spec,
         )
-
     j_v = _nanargmin_finite(g_err_G0)
     j_i = _nanargmin_finite(r_err_R0)
     return {
-        "specific_key": trace["specific_key"],
-        "index": trace["index"],
-        "yvalue": trace["yvalue"],
         "dGerr_G0": np.asarray(g_err_G0, dtype=np.float64),
         "dRerr_R0": np.asarray(r_err_R0, dtype=np.float64),
         "Voff_mV": float(spec.Voff_mV[j_v]),
@@ -457,14 +358,34 @@ def get_offset(
     }
 
 
-def get_offsets(
+@overload
+def offset_analysis(
     traces: IVTraces,
     spec: OffsetSpec,
     show_progress: bool = True,
     backend: str = "jax",
     workers: int = 1,
-) -> OffsetTraces:
-    """Find offsets for one collection of IV traces.
+) -> OffsetTraces: ...
+
+
+@overload
+def offset_analysis(
+    traces: IVTrace,
+    spec: OffsetSpec,
+    show_progress: bool = True,
+    backend: str = "jax",
+    workers: int = 1,
+) -> OffsetTrace: ...
+
+
+def offset_analysis(
+    traces: IVTrace | IVTraces,
+    spec: OffsetSpec,
+    show_progress: bool = True,
+    backend: str = "jax",
+    workers: int = 1,
+) -> OffsetTrace | OffsetTraces:
+    """Run offset analysis for one trace or one collection.
 
     Notes
     -----
@@ -472,6 +393,10 @@ def get_offsets(
     single-worker because it already vectorizes over the offset grid and
     competing thread pools usually slow it down.
     """
+    if not isinstance(traces, IVTraces):
+        _ = show_progress, workers
+        return _offset_analysis_one(traces, spec=spec, backend=backend)
+
     worker_count = int(workers)
     if worker_count <= 0:
         raise ValueError("workers must be > 0.")
@@ -484,24 +409,25 @@ def get_offsets(
         trace_iterable = tqdm(
             traces,
             total=len(traces),
-            desc="get_offsets",
+            desc="offset_analysis",
             unit="trace",
         )
 
-    compute_one = partial(get_offset, spec=spec, backend=backend_key)
+    compute_one = partial(_offset_analysis_one, spec=spec, backend=backend_key)
     if worker_count == 1:
         out_traces = [compute_one(trace) for trace in trace_iterable]
     else:
         with ThreadPoolExecutor(max_workers=worker_count) as executor:
             out_traces = list(executor.map(compute_one, trace_iterable))
 
-    return OffsetTraces(spec=spec, traces=out_traces)
+    return OffsetTraces(
+        traces=out_traces,
+    )
 
 
 __all__ = [
     "OffsetSpec",
     "OffsetTrace",
     "OffsetTraces",
-    "get_offset",
-    "get_offsets",
+    "offset_analysis",
 ]
