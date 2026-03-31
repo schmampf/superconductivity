@@ -15,40 +15,31 @@ implemented in `superconductivity/__init__.py` and forwards missing attributes
 to this module.
 """
 
-from .evaluation.ivdata import IVTrace, IVTraces, get_iv, get_ivs
-from .evaluation.keys import (
-    list_measurement_keys,
-    list_specific_keys,
-    list_specific_keys_and_values,
-    sort_specific_keys_by_value,
-)
-
-# import from evaluation
-from .evaluation.offset import (
+from .evaluation.traces import FileSpec, list_measurement_keys, list_specific_keys
+from .evaluation.traces import Keys, KeysSpec, get_keys
+from .evaluation.traces import TraceMeta
+from .evaluation.analysis import (
     OffsetSpec,
     OffsetTrace,
     OffsetTraces,
-    get_offset,
-    get_offsets,
+    offset_analysis,
 )
-from .evaluation.psd import PSDSpec, PSDTrace, PSDTraces, get_psd, get_psds
+from .evaluation.analysis import PSDSpec, PSDTrace, PSDTraces, psd_analysis
 from .evaluation.sampling import (
+    Sample,
+    Samples,
     SamplingSpec,
-    SamplingTrace,
-    SamplingTraces,
-    fill_sampling_spec_from_offset,
-    fill_sampling_spec_from_offsets,
-    fill_sampling_specs_from_offsets,
-    get_sampling,
-    get_samplings,
-)
-from .evaluation.smoothing import (
-    SmoothedSamplingTrace,
-    SmoothedSamplingTraces,
     SmoothingSpec,
-    get_smoothed_sampling,
-    get_smoothed_samplings,
+    binning,
+    downsample_trace,
+    downsample_traces,
+    downsampling,
+    offset_correction,
+    sample,
+    smooth,
+    upsampling,
 )
+from .evaluation.traces import TraceSpec, Trace, Traces, get_traces
 
 # import from abs
 from .models.abs import (

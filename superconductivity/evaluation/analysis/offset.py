@@ -9,13 +9,13 @@ from typing import Iterator, Sequence, TypedDict, overload
 
 import numpy as np
 
-from ..utilities.constants import G_0_muS
-from ..utilities.functions import bin_y_over_x, fill_nans
-from ..utilities.functions import upsample as upsample_xy
-from ..utilities.safety import require_all_finite, require_min_size, to_1d_float64
-from ..utilities.types import NDArray64
-from .ivdata import IVTrace, IVTraces
-from .psd import _downsample_iv_trace
+from ...utilities.constants import G_0_muS
+from ...utilities.functions import bin_y_over_x, fill_nans
+from ...utilities.functions import upsample as upsample_xy
+from ...utilities.safety import require_all_finite, require_min_size, to_1d_float64
+from ...utilities.types import NDArray64
+from ..traces import Trace, Traces
+from ..sampling import downsample_trace
 
 
 def _import_tqdm():
@@ -42,7 +42,7 @@ def _import_jax_offset_kernels():
             "'pip install jax jaxlib'.",
         ) from exc
 
-    from ..utilities.functions_jax import jbin_y_over_x
+    from ...utilities.functions_jax import jbin_y_over_x
 
     @jax.jit
     def _bin_offsets(
@@ -109,17 +109,6 @@ class OffsetSpec:
         if upsample <= 0:
             raise ValueError("upsample must be > 0.")
         self.upsample = upsample
-
-    @property
-    def dt_s(self) -> float:
-        """Temporary time-grid spacing used for offset analysis.
-
-        Notes
-        -----
-        ``nu_Hz`` is interpreted as the literal sampling rate, so the
-        spacing is ``dt_s = 1 / nu_Hz``.
-        """
-        return 1.0 / self.nu_Hz
 
 
 class OffsetTrace(TypedDict):
@@ -201,14 +190,13 @@ def _nanargmin_finite(values: NDArray64) -> int:
 
 
 def _prepare_trace_for_offset(
-    trace: IVTrace,
+    trace: Trace,
     spec: OffsetSpec,
 ) -> tuple[NDArray64, NDArray64]:
     """Downsample in time, then upsample in index for offset analysis."""
-    _, v_down_mV, i_down_nA = _downsample_iv_trace(
-        trace=trace,
-        nu_Hz=spec.nu_Hz,
-    )
+    downsampled = downsample_trace(trace, nu_Hz=spec.nu_Hz)
+    v_down_mV = np.asarray(downsampled["V_mV"], dtype=np.float64)
+    i_down_nA = np.asarray(downsampled["I_nA"], dtype=np.float64)
 
     v_mV, i_nA = upsample_xy(
         x=v_down_mV,
@@ -322,7 +310,7 @@ def _compute_offset_errors_jax(
 
 
 def _offset_analysis_one(
-    trace: IVTrace,
+    trace: Trace,
     spec: OffsetSpec,
     backend: str = "numpy",
 ) -> OffsetTrace:
@@ -360,7 +348,7 @@ def _offset_analysis_one(
 
 @overload
 def offset_analysis(
-    traces: IVTraces,
+    traces: Traces,
     spec: OffsetSpec,
     show_progress: bool = True,
     backend: str = "jax",
@@ -370,7 +358,7 @@ def offset_analysis(
 
 @overload
 def offset_analysis(
-    traces: IVTrace,
+    traces: Trace,
     spec: OffsetSpec,
     show_progress: bool = True,
     backend: str = "jax",
@@ -379,7 +367,7 @@ def offset_analysis(
 
 
 def offset_analysis(
-    traces: IVTrace | IVTraces,
+    traces: Trace | Traces,
     spec: OffsetSpec,
     show_progress: bool = True,
     backend: str = "jax",
@@ -393,7 +381,7 @@ def offset_analysis(
     single-worker because it already vectorizes over the offset grid and
     competing thread pools usually slow it down.
     """
-    if not isinstance(traces, IVTraces):
+    if not isinstance(traces, Traces):
         _ = show_progress, workers
         return _offset_analysis_one(traces, spec=spec, backend=backend)
 
@@ -402,7 +390,7 @@ def offset_analysis(
         raise ValueError("workers must be > 0.")
     backend_key = _resolve_backend(backend, workers=worker_count)
 
-    trace_iterable: Iterator[IVTrace] | IVTraces
+    trace_iterable: Iterator[Trace] | Traces
     trace_iterable = traces
     if show_progress:
         tqdm = _import_tqdm()

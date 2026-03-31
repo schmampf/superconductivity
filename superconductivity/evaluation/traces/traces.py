@@ -16,14 +16,13 @@ from .keys import (
     _extract_value_from_specific_key,
     get_keys,
 )
+from .meta import TraceMeta
 
 
 class Trace(TypedDict):
     """One trace with metadata and time axis."""
 
-    specific_key: str
-    index: int | None
-    yvalue: float | None
+    meta: TraceMeta
     I_nA: NDArray64
     V_mV: NDArray64
     t_s: NDArray64
@@ -44,33 +43,23 @@ class TraceSpec:
 
 @dataclass(slots=True)
 class Traces:
-    """Container for multiple traces with lookup helpers."""
+    """Container for multiple traces."""
 
     traces: list[Trace]
-    specific_keys: list[str] = field(init=False)
-    yvalues: NDArray64 = field(init=False)
     I_nA: list[NDArray64] = field(init=False)
     V_mV: list[NDArray64] = field(init=False)
     t_s: list[NDArray64] = field(init=False)
 
     def __post_init__(self) -> None:
-        """Build list views and lookup tables from ``traces``."""
-        self.specific_keys = []
+        """Build list views from ``traces``."""
         self.I_nA = []
         self.V_mV = []
         self.t_s = []
-        yvalues: list[float] = []
 
-        for index, trace in enumerate(self.traces):
-            specific_key = trace["specific_key"]
-            self.specific_keys.append(specific_key)
+        for trace in self.traces:
             self.I_nA.append(trace["I_nA"])
             self.V_mV.append(trace["V_mV"])
             self.t_s.append(trace["t_s"])
-            yvalue = trace["yvalue"]
-            yvalues.append(np.nan if yvalue is None else float(yvalue))
-
-        self.yvalues = np.asarray(yvalues, dtype=np.float64)
 
     def __len__(self) -> int:
         """Return number of traces."""
@@ -86,6 +75,24 @@ class Traces:
     ) -> Trace | list[Trace]:
         """Return trace(s) by positional index."""
         return self.traces[index]
+
+    @property
+    def specific_keys(self) -> list[str]:
+        """Return ordered specific keys."""
+        return [meta.specific_key for meta in self.metas]
+
+    @property
+    def metas(self) -> list[TraceMeta]:
+        """Return ordered per-trace metadata."""
+        return [trace["meta"] for trace in self.traces]
+
+    @property
+    def yvalues(self) -> NDArray64:
+        """Return ordered y-values."""
+        values = [
+            np.nan if meta.yvalue is None else float(meta.yvalue) for meta in self.metas
+        ]
+        return np.asarray(values, dtype=np.float64)
 
 
 def _normalize_skip(
@@ -128,7 +135,6 @@ def _normalize_keys_and_yvalues(
         raise ValueError("yvalues must not be empty.")
     if yvalues_array.size != len(keys_list):
         raise ValueError("keys and yvalues must have the same length.")
-    require_all_finite(yvalues_array, name="yvalues")
     return keys_list, np.asarray(yvalues_array, dtype=np.float64)
 
 
@@ -308,9 +314,11 @@ def _load_trace_from_file(
         t_s = t_s - t_s[0]
 
     return {
-        "specific_key": specific_key,
-        "index": index,
-        "yvalue": yvalue,
+        "meta": TraceMeta(
+            specific_key=specific_key,
+            index=index,
+            yvalue=yvalue,
+        ),
         "I_nA": np.asarray(I_nA, dtype=np.float64),
         "V_mV": np.asarray(V_mV, dtype=np.float64),
         "t_s": np.asarray(t_s, dtype=np.float64),
@@ -356,7 +364,7 @@ def _load_traces_from_keys(
                 full_path=full_path,
                 specific_key=specific_key,
                 index=index,
-                yvalue=float(value),
+                yvalue=(None if not np.isfinite(float(value)) else float(value)),
                 amp_voltage=tracespec.amp_voltage,
                 amp_current=tracespec.amp_current,
                 r_ref_ohm=tracespec.r_ref_ohm,
@@ -400,7 +408,7 @@ def get_traces(
             yvalue=yvalue,
             index=index,
         )
-        resolved_keys = Keys(
+        resolved_keys = Keys.from_fields(
             specific_keys=[resolved_key],
             indices=np.asarray(
                 [0 if resolved_index is None else resolved_index],
@@ -410,7 +418,7 @@ def get_traces(
                 [np.nan if resolved_value is None else resolved_value],
                 dtype=np.float64,
             ),
-            _spec=resolved_keys._spec,
+            spec=resolved_keys._spec,
         )
 
     return _load_traces_from_keys(

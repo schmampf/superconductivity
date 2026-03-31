@@ -1,5 +1,7 @@
 """Helpers for measurement and specific-key handling."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
@@ -9,6 +11,7 @@ from numpy.typing import NDArray
 
 from ...utilities.types import NDArray64
 from .file import FileSpec, _require_measurement, list_specific_keys
+from .meta import TraceMeta
 
 
 @dataclass(slots=True)
@@ -79,10 +82,58 @@ class KeysSpec:
 class Keys:
     """Sorted key metadata with derived labels."""
 
-    specific_keys: list[str]
-    indices: NDArray[np.int64]
-    yvalues: NDArray64
+    metas: list[TraceMeta]
     _spec: KeysSpec = field(repr=False, compare=False)
+
+    @classmethod
+    def from_fields(
+        cls,
+        *,
+        specific_keys: Sequence[str],
+        indices: Sequence[int] | NDArray[np.int64],
+        yvalues: Sequence[float] | NDArray64,
+        spec: KeysSpec,
+    ) -> Keys:
+        """Build key metadata from aligned field arrays."""
+        keys_list = list(specific_keys)
+        indices_array = np.asarray(indices, dtype=np.int64).reshape(-1)
+        yvalues_array = np.asarray(yvalues, dtype=np.float64).reshape(-1)
+        if len(keys_list) != indices_array.size:
+            raise ValueError("specific_keys and indices must have the same length.")
+        if len(keys_list) != yvalues_array.size:
+            raise ValueError("specific_keys and yvalues must have the same length.")
+        metas = [
+            TraceMeta(
+                specific_key=key,
+                index=int(index),
+                yvalue=(None if not np.isfinite(float(yvalue)) else float(yvalue)),
+            )
+            for key, index, yvalue in zip(keys_list, indices_array, yvalues_array)
+        ]
+        return cls(metas=metas, _spec=spec)
+
+    @property
+    def specific_keys(self) -> list[str]:
+        """Return ordered specific keys."""
+        return [meta.specific_key for meta in self.metas]
+
+    @property
+    def indices(self) -> NDArray[np.int64]:
+        """Return ordered positional indices."""
+        indices: list[int] = []
+        for meta in self.metas:
+            if meta.index is None:
+                raise ValueError("Keys metadata must include indices.")
+            indices.append(int(meta.index))
+        return np.asarray(indices, dtype=np.int64)
+
+    @property
+    def yvalues(self) -> NDArray64:
+        """Return ordered parsed y-values."""
+        values = [
+            np.nan if meta.yvalue is None else float(meta.yvalue) for meta in self.metas
+        ]
+        return np.asarray(values, dtype=np.float64)
 
     @property
     def label(self) -> str:
@@ -347,15 +398,15 @@ def _build_keys_output(
     *,
     spec: KeysSpec,
 ) -> Keys:
-    """Build one key-metadata dictionary."""
+    """Build one key-metadata object."""
     values = np.asarray(yvalues, dtype=np.float64)
     if spec.norm is not None:
         values = values / spec.norm
-    return Keys(
+    return Keys.from_fields(
         specific_keys=list(specific_keys),
         indices=np.arange(len(specific_keys), dtype=np.int64),
         yvalues=values,
-        _spec=spec,
+        spec=spec,
     )
 
 
