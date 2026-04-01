@@ -10,6 +10,7 @@ from numpy.typing import NDArray
 
 from ...utilities.types import NDArray64
 from ..traces import TraceMeta
+from ..traces.meta import numeric_yvalue
 
 
 class Sample(TypedDict):
@@ -111,7 +112,10 @@ class Samples:
     def yvalues(self) -> NDArray64:
         """Return ordered y-values."""
         values = [
-            np.nan if meta.yvalue is None else float(meta.yvalue) for meta in self.metas
+            np.nan
+            if numeric_yvalue(meta.yvalue) is None
+            else float(numeric_yvalue(meta.yvalue))
+            for meta in self.metas
         ]
         return np.asarray(values, dtype=np.float64)
 
