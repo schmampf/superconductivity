@@ -1,6 +1,12 @@
+from .data import (
+    get_measurement_keys,
+    get_measurement_series,
+    get_status_keys,
+    get_status_series,
+)
 from .file import FileSpec, list_measurement_keys, list_specific_keys
 from .keys import Keys, KeysSpec, get_keys
-from .meta import TraceMeta
+from .meta import TraceMeta, YValue, numeric_yvalue
 from .traces import TraceSpec, Trace, Traces, get_traces
 
 __all__ = [
@@ -11,6 +17,12 @@ __all__ = [
     "KeysSpec",
     "get_keys",
     "TraceMeta",
+    "YValue",
+    "numeric_yvalue",
+    "get_status_keys",
+    "get_status_series",
+    "get_measurement_keys",
+    "get_measurement_series",
     "TraceSpec",
     "Trace",
     "Traces",

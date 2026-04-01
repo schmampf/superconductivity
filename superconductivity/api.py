@@ -18,6 +18,12 @@ to this module.
 from .evaluation.traces import FileSpec, list_measurement_keys, list_specific_keys
 from .evaluation.traces import Keys, KeysSpec, get_keys
 from .evaluation.traces import TraceMeta
+from .evaluation.traces import (
+    get_measurement_keys,
+    get_measurement_series,
+    get_status_keys,
+    get_status_series,
+)
 from .evaluation.analysis import (
     OffsetSpec,
     OffsetTrace,
