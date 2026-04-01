@@ -13,10 +13,10 @@ from .file import FileSpec, _import_h5py, _require_measurement, _to_measurement_
 from .keys import (
     Keys,
     KeysSpec,
-    _extract_value_from_specific_key,
+    _extract_yvalue_from_specific_key,
     get_keys,
 )
-from .meta import TraceMeta
+from .meta import TraceMeta, YValue, numeric_yvalue
 
 
 class Trace(TypedDict):
@@ -90,7 +90,10 @@ class Traces:
     def yvalues(self) -> NDArray64:
         """Return ordered y-values."""
         values = [
-            np.nan if meta.yvalue is None else float(meta.yvalue) for meta in self.metas
+            np.nan
+            if numeric_yvalue(meta.yvalue) is None
+            else float(numeric_yvalue(meta.yvalue))
+            for meta in self.metas
         ]
         return np.asarray(values, dtype=np.float64)
 
@@ -120,8 +123,8 @@ def _normalize_skip(
 
 def _normalize_keys_and_yvalues(
     keys: Sequence[str],
-    yvalues: Sequence[float] | np.ndarray,
-) -> tuple[list[str], NDArray64]:
+    yvalues: Sequence[YValue] | np.ndarray,
+) -> tuple[list[str], list[YValue]]:
     """Normalize and validate collection metadata."""
     keys_list = list(keys)
     if len(keys_list) == 0:
@@ -130,12 +133,12 @@ def _normalize_keys_and_yvalues(
         if not isinstance(key, str) or key == "":
             raise ValueError("keys must contain only non-empty strings.")
 
-    yvalues_array = np.asarray(yvalues, dtype=np.float64).reshape(-1)
+    yvalues_array = np.asarray(yvalues, dtype=object).reshape(-1)
     if yvalues_array.size == 0:
         raise ValueError("yvalues must not be empty.")
     if yvalues_array.size != len(keys_list):
         raise ValueError("keys and yvalues must have the same length.")
-    return keys_list, np.asarray(yvalues_array, dtype=np.float64)
+    return keys_list, yvalues_array.tolist()
 
 
 def _normalize_index(
@@ -176,7 +179,7 @@ def _resolve_trace_reference(
     specific_key: str | None = None,
     yvalue: float | None = None,
     index: int | None = None,
-) -> tuple[str, int | None, float | None]:
+) -> tuple[str, int | None, YValue]:
     """Resolve selectors into ``(specific_key, index, yvalue)``."""
     if specific_key is None and yvalue is None and index is None:
         raise ValueError(
@@ -184,11 +187,12 @@ def _resolve_trace_reference(
         )
 
     keys_sorted = list(keys.specific_keys)
+    metas = keys.metas
     yvalues_sorted = np.asarray(keys.yvalues, dtype=np.float64)
 
     resolved_key = specific_key
     resolved_index: int | None = None
-    resolved_value: float | None = None
+    resolved_value: YValue = None
 
     if index is not None:
         assert keys_sorted is not None
@@ -200,7 +204,7 @@ def _resolve_trace_reference(
                 "specific_key and index refer to different traces.",
             )
         resolved_key = key_from_index
-        resolved_value = float(yvalues_sorted[resolved_index])
+        resolved_value = metas[resolved_index].yvalue
 
     if yvalue is not None:
         value = float(yvalue)
@@ -223,7 +227,7 @@ def _resolve_trace_reference(
 
         resolved_key = key_from_value
         resolved_index = index_from_value
-        resolved_value = float(yvalues_sorted[index_from_value])
+        resolved_value = metas[index_from_value].yvalue
 
     if resolved_key is None:
         raise ValueError(
@@ -232,15 +236,17 @@ def _resolve_trace_reference(
 
     if resolved_value is None and specific_key is not None:
         try:
-            resolved_value = float(
-                _extract_value_from_specific_key(
-                    specific_key=specific_key,
-                    strip0=keys._spec.strip0,
-                    strip1=keys._spec.strip1,
-                ),
-            )
+            key_index = keys_sorted.index(specific_key)
         except ValueError:
-            resolved_value = None
+            resolved_value = _extract_yvalue_from_specific_key(
+                specific_key=specific_key,
+                strip0=keys._spec.strip0,
+                strip1=keys._spec.strip1,
+            )
+            if resolved_value is None:
+                resolved_value = specific_key
+        else:
+            resolved_value = metas[key_index].yvalue
 
     return resolved_key, resolved_index, resolved_value
 
@@ -250,7 +256,7 @@ def _load_trace_from_file(
     full_path: str,
     specific_key: str,
     index: int | None,
-    yvalue: float | None,
+    yvalue: YValue,
     amp_voltage: float,
     amp_current: float,
     r_ref_ohm: float,
@@ -329,7 +335,7 @@ def _load_traces_from_keys(
     *,
     filespec: FileSpec,
     keys: Sequence[str],
-    yvalues: Sequence[float] | np.ndarray,
+    yvalues: Sequence[YValue] | np.ndarray,
     tracespec: TraceSpec,
 ) -> Traces:
     """Load traces for one measurement in the provided order."""
@@ -344,7 +350,7 @@ def _load_traces_from_keys(
         h5path=filespec,
     )
     skip_pair = _normalize_skip(tracespec.skip)
-    keys_list, yvalues_array = _normalize_keys_and_yvalues(
+    keys_list, yvalues_list = _normalize_keys_and_yvalues(
         keys=keys,
         yvalues=yvalues,
     )
@@ -353,7 +359,7 @@ def _load_traces_from_keys(
     traces: list[Trace] = []
     with h5py.File(path, "r") as file:
         for index, (specific_key, value) in enumerate(
-            zip(keys_list, yvalues_array),
+            zip(keys_list, yvalues_list),
         ):
             full_path = _to_measurement_path(
                 measurement=resolved_measurement,
@@ -364,7 +370,7 @@ def _load_traces_from_keys(
                 full_path=full_path,
                 specific_key=specific_key,
                 index=index,
-                yvalue=(None if not np.isfinite(float(value)) else float(value)),
+                yvalue=value,
                 amp_voltage=tracespec.amp_voltage,
                 amp_current=tracespec.amp_current,
                 r_ref_ohm=tracespec.r_ref_ohm,
@@ -414,17 +420,14 @@ def get_traces(
                 [0 if resolved_index is None else resolved_index],
                 dtype=np.int64,
             ),
-            yvalues=np.asarray(
-                [np.nan if resolved_value is None else resolved_value],
-                dtype=np.float64,
-            ),
+            yvalues=[resolved_value],
             spec=resolved_keys._spec,
         )
 
     return _load_traces_from_keys(
         filespec=filespec,
         keys=resolved_keys.specific_keys,
-        yvalues=resolved_keys.yvalues,
+        yvalues=resolved_keys.yitems,
         tracespec=resolved_tracespec,
     )
 
