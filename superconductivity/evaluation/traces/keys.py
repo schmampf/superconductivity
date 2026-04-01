@@ -11,7 +11,7 @@ from numpy.typing import NDArray
 
 from ...utilities.types import NDArray64
 from .file import FileSpec, _require_measurement, list_specific_keys
-from .meta import TraceMeta
+from .meta import TraceMeta, YValue, numeric_yvalue
 
 
 @dataclass(slots=True)
@@ -51,8 +51,8 @@ class KeysSpec:
 
     def __post_init__(self) -> None:
         """Normalize and validate key-parsing settings."""
-        if not isinstance(self.strip0, str) or self.strip0 == "":
-            raise ValueError("strip0 must be a non-empty string.")
+        if not isinstance(self.strip0, str):
+            raise ValueError("strip0 must be a string.")
         if self.strip1 is not None and not isinstance(self.strip1, str):
             raise ValueError("strip1 must be a string or None.")
         if self.norm is not None:
@@ -91,24 +91,24 @@ class Keys:
         *,
         specific_keys: Sequence[str],
         indices: Sequence[int] | NDArray[np.int64],
-        yvalues: Sequence[float] | NDArray64,
+        yvalues: Sequence[YValue] | NDArray[np.object_] | NDArray64,
         spec: KeysSpec,
     ) -> Keys:
         """Build key metadata from aligned field arrays."""
         keys_list = list(specific_keys)
         indices_array = np.asarray(indices, dtype=np.int64).reshape(-1)
-        yvalues_array = np.asarray(yvalues, dtype=np.float64).reshape(-1)
+        yvalues_list = list(yvalues)
         if len(keys_list) != indices_array.size:
             raise ValueError("specific_keys and indices must have the same length.")
-        if len(keys_list) != yvalues_array.size:
+        if len(keys_list) != len(yvalues_list):
             raise ValueError("specific_keys and yvalues must have the same length.")
         metas = [
             TraceMeta(
                 specific_key=key,
                 index=int(index),
-                yvalue=(None if not np.isfinite(float(yvalue)) else float(yvalue)),
+                yvalue=yvalue,
             )
-            for key, index, yvalue in zip(keys_list, indices_array, yvalues_array)
+            for key, index, yvalue in zip(keys_list, indices_array, yvalues_list)
         ]
         return cls(metas=metas, _spec=spec)
 
@@ -131,9 +131,19 @@ class Keys:
     def yvalues(self) -> NDArray64:
         """Return ordered parsed y-values."""
         values = [
-            np.nan if meta.yvalue is None else float(meta.yvalue) for meta in self.metas
+            (
+                np.nan
+                if numeric_yvalue(meta.yvalue) is None
+                else float(numeric_yvalue(meta.yvalue))
+            )
+            for meta in self.metas
         ]
         return np.asarray(values, dtype=np.float64)
+
+    @property
+    def yitems(self) -> list[YValue]:
+        """Return ordered raw y-value metadata."""
+        return [meta.yvalue for meta in self.metas]
 
     @property
     def label(self) -> str:
@@ -154,6 +164,100 @@ class Keys:
     def __getitem__(self, key: str) -> object:
         """Provide mapping-style access for compatibility."""
         return getattr(self, key)
+
+
+def _extract_value_token_from_specific_key(
+    specific_key: str,
+    strip0: str = "=",
+    strip1: str | None = None,
+) -> str:
+    """Extract one raw value token from a specific key string.
+
+    Parameters
+    ----------
+    specific_key : str
+        Key string such as ``"nu=-31.0dBm"``.
+    strip0 : str, default="="
+        Start delimiter. Parsing begins right after its first occurrence.
+    strip1 : str | None, default=None
+        Optional end delimiter. If ``None`` (or not found), parsing continues
+        to the end of the key.
+
+    Returns
+    -------
+    str
+        Extracted value token.
+
+    Raises
+    ------
+    ValueError
+        If delimiters are invalid or no token can be extracted.
+    """
+    if strip0 == "":
+        start_idx = 0
+    else:
+        start_idx = specific_key.find(strip0)
+        if start_idx < 0:
+            raise ValueError(
+                f"strip0 '{strip0}' not found in specific_key '{specific_key}'.",
+            )
+        start_idx += len(strip0)
+
+    if strip1 is None:
+        token = specific_key[start_idx:]
+    else:
+        end_idx = specific_key.find(strip1, start_idx)
+        token = (
+            specific_key[start_idx:] if end_idx < 0 else specific_key[start_idx:end_idx]
+        )
+
+    token = token.strip()
+    if token == "":
+        raise ValueError(
+            f"No value found in specific_key '{specific_key}'.",
+        )
+    return token
+
+
+def _extract_yvalue_from_specific_key(
+    specific_key: str,
+    strip0: str = "=",
+    strip1: str | None = None,
+) -> YValue:
+    """Extract one parsed y-value from a specific key string.
+
+    Parameters
+    ----------
+    specific_key : str
+        Key string such as ``"nu=-31.0dBm"``.
+    strip0 : str, default="="
+        Start delimiter. Parsing begins right after its first occurrence.
+    strip1 : str | None, default=None
+        Optional end delimiter. If ``None`` (or not found), parsing continues
+        to the end of the key.
+
+    Returns
+    -------
+    float | str | None
+        Parsed finite float when available, else the raw extracted token. If
+        no token can be extracted, return ``None``.
+    """
+    try:
+        token = _extract_value_token_from_specific_key(
+            specific_key=specific_key,
+            strip0=strip0,
+            strip1=strip1,
+        )
+    except ValueError:
+        return None
+
+    try:
+        value = float(token)
+    except ValueError:
+        return token
+    if not np.isfinite(value):
+        return None
+    return value
 
 
 def _extract_value_from_specific_key(
@@ -183,30 +287,11 @@ def _extract_value_from_specific_key(
     ValueError
         If delimiters are invalid or the parsed token is not numeric.
     """
-    if strip0 == "":
-        raise ValueError("strip0 must not be empty.")
-
-    start_idx = specific_key.find(strip0)
-    if start_idx < 0:
-        raise ValueError(
-            f"strip0 '{strip0}' not found in specific_key '{specific_key}'.",
-        )
-    start_idx += len(strip0)
-
-    if strip1 is None:
-        token = specific_key[start_idx:]
-    else:
-        end_idx = specific_key.find(strip1, start_idx)
-        token = (
-            specific_key[start_idx:] if end_idx < 0 else specific_key[start_idx:end_idx]
-        )
-
-    token = token.strip()
-    if token == "":
-        raise ValueError(
-            f"No value found in specific_key '{specific_key}'.",
-        )
-
+    token = _extract_value_token_from_specific_key(
+        specific_key=specific_key,
+        strip0=strip0,
+        strip1=strip1,
+    )
     try:
         return float(token)
     except ValueError as exc:
@@ -273,7 +358,10 @@ def _normalize_added_specific_keys(
     if add_key is None:
         return []
 
-    additions_raw = [add_key] if isinstance(add_key, tuple) else list(add_key)
+    if isinstance(add_key, tuple) and len(add_key) == 2 and isinstance(add_key[0], str):
+        additions_raw = [add_key]
+    else:
+        additions_raw = list(add_key)
     normalized: list[tuple[str, float]] = []
     for item in additions_raw:
         if not isinstance(item, tuple) or len(item) != 2:
@@ -394,14 +482,18 @@ def _infer_keys_labels(
 
 def _build_keys_output(
     specific_keys: list[str],
-    yvalues: NDArray64,
+    yvalues: Sequence[YValue],
     *,
     spec: KeysSpec,
 ) -> Keys:
     """Build one key-metadata object."""
-    values = np.asarray(yvalues, dtype=np.float64)
-    if spec.norm is not None:
-        values = values / spec.norm
+    values: list[YValue] = []
+    for value in yvalues:
+        numeric = numeric_yvalue(value)
+        if spec.norm is not None and numeric is not None:
+            values.append(float(numeric) / spec.norm)
+        else:
+            values.append(value)
     return Keys.from_fields(
         specific_keys=list(specific_keys),
         indices=np.arange(len(specific_keys), dtype=np.int64),
@@ -476,9 +568,8 @@ def _normalize_limit_bound(
     )
 
 
-def _apply_limits_to_sorted_keys(
-    keys_sorted: list[str],
-    values_sorted: np.ndarray,
+def _resolve_limits_slice(
+    size: int,
     limits: (
         float
         | slice
@@ -486,15 +577,13 @@ def _apply_limits_to_sorted_keys(
         | list[int | float | None]
         | None
     ) = None,
-) -> tuple[list[str], np.ndarray]:
-    """Apply optional positional or fractional limits to sorted keys.
+) -> tuple[int, int]:
+    """Resolve optional positional or fractional limits into a slice.
 
     Parameters
     ----------
-    keys_sorted : list[str]
-        Sorted specific keys.
-    values_sorted : np.ndarray
-        Parsed values aligned with ``keys_sorted``.
+    size : int
+        Number of available entries.
     limits : float, slice, tuple, list, or None, default=None
         Optional selection applied after sorting.
 
@@ -506,8 +595,8 @@ def _apply_limits_to_sorted_keys(
 
     Returns
     -------
-    tuple[list[str], np.ndarray]
-        Limited ``(specific_keys_sorted, values_sorted)``.
+    tuple[int, int]
+        Concrete ``(start, stop)`` slice bounds.
 
     Raises
     ------
@@ -515,9 +604,8 @@ def _apply_limits_to_sorted_keys(
         If ``limits`` is malformed or removes all entries.
     """
     if limits is None:
-        return keys_sorted, values_sorted
+        return 0, size
 
-    size = len(keys_sorted)
     if isinstance(limits, slice):
         start_idx, stop_idx, step = limits.indices(size)
         if step != 1:
@@ -551,13 +639,9 @@ def _apply_limits_to_sorted_keys(
 
     if stop_idx < start_idx:
         raise ValueError("limits stop must be >= start.")
-
-    keys_limited = keys_sorted[start_idx:stop_idx]
-    values_limited = np.asarray(values_sorted[start_idx:stop_idx], dtype=np.float64)
-    if len(keys_limited) == 0:
+    if stop_idx == start_idx:
         raise ValueError("limits removed all specific keys.")
-
-    return keys_limited, values_limited
+    return start_idx, stop_idx
 
 
 def get_keys(
@@ -640,35 +724,46 @@ def get_keys(
     removed_keys = set(resolved.remove_key)
     if len(removed_keys) > 0:
         keys = [key for key in keys if key not in removed_keys]
-
-    values = [
-        _extract_value_from_specific_key(
+    parsed_entries: list[tuple[str, float]] = []
+    fallback_entries: list[tuple[str, YValue]] = []
+    for key in keys:
+        value = _extract_yvalue_from_specific_key(
             specific_key=key,
             strip0=resolved.strip0,
             strip1=resolved.strip1,
         )
-        for key in keys
-    ]
+        if isinstance(value, float):
+            parsed_entries.append((key, value))
+        elif value is None:
+            fallback_entries.append((key, key))
+        else:
+            fallback_entries.append((key, value))
 
     additions = list(resolved.add_key)
     for key, value in additions:
-        keys.append(key)
-        values.append(value)
+        parsed_entries.append((key, value))
 
-    if len(keys) == 0:
+    if len(parsed_entries) == 0 and len(fallback_entries) == 0:
         raise ValueError(
             "specific_keys must not be empty after applying remove_key and add_key.",
         )
 
-    values_array = np.asarray(values, dtype=np.float64)
-    order = np.argsort(values_array)
-    keys_sorted = [keys[i] for i in order]
-    values_sorted = np.asarray(values_array[order], dtype=np.float64)
-    keys_sorted, values_sorted = _apply_limits_to_sorted_keys(
-        keys_sorted=keys_sorted,
-        values_sorted=values_sorted,
-        limits=resolved.limits,
-    )
+    if len(parsed_entries) > 0:
+        parsed_entries.sort(key=lambda item: item[1])
+
+    keys_sorted = [key for key, _ in parsed_entries]
+    values_sorted: list[YValue] = [value for _, value in parsed_entries]
+    keys_sorted.extend(key for key, _ in fallback_entries)
+    values_sorted.extend(value for _, value in fallback_entries)
+
+    if resolved.limits is not None:
+        start_idx, stop_idx = _resolve_limits_slice(
+            len(keys_sorted),
+            resolved.limits,
+        )
+        keys_sorted = keys_sorted[start_idx:stop_idx]
+        values_sorted = values_sorted[start_idx:stop_idx]
+
     return _build_keys_output(
         specific_keys=keys_sorted,
         yvalues=values_sorted,
