@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+from dataclasses import replace
+from queue import Empty, Queue
+from threading import Event
+
 import numpy as np
 import pandas as pd
 from panel.io.model import JSCode
 
-from ...evaluation.offset import OffsetSpec
+from ...evaluation.analysis import (
+    OffsetSpec,
+    OffsetTrace,
+    OffsetTraces,
+    offset_analysis,
+)
+from ...evaluation.traces import numeric_yvalue
 from ..state import _linspace_from_values
 
 _OFFSET_GRID_PARAMETER_LABELS = {
@@ -29,9 +39,118 @@ _OFFSET_INFO_PARAMETER_LABELS = {
     "Voff_mV": "<i>V</i><sub>off</sub> (mV)",
     "Ioff_nA": "<i>I</i><sub>off</sub> (nA)",
 }
+_OFFSET_BATCH_TITLES = {
+    "index": "Index",
+    "specific_key": "Key",
+    "yvalue": "y",
+    "status": "Status",
+    "Voff_mV": "<i>V</i><sub>off</sub> (mV)",
+    "Ioff_nA": "<i>I</i><sub>off</sub> (nA)",
+}
+
+
+def _run_offset_batch(
+    traces: list[object],
+    order: list[int],
+    spec: OffsetSpec,
+    event_queue: Queue,
+    stop_event: Event,
+) -> None:
+    for index in order:
+        if stop_event.is_set():
+            break
+        trace = traces[index]
+        event_queue.put(("running", index, None, ""))
+        try:
+            offset = offset_analysis(trace, spec=replace(spec))
+        except Exception as exc:  # pragma: no cover - exercised via GUI tests
+            event_queue.put(("failed", index, None, f"{type(exc).__name__}: {exc}"))
+        else:
+            event_queue.put(("done", index, offset, ""))
 
 
 class GUIOffsetTabMixin:
+    def _init_offset_batch_state(self) -> None:
+        self._offset_batch_spec: OffsetSpec | None = None
+        self._offset_batch_results: list[OffsetTrace | None] = [
+            None for _ in range(len(self.traces))
+        ]
+        self._offset_batch_status: list[str] = ["idle" for _ in range(len(self.traces))]
+        self._offset_batch_errors: list[str] = ["" for _ in range(len(self.traces))]
+        self._offset_batch_queue: Queue | None = None
+        self._offset_batch_running = False
+        self._offset_batch_future = None
+        self._offset_batch_timer = None
+        self._offset_batch_completed = 0
+        self._offset_batch_display_index: int | None = None
+        self._offset_batch_stop_event = Event()
+        self._offset_batch_stop_requested = False
+
+    @staticmethod
+    def _offset_specs_match(left: OffsetSpec, right: OffsetSpec) -> bool:
+        return bool(
+            np.array_equal(left.Vbins_mV, right.Vbins_mV)
+            and np.array_equal(left.Ibins_nA, right.Ibins_nA)
+            and np.array_equal(left.Voff_mV, right.Voff_mV)
+            and np.array_equal(left.Ioff_nA, right.Ioff_nA)
+            and float(left.nu_Hz) == float(right.nu_Hz)
+            and int(left.upsample) == int(right.upsample)
+        )
+
+    def _ensure_offset_stage_spec(self, spec: OffsetSpec) -> None:
+        if self._offset_batch_spec is None:
+            self._offset_batch_spec = replace(spec)
+            return
+        if self._offset_specs_match(self._offset_batch_spec, spec):
+            return
+        self._clear_offset_batch_cache()
+        self._offset_batch_spec = replace(spec)
+
+    def _stage_offset_result(self, index: int, offset: OffsetTrace) -> None:
+        self._offset_batch_results[index] = offset
+        self._offset_batch_status[index] = "done"
+        self._offset_batch_errors[index] = ""
+        self._offset_batch_display_index = int(index)
+
+    @staticmethod
+    def _copy_offset_trace(offset: OffsetTrace) -> OffsetTrace:
+        return {
+            "dGerr_G0": np.asarray(offset["dGerr_G0"], dtype=np.float64).copy(),
+            "dRerr_R0": np.asarray(offset["dRerr_R0"], dtype=np.float64).copy(),
+            "Voff_mV": float(offset["Voff_mV"]),
+            "Ioff_nA": float(offset["Ioff_nA"]),
+        }
+
+    def _load_offset_analysis_preset(
+        self,
+        offset_analysis: OffsetTrace | OffsetTraces,
+    ) -> None:
+        copied = self._copy_stage_preset_entries(
+            offset_analysis,
+            collection_type=OffsetTraces,
+            single_name="OffsetTrace",
+            copy_fn=self._copy_offset_trace,
+        )
+        self._offset_batch_spec = replace(self._offset_spec)
+        self._offset_batch_results = [None for _ in range(len(self.traces))]
+        self._offset_batch_status = ["idle" for _ in range(len(self.traces))]
+        self._offset_batch_errors = ["" for _ in range(len(self.traces))]
+        display_index: int | None = None
+        completed = 0
+        for index, result in enumerate(copied):
+            self._offset_batch_results[index] = result
+            self._offset_batch_status[index] = "done"
+            completed += 1
+            if index == int(self.active_index):
+                display_index = index
+            elif display_index is None:
+                display_index = index
+        self._offset_batch_completed = completed
+        self._offset_batch_display_index = display_index
+        self._offset_batch_progress.max = len(self.traces)
+        self._offset_batch_progress.value = completed
+        self._offset_batch_state.object = "Loaded"
+
     def _build_offset_widgets(self) -> None:
         self._offset_grid_table = self._pn.widgets.Tabulator(
             self._offset_grid_frame(),
@@ -51,20 +170,22 @@ class GUIOffsetTabMixin:
                 "parameter": {"type": "html"},
             },
             titles=_OFFSET_GRID_TITLES,
-            title_formatters={
-                key: {"type": "html"} for key in _OFFSET_GRID_TITLES
-            },
+            title_formatters={key: {"type": "html"} for key in _OFFSET_GRID_TITLES},
         )
+        self._offset_grid_table.on_edit(self._on_offset_spec_edited)
         self._offset_info_table = self._pn.widgets.Tabulator(
             self._offset_info_frame(),
             show_index=False,
             selectable=False,
             sortable=False,
             hidden_columns=["key"],
-            layout="fit_columns",
+            layout="fit_data_fill",
             sizing_mode="fixed",
             width=320,
             height=145,
+            widths={
+                "parameter": 150,
+            },
             editors={
                 "parameter": None,
                 "value": {"type": "number"},
@@ -81,27 +202,94 @@ class GUIOffsetTabMixin:
                 "parameter": {"type": "html"},
             },
             titles=_OFFSET_INFO_TITLES,
-            title_formatters={
-                key: {"type": "html"} for key in _OFFSET_INFO_TITLES
-            },
+            title_formatters={key: {"type": "html"} for key in _OFFSET_INFO_TITLES},
         )
+        self._offset_info_table.on_edit(self._on_offset_spec_edited)
         self._offset_apply_button = self._pn.widgets.Button(
             name="Offset Analysis",
             button_type="primary",
         )
         self._offset_apply_button.on_click(self._on_offset_apply)
+        self._offset_batch_apply_button = self._pn.widgets.Button(
+            name="Offset Analysis (All)",
+            button_type="default",
+        )
+        self._offset_batch_apply_button.on_click(self._on_offset_batch_apply)
+        self._offset_batch_stop_button = self._pn.widgets.Button(
+            name="Stop",
+            button_type="danger",
+            disabled=True,
+        )
+        self._offset_batch_stop_button.on_click(self._on_offset_batch_stop)
+        self._offset_batch_spinner = self._pn.indicators.LoadingSpinner(
+            value=False,
+            width=20,
+            height=20,
+        )
+        self._offset_batch_progress = self._pn.indicators.Progress(
+            value=0,
+            max=len(self.traces),
+            sizing_mode="stretch_width",
+            width=220,
+        )
+        self._offset_batch_state = self._pn.pane.Markdown(
+            "Idle",
+            sizing_mode="stretch_width",
+        )
+        self._offset_batch_table = self._pn.widgets.Tabulator(
+            self._offset_batch_frame(),
+            show_index=False,
+            selectable=1,
+            sortable=False,
+            layout="fit_columns",
+            sizing_mode="stretch_width",
+            height=240,
+            editors={
+                "index": None,
+                "specific_key": None,
+                "yvalue": None,
+                "status": None,
+                "Voff_mV": None,
+                "Ioff_nA": None,
+            },
+            formatters={
+                "Voff_mV": {"type": "plaintext"},
+                "Ioff_nA": {"type": "plaintext"},
+            },
+            titles=_OFFSET_BATCH_TITLES,
+            title_formatters={key: {"type": "html"} for key in _OFFSET_BATCH_TITLES},
+        )
+
+    @staticmethod
+    def _display_scalar(value: float, *, significant_digits: int = 7) -> float:
+        value = float(value)
+        if not np.isfinite(value):
+            return value
+        return float(f"{value:.{significant_digits}g}")
 
     def _offset_tab(self):
         return self._pn.Column(
-            self._offset_apply_button,
-            self._offset_grid_table,
             self._pn.Row(
+                self._offset_apply_button,
+                self._offset_batch_apply_button,
+                self._offset_batch_stop_button,
+                self._offset_batch_spinner,
+                self._offset_batch_progress,
+                sizing_mode="stretch_width",
+            ),
+            self._pn.Row(
+                self._offset_grid_table,
                 self._offset_info_table,
-                self._pn.Column(
-                    self._offset_g_pane,
-                    self._offset_r_pane,
-                    sizing_mode="stretch_width",
-                ),
+                sizing_mode="stretch_width",
+            ),
+            self._pn.Row(
+                self._offset_g_pane,
+                self._offset_batch_v_pane,
+                sizing_mode="stretch_width",
+            ),
+            self._pn.Row(
+                self._offset_r_pane,
+                self._offset_batch_i_pane,
                 sizing_mode="stretch_width",
             ),
             sizing_mode="stretch_width",
@@ -142,9 +330,10 @@ class GUIOffsetTabMixin:
     def _offset_info_frame(self) -> pd.DataFrame:
         Voff_mV = np.nan
         Ioff_nA = np.nan
-        if self._offset is not None:
-            Voff_mV = float(self._offset["Voff_mV"])
-            Ioff_nA = float(self._offset["Ioff_nA"])
+        display_offset = self._offset_display_result()
+        if display_offset is not None:
+            Voff_mV = self._display_scalar(float(display_offset["Voff_mV"]))
+            Ioff_nA = self._display_scalar(float(display_offset["Ioff_nA"]))
         return pd.DataFrame(
             [
                 {
@@ -171,10 +360,18 @@ class GUIOffsetTabMixin:
             dtype=object,
         )
 
+    def _offset_display_result(self) -> OffsetTrace | None:
+        index = self._offset_batch_display_index
+        if index is not None:
+            cached = self._get_cached_offset_batch_result(int(index))
+            if cached is not None:
+                return cached
+        return self._offset
+
     def _build_offset_spec_from_table(self) -> OffsetSpec:
         grid_frame = self._offset_grid_table.value.reset_index(drop=True)
-        info_frame = (
-            self._offset_info_table.value.reset_index(drop=True).set_index("key")
+        info_frame = self._offset_info_table.value.reset_index(drop=True).set_index(
+            "key"
         )
         return OffsetSpec(
             Vbins_mV=_linspace_from_values(
@@ -213,15 +410,257 @@ class GUIOffsetTabMixin:
         self._offset_grid_table.value = self._offset_grid_frame()
         self._offset_info_table.value = self._offset_info_frame()
 
+    def _on_offset_spec_edited(self, _: object) -> None:
+        if self._offset_batch_running or self._offset_batch_spec is None:
+            return
+        self._clear_offset_batch_cache()
+        self._refresh_offset_batch_views()
+
     def _on_offset_apply(self, _: object) -> None:
+        if self._offset_batch_running or self._fit_running:
+            return
         offset_spec = self._build_offset_spec_from_table()
         self._offset_spec = offset_spec
+        self._ensure_offset_stage_spec(offset_spec)
+        self._clear_sampling_stage_cache(indices=[int(self.active_index)])
         self._recompute_pipeline(
             clear_fit=True,
             recompute_psd=False,
             recompute_offset=True,
             recompute_sampling=True,
         )
+        self._stage_offset_result(self.active_index, self._require_offset())
         self._sync_control_widgets_from_specs()
         self._refresh_all_views()
         self._notify_state_changed()
+
+    def _offset_batch_frame(self) -> pd.DataFrame:
+        rows: list[dict[str, object]] = []
+        for index, trace in enumerate(self.traces):
+            result = self._offset_batch_results[index]
+            meta = trace["meta"]
+            yvalue = numeric_yvalue(meta.yvalue)
+            rows.append(
+                {
+                    "index": int(index),
+                    "specific_key": str(meta.specific_key),
+                    "yvalue": (
+                        meta.yvalue
+                        if yvalue is None
+                        else float(yvalue)
+                    ),
+                    "status": self._offset_batch_status[index],
+                    "Voff_mV": (
+                        np.nan
+                        if result is None
+                        else self._display_scalar(float(result["Voff_mV"]))
+                    ),
+                    "Ioff_nA": (
+                        np.nan
+                        if result is None
+                        else self._display_scalar(float(result["Ioff_nA"]))
+                    ),
+                }
+            )
+        return pd.DataFrame(rows, dtype=object)
+
+    def _clear_offset_batch_cache(self) -> None:
+        if self._offset_batch_timer is not None:
+            self._offset_batch_timer.stop()
+            self._offset_batch_timer = None
+        self._offset_batch_spec = None
+        self._offset_batch_results = [None for _ in range(len(self.traces))]
+        self._offset_batch_status = ["idle" for _ in range(len(self.traces))]
+        self._offset_batch_errors = ["" for _ in range(len(self.traces))]
+        self._offset_batch_queue = None
+        self._offset_batch_future = None
+        self._offset_batch_running = False
+        self._offset_batch_completed = 0
+        self._offset_batch_display_index = None
+        self._offset_batch_stop_event = Event()
+        self._offset_batch_stop_requested = False
+        self._offset_batch_spinner.value = False
+        self._offset_batch_progress.max = len(self.traces)
+        self._offset_batch_progress.value = 0
+        self._offset_batch_state.object = "Idle"
+        self._offset_grid_table.disabled = False
+        self._offset_info_table.disabled = False
+        self._offset_apply_button.disabled = False
+        self._offset_batch_apply_button.disabled = False
+        self._offset_batch_stop_button.disabled = True
+        if hasattr(self, "_fit_button"):
+            self._fit_button.disabled = False
+
+    def _get_cached_offset_batch_result(
+        self,
+        index: int,
+    ) -> OffsetTrace | None:
+        if self._offset_batch_spec is None:
+            return None
+        if index < 0 or index >= len(self._offset_batch_results):
+            return None
+        return self._offset_batch_results[index]
+
+    def _on_offset_batch_apply(self, _: object) -> None:
+        if self._offset_batch_running or self._fit_running:
+            return
+        self._offset_spec = self._build_offset_spec_from_table()
+        self._clear_offset_batch_cache()
+        self._offset_batch_spec = replace(self._offset_spec)
+        self._offset_batch_queue = Queue()
+        self._offset_batch_status = ["queued" for _ in range(len(self.traces))]
+        self._offset_batch_running = True
+        self._offset_batch_display_index = None
+        self._offset_batch_stop_event = Event()
+        self._offset_batch_stop_requested = False
+        self._offset_batch_spinner.value = True
+        self._offset_batch_progress.max = len(self.traces)
+        self._offset_batch_progress.value = 0
+        self._offset_batch_state.object = "Running"
+        self._offset_grid_table.disabled = True
+        self._offset_info_table.disabled = True
+        self._offset_apply_button.disabled = True
+        self._offset_batch_apply_button.disabled = True
+        self._offset_batch_stop_button.disabled = False
+        if hasattr(self, "_fit_button"):
+            self._fit_button.disabled = True
+        self._refresh_offset_batch_views()
+        run_order = [int(self.active_index)] + [
+            index
+            for index in range(len(self.traces))
+            if index != int(self.active_index)
+        ]
+        self._offset_batch_future = self._executor.submit(
+            _run_offset_batch,
+            list(self.traces),
+            run_order,
+            replace(self._offset_spec),
+            self._offset_batch_queue,
+            self._offset_batch_stop_event,
+        )
+        self._start_offset_batch_timer()
+
+    def _on_offset_batch_stop(self, _: object) -> None:
+        if not self._offset_batch_running or self._offset_batch_stop_requested:
+            return
+        self._offset_batch_stop_requested = True
+        self._offset_batch_stop_event.set()
+        self._offset_batch_stop_button.disabled = True
+        self._offset_batch_state.object = "Stopping"
+
+    def _start_offset_batch_timer(self) -> None:
+        if self._offset_batch_timer is not None:
+            self._offset_batch_timer.stop()
+        self._offset_batch_timer = self._pn.state.add_periodic_callback(
+            self._update_offset_batch_timer,
+            period=400,
+            start=True,
+        )
+
+    def _update_offset_batch_timer(self) -> None:
+        if self._offset_batch_queue is None:
+            return
+
+        refresh_active_trace = False
+        refresh_display_trace = False
+        status_changed = False
+        plot_changed = False
+        while True:
+            try:
+                state, index, offset, message = self._offset_batch_queue.get_nowait()
+            except Empty:
+                break
+
+            if state == "running":
+                self._offset_batch_status[index] = "running"
+                status_changed = True
+                continue
+            if state == "failed":
+                self._offset_batch_status[index] = "failed"
+                self._offset_batch_errors[index] = str(message)
+                self._offset_batch_completed += 1
+                status_changed = True
+                continue
+
+            self._offset_batch_status[index] = "done"
+            self._offset_batch_errors[index] = ""
+            self._offset_batch_results[index] = offset
+            self._offset_batch_completed += 1
+            self._clear_sampling_stage_cache(indices=[int(index)])
+            status_changed = True
+            plot_changed = True
+            if int(index) == int(self.active_index):
+                refresh_active_trace = True
+            if self._offset_batch_display_index == int(index):
+                refresh_display_trace = True
+
+        if status_changed:
+            self._offset_batch_progress.value = self._offset_batch_completed
+            if self._offset_batch_stop_requested:
+                self._offset_batch_state.object = "Stopping"
+            else:
+                self._offset_batch_state.object = "Running"
+            self._offset_batch_table.value = self._offset_batch_frame()
+
+        if plot_changed:
+            self._refresh_offset_batch_views()
+
+        if refresh_display_trace:
+            self._refresh_offset_views()
+
+        if refresh_active_trace:
+            self._recompute_pipeline(
+                clear_fit=True,
+                recompute_psd=False,
+                recompute_offset=True,
+                recompute_sampling=True,
+            )
+            self._sync_control_widgets_from_specs()
+            self._refresh_all_views()
+
+        if (
+            self._offset_batch_future is not None
+            and self._offset_batch_future.done()
+            and self._offset_batch_queue.empty()
+        ):
+            self._finalize_offset_batch()
+
+    def _finalize_offset_batch(self) -> None:
+        failed = sum(status == "failed" for status in self._offset_batch_status)
+        self._offset_batch_running = False
+        self._offset_batch_spinner.value = False
+        self._offset_grid_table.disabled = False
+        self._offset_info_table.disabled = False
+        self._offset_apply_button.disabled = False
+        self._offset_batch_apply_button.disabled = False
+        self._offset_batch_stop_button.disabled = True
+        if hasattr(self, "_fit_button"):
+            self._fit_button.disabled = False
+        if self._offset_batch_timer is not None:
+            self._offset_batch_timer.stop()
+            self._offset_batch_timer = None
+
+        future = self._offset_batch_future
+        self._offset_batch_future = None
+        if future is not None:
+            try:
+                future.result()
+            except Exception as exc:  # pragma: no cover
+                self._offset_batch_state.object = (
+                    f"Failed: `{type(exc).__name__}: {exc}`"
+                )
+            else:
+                if self._offset_batch_stop_requested:
+                    for index, status in enumerate(self._offset_batch_status):
+                        if status == "queued":
+                            self._offset_batch_status[index] = "stopped"
+                    self._offset_batch_state.object = "Stopped"
+                elif failed == 0:
+                    self._offset_batch_state.object = "Done"
+                else:
+                    self._offset_batch_state.object = "Done with failures"
+        self._refresh_offset_batch_views()
+
+    def _on_offset_batch_table_selection(self, event: object) -> None:
+        _ = event
+        return

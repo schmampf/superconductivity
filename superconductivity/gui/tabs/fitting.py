@@ -45,10 +45,13 @@ class GUIFitTabMixin:
             selectable=False,
             sortable=False,
             hidden_columns=["key"],
-            layout="fit_columns",
+            layout="fit_data_fill",
             sizing_mode="fixed",
             width=220,
             height=170,
+            widths={
+                "parameter": 110,
+            },
             editors={
                 "parameter": None,
                 "value": {"type": "tickCross"},
@@ -73,9 +76,12 @@ class GUIFitTabMixin:
             disabled=True,
             selectable=False,
             sortable=False,
-            layout="fit_columns",
+            layout="fit_data_fill",
             sizing_mode="stretch_width",
             height=220,
+            widths={
+                "key": 150,
+            },
         )
         self._optimizer_info_table = self._pn.widgets.Tabulator(
             _mapping_frame(self._optimizer_info()),
@@ -83,9 +89,12 @@ class GUIFitTabMixin:
             disabled=True,
             selectable=False,
             sortable=False,
-            layout="fit_columns",
+            layout="fit_data_fill",
             sizing_mode="stretch_width",
             height=220,
+            widths={
+                "key": 150,
+            },
         )
         self._model_html = self._pn.pane.LaTeX(
             get_model_spec(self._fit_model_config).html,
@@ -232,7 +241,6 @@ class GUIFitTabMixin:
         chi2, reduced_chi2 = self._chi2_metrics()
         info = OrderedDict()
         info["solver"] = "scipy.optimize.curve_fit"
-        info["maxfev"] = self.maxfev
         info["active_trace"] = self.active_index
         info["free_parameters"] = free_parameters
         info["chi2"] = f"{chi2:.6g}" if np.isfinite(chi2) else "n/a"
@@ -390,7 +398,7 @@ class GUIFitTabMixin:
         self._notify_state_changed()
 
     def _on_fit_clicked(self, _: object) -> None:
-        if self._fit_running:
+        if self._fit_running or self._offset_batch_running:
             return
 
         self._fit_running = True
@@ -408,7 +416,7 @@ class GUIFitTabMixin:
             self._require_sampling(),
             model=self.model_key,
             parameters=[replace(parameter) for parameter in self._parameters],
-            maxfev=self.maxfev,
+            maxfev=None,
         )
         self._fit_future.add_done_callback(self._on_fit_finished)
 

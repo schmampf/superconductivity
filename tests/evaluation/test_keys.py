@@ -121,6 +121,36 @@ def test_get_keys_accepts_keysspec(
     assert out.html_label == "<i>nu</i> (dBm)"
 
 
+def test_get_keys_accepts_add_key_as_tuple_of_tuples(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Tuple-of-tuples add_key input should be treated as multiple additions."""
+
+    def fake_list_specific_keys(
+        h5path: str,
+        measurement: str,
+    ) -> list[str]:
+        assert h5path == "dummy.h5"
+        assert measurement == "frequency_at_15GHz"
+        return ["nu=3dBm"]
+
+    monkeypatch.setattr(
+        "superconductivity.evaluation.traces.keys.list_specific_keys",
+        fake_list_specific_keys,
+    )
+
+    out = get_keys(
+        "dummy.h5",
+        "frequency_at_15GHz",
+        strip0="=",
+        strip1="dBm",
+        add_key=(("no_irradiation", 0.0), ("no_irradiation", 0.005)),
+    )
+
+    assert out.specific_keys == ["no_irradiation", "no_irradiation", "nu=3dBm"]
+    assert np.allclose(out.yvalues, np.asarray([0.0, 0.005, 3.0]))
+
+
 def test_get_keys_rejects_invalid_norm() -> None:
     """KeysSpec.norm must be finite and positive."""
     with pytest.raises(ValueError, match="norm must be finite and > 0"):
@@ -148,3 +178,32 @@ def test_get_keys_rejects_spec_plus_explicit_args() -> None:
             strip1="dBm",
             spec=KeysSpec(strip0="=", strip1="dBm"),
         )
+
+
+def test_get_keys_preserves_raw_token_when_value_is_non_numeric(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Non-numeric extracted values should stay visible as raw strings."""
+
+    def fake_list_specific_keys(
+        h5path: str,
+        measurement: str,
+    ) -> list[str]:
+        assert h5path == "dummy.h5"
+        assert measurement == "frequency_at_15GHz"
+        return ["mode=alpha", "mode=beta"]
+
+    monkeypatch.setattr(
+        "superconductivity.evaluation.traces.keys.list_specific_keys",
+        fake_list_specific_keys,
+    )
+
+    out = get_keys(
+        "dummy.h5",
+        "frequency_at_15GHz",
+        strip0="=",
+    )
+
+    assert out.specific_keys == ["mode=alpha", "mode=beta"]
+    assert np.isnan(out.yvalues).all()
+    assert out.yitems == ["alpha", "beta"]

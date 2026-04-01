@@ -5,12 +5,12 @@ import pandas as pd
 from panel.io.model import JSCode
 
 from ...evaluation.sampling import SamplingSpec
-from ...evaluation.smoothing import SmoothingSpec
+from ...evaluation.sampling import SmoothingSpec
 from ..state import _linspace_from_values
 
 _SAMPLING_GRID_PARAMETER_LABELS = {
-    "Vbin_mV": "<i>V</i><sub>bins</sub> (mV)",
-    "Ibin_nA": "<i>I</i><sub>bins</sub> (nA)",
+    "Vbins_mV": "<i>V</i><sub>bins</sub> (mV)",
+    "Ibins_nA": "<i>I</i><sub>bins</sub> (nA)",
 }
 _SAMPLING_GRID_TITLES = {
     "parameter": "Parameter",
@@ -53,9 +53,7 @@ class GUISamplingTabMixin:
                 "parameter": {"type": "html"},
             },
             titles=_SAMPLING_GRID_TITLES,
-            title_formatters={
-                key: {"type": "html"} for key in _SAMPLING_GRID_TITLES
-            },
+            title_formatters={key: {"type": "html"} for key in _SAMPLING_GRID_TITLES},
         )
         self._sampling_info_table = self._pn.widgets.Tabulator(
             self._sampling_info_frame(),
@@ -63,28 +61,27 @@ class GUISamplingTabMixin:
             selectable=False,
             sortable=False,
             hidden_columns=["key"],
-            layout="fit_columns",
+            layout="fit_data_fill",
             sizing_mode="fixed",
             width=320,
             height=145,
+            widths={
+                "parameter": 150,
+            },
             editors={
                 "parameter": None,
                 "value": {"type": "number"},
             },
             editables={
                 "value": JSCode(
-                    "function(cell) { "
-                    "return cell.getData().key === 'upsample'; "
-                    "}"
+                    "function(cell) { " "return cell.getData().key === 'upsample'; " "}"
                 )
             },
             formatters={
                 "parameter": {"type": "html"},
             },
             titles=_SAMPLING_INFO_TITLES,
-            title_formatters={
-                key: {"type": "html"} for key in _SAMPLING_INFO_TITLES
-            },
+            title_formatters={key: {"type": "html"} for key in _SAMPLING_INFO_TITLES},
         )
         self._sampling_smoothing_table = self._pn.widgets.Tabulator(
             self._sampling_smoothing_frame(),
@@ -92,10 +89,13 @@ class GUISamplingTabMixin:
             selectable=False,
             sortable=False,
             hidden_columns=["key"],
-            layout="fit_columns",
+            layout="fit_data_fill",
             sizing_mode="fixed",
             width=320,
             height=110,
+            widths={
+                "parameter": 150,
+            },
             editors={
                 "parameter": None,
                 "value": {"type": "number"},
@@ -104,13 +104,11 @@ class GUISamplingTabMixin:
                 "parameter": {"type": "html"},
             },
             titles=_SAMPLING_INFO_TITLES,
-            title_formatters={
-                key: {"type": "html"} for key in _SAMPLING_INFO_TITLES
-            },
+            title_formatters={key: {"type": "html"} for key in _SAMPLING_INFO_TITLES},
         )
         self._sampling_smooth_toggle = self._pn.widgets.Checkbox(
             name="Smooth",
-            value=bool(self._smoothing_spec.smooth),
+            value=bool(self._smoothing_enabled),
             sizing_mode="stretch_width",
         )
         self._sampling_apply_button = self._pn.widgets.Button(
@@ -145,16 +143,16 @@ class GUISamplingTabMixin:
         frame = pd.DataFrame(
             [
                 {
-                    "parameter": _SAMPLING_GRID_PARAMETER_LABELS["Vbin_mV"],
-                    "start": float(self._sampling_spec.Vbin_mV[0]),
-                    "stop": float(self._sampling_spec.Vbin_mV[-1]),
-                    "count": int(self._sampling_spec.Vbin_mV.size),
+                    "parameter": _SAMPLING_GRID_PARAMETER_LABELS["Vbins_mV"],
+                    "start": float(self._sampling_spec.Vbins_mV[0]),
+                    "stop": float(self._sampling_spec.Vbins_mV[-1]),
+                    "count": int(self._sampling_spec.Vbins_mV.size),
                 },
                 {
-                    "parameter": _SAMPLING_GRID_PARAMETER_LABELS["Ibin_nA"],
-                    "start": float(self._sampling_spec.Ibin_nA[0]),
-                    "stop": float(self._sampling_spec.Ibin_nA[-1]),
-                    "count": int(self._sampling_spec.Ibin_nA.size),
+                    "parameter": _SAMPLING_GRID_PARAMETER_LABELS["Ibins_nA"],
+                    "start": float(self._sampling_spec.Ibins_nA[0]),
+                    "stop": float(self._sampling_spec.Ibins_nA[-1]),
+                    "count": int(self._sampling_spec.Ibins_nA.size),
                 },
             ]
         )
@@ -189,9 +187,7 @@ class GUISamplingTabMixin:
             [
                 {
                     "key": "median_bins",
-                    "parameter": _SAMPLING_INFO_PARAMETER_LABELS[
-                        "median_bins"
-                    ],
+                    "parameter": _SAMPLING_INFO_PARAMETER_LABELS["median_bins"],
                     "value": int(self._smoothing_spec.median_bins),
                 },
                 {
@@ -205,23 +201,23 @@ class GUISamplingTabMixin:
 
     def _build_sampling_spec_from_tables(self) -> SamplingSpec:
         grid_frame = self._sampling_grid_table.value.reset_index(drop=True)
-        info_frame = (
-            self._sampling_info_table.value.reset_index(drop=True).set_index("key")
+        info_frame = self._sampling_info_table.value.reset_index(drop=True).set_index(
+            "key"
         )
         return SamplingSpec(
             upsample=int(info_frame.at["upsample", "value"]),
-            Vbin_mV=_linspace_from_values(
+            Vbins_mV=_linspace_from_values(
                 grid_frame.at[0, "start"],
                 grid_frame.at[0, "stop"],
                 grid_frame.at[0, "count"],
-                name="Vbin_mV",
+                name="Vbins_mV",
                 min_count=2,
             ),
-            Ibin_nA=_linspace_from_values(
+            Ibins_nA=_linspace_from_values(
                 grid_frame.at[1, "start"],
                 grid_frame.at[1, "stop"],
                 grid_frame.at[1, "count"],
-                name="Ibin_nA",
+                name="Ibins_nA",
                 min_count=2,
             ),
         )
@@ -229,34 +225,50 @@ class GUISamplingTabMixin:
     def _build_smoothing_state_from_tables(
         self,
     ) -> SmoothingSpec:
-        smoothing_frame = (
-            self._sampling_smoothing_table.value.reset_index(drop=True).set_index(
-                "key"
-            )
-        )
+        smoothing_frame = self._sampling_smoothing_table.value.reset_index(
+            drop=True
+        ).set_index("key")
         return SmoothingSpec(
-            smooth=bool(self._sampling_smooth_toggle.value),
             median_bins=int(smoothing_frame.at["median_bins", "value"]),
             sigma_bins=float(smoothing_frame.at["sigma_bins", "value"]),
             mode=self._smoothing_spec.mode,
         )
 
     def _sync_sampling_widgets_from_spec(self) -> None:
-        self._sampling_smooth_toggle.value = bool(self._smoothing_spec.smooth)
+        self._sampling_smooth_toggle.value = bool(self._smoothing_enabled)
         self._sampling_grid_table.value = self._sampling_grid_frame()
         self._sampling_info_table.value = self._sampling_info_frame()
         self._sampling_smoothing_table.value = self._sampling_smoothing_frame()
 
     def _on_sampling_apply(self, _: object) -> None:
-        self._sampling_spec = self._build_sampling_spec_from_tables()
-        self._smoothing_spec = self._build_smoothing_state_from_tables()
-        self._smoothing_enabled = bool(self._smoothing_spec.smooth)
+        new_sampling_spec = self._build_sampling_spec_from_tables()
+        new_smoothing_spec = self._build_smoothing_state_from_tables()
+        new_smoothing_enabled = bool(self._sampling_smooth_toggle.value)
+        previous_sampling_spec = self._sampling_spec
+        previous_smoothing_enabled = self._smoothing_enabled
+        previous_smoothing_spec = self._smoothing_spec
+        self._sampling_spec = new_sampling_spec
+        self._smoothing_spec = new_smoothing_spec
+        self._smoothing_enabled = new_smoothing_enabled
+        if (
+            not self._sampling_specs_match(previous_sampling_spec, self._sampling_spec)
+            or previous_smoothing_enabled != self._smoothing_enabled
+            or (
+                self._smoothing_enabled
+                and not self._smoothing_specs_match(
+                    previous_smoothing_spec,
+                    self._smoothing_spec,
+                )
+            )
+        ):
+            self._clear_sampling_stage_cache()
         self._recompute_pipeline(
             clear_fit=True,
             recompute_psd=False,
             recompute_offset=False,
             recompute_sampling=True,
         )
+        self._stage_sampling_result(self.active_index, self._require_sampling())
         self._sync_control_widgets_from_specs()
         self._refresh_all_views()
         self._notify_state_changed()

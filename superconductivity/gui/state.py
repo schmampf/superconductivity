@@ -4,10 +4,10 @@ from typing import Optional, TypedDict
 
 import numpy as np
 
-from ..evaluation.ivdata import IVTrace
-from ..evaluation.offset import OffsetSpec, OffsetTrace
-from ..evaluation.psd import PSDTrace
-from ..evaluation.sampling import SamplingSpec, SamplingTrace
+from ..evaluation.traces import Trace, numeric_yvalue
+from ..evaluation.analysis import OffsetSpec, OffsetTrace
+from ..evaluation.analysis import PSDTrace
+from ..evaluation.sampling import Sample, SamplingSpec
 from ..optimizers.bcs import (
     BCSModelConfig,
     ParameterSpec,
@@ -18,20 +18,19 @@ from ..optimizers.bcs import (
 from ..utilities.types import NDArray64
 
 _DEFAULT_MODEL = "bcs_conv_jax"
+_DEFAULT_SHARED_NU_HZ = 13.7
 _EXPERIMENTAL_TITLES = {
     "nu_Hz": "<i>&nu;</i> (Hz)",
     "detrend": "Detrend",
-    "sigma_I_nA": "<i>&sigma;<sub>I</sub></i> (nA)",
-    "sigma_V_mV": "<i>&sigma;<sub>V</sub></i> (mV)",
 }
 
 
 class GUIStateDict(TypedDict):
     active_index: int
-    trace: IVTrace
+    trace: Trace
     psd: PSDTrace
     offset: OffsetTrace
-    sampling: SamplingTrace
+    sampling: Sample
     fit: Optional[SolutionDict]
 
 
@@ -48,19 +47,23 @@ def _default_offset_spec(nu_Hz: float) -> OffsetSpec:
 
 def _default_sampling_spec() -> SamplingSpec:
     return SamplingSpec(
-        upsample=10,
-        Vbin_mV=np.linspace(-0.5, 0.5, 51, dtype=np.float64),
-        Ibin_nA=np.linspace(-5.0, 5.0, 181, dtype=np.float64),
+        Vbins_mV=np.linspace(-1.6, 1.6, 1601, dtype=np.float64),
+        Ibins_nA=np.linspace(-30.0, 30.0, 2001, dtype=np.float64),
+        nu_Hz=43.7,
+        upsample=1000,
     )
 
 
-def _trace_label(index: int, trace: IVTrace) -> str:
-    yvalue = trace["yvalue"]
+def _trace_label(index: int, trace: Trace) -> str:
+    meta = trace["meta"]
+    yvalue = meta.yvalue
     if yvalue is None:
         ytext = "n/a"
+    elif numeric_yvalue(yvalue) is not None:
+        ytext = f"{float(numeric_yvalue(yvalue)):.6g}"
     else:
-        ytext = f"{float(yvalue):.6g}"
-    return f"{index}: {trace['specific_key']} | y={ytext}"
+        ytext = str(yvalue)
+    return f"{index}: {meta.specific_key} | y={ytext}"
 
 
 def _linspace_from_values(
@@ -82,13 +85,13 @@ def _linspace_from_values(
 
 
 def _fit_sampling_trace(
-    sampling: SamplingTrace,
+    sampling: Sample,
     *,
     model: str | BCSModelConfig,
     parameters: list[ParameterSpec],
     maxfev: Optional[int],
 ) -> SolutionDict:
-    V_full = np.asarray(sampling["Vbin_mV"], dtype=np.float64)
+    V_full = np.asarray(sampling["Vbins_mV"], dtype=np.float64)
     I_full = np.asarray(sampling["I_nA"], dtype=np.float64)
     finite = np.isfinite(V_full) & np.isfinite(I_full)
     if int(np.sum(finite)) < 3:
@@ -133,6 +136,7 @@ def _fit_sampling_trace(
 __all__ = [
     "GUIStateDict",
     "_DEFAULT_MODEL",
+    "_DEFAULT_SHARED_NU_HZ",
     "_EXPERIMENTAL_TITLES",
     "_default_offset_spec",
     "_default_sampling_spec",

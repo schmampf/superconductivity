@@ -7,15 +7,23 @@ from typing import Callable, Optional
 
 import numpy as np
 
-from ..evaluation.ivdata import IVTrace, IVTraces
-from ..evaluation.offset import OffsetSpec, OffsetTrace, get_offset
-from ..evaluation.psd import PSDSpec, PSDTrace, get_psd
-from ..evaluation.sampling import (
-    SamplingSpec,
-    SamplingTrace,
-    get_sampling,
+from ..evaluation.traces import FileSpec, Keys, KeysSpec, Trace, TraceSpec, Traces
+from ..evaluation.analysis import (
+    OffsetSpec,
+    OffsetTrace,
+    OffsetTraces,
+    PSDTraces,
+    offset_analysis,
 )
-from ..evaluation.smoothing import SmoothingSpec, get_smoothed_sampling
+from ..evaluation.analysis import PSDSpec, PSDTrace, psd_analysis
+from ..evaluation.sampling import (
+    Sample,
+    Samples,
+    SamplingSpec,
+    downsample_trace,
+    sample,
+)
+from ..evaluation.sampling import SmoothingSpec, smooth
 from ..optimizers.bcs import (
     BCSModelConfig,
     ParameterSpec,
@@ -33,6 +41,7 @@ from .display import GUILeftMixin
 from .state import (
     GUIStateDict,
     _DEFAULT_MODEL,
+    _DEFAULT_SHARED_NU_HZ,
     _default_offset_spec,
     _default_sampling_spec,
 )
@@ -45,50 +54,50 @@ _ACTIVE_GUI_PANEL: "GUIPanel | None" = None
 class GUIPanel(GUILeftMixin, GUITabsMixin):
     def __init__(
         self,
-        traces: IVTraces,
+        traces: Traces,
         *,
-        model: str = _DEFAULT_MODEL,
-        psd_spec: Optional[PSDSpec] = None,
-        psd_nu_Hz: float = 13.7,
-        offset_spec: Optional[OffsetSpec] = None,
-        sampling_spec: Optional[SamplingSpec] = None,
-        smoothing_spec: Optional[SmoothingSpec] = None,
-        maxfev: Optional[int] = None,
-        on_state_changed: Optional[
-            Callable[[GUIStateDict], None]
-        ] = None,
+        filespec: Optional[FileSpec] = None,
+        keysspec: Optional[KeysSpec] = None,
+        tracespec: Optional[TraceSpec] = None,
+        keys: Optional[Keys] = None,
+        psdspec: Optional[PSDSpec] = None,
+        psdanalysis: Optional[PSDTrace | PSDTraces] = None,
+        offsetspec: Optional[OffsetSpec] = None,
+        offsetanalysis: Optional[OffsetTrace | OffsetTraces] = None,
+        samples: Optional[Sample | Samples] = None,
+        samplingspec: Optional[SamplingSpec] = None,
+        smoothingspec: Optional[SmoothingSpec] = None,
+        on_state_changed: Optional[Callable[[GUIStateDict], None]] = None,
     ) -> None:
         self._pn = _import_panel()
         if len(traces) == 0:
             raise ValueError("traces must not be empty.")
 
         self.traces = traces
+        self._filespec = filespec
+        self._keysspec = keysspec
+        self._tracespec = tracespec
+        self._keys = keys
         self.active_index = 0
-        self._fit_model_config = get_model_config(model)
+        self._fit_model_config = get_model_config(_DEFAULT_MODEL)
         self.model_key = get_model_key(self._fit_model_config)
-        self.maxfev = maxfev
         self._on_state_changed = on_state_changed
-        resolved_psd_spec = (
-            PSDSpec(nu_Hz=psd_nu_Hz)
-            if psd_spec is None
-            else replace(psd_spec)
-        )
-        self._shared_nu_Hz = float(resolved_psd_spec.nu_Hz)
+        resolved_psd_spec = PSDSpec() if psdspec is None else replace(psdspec)
+        self._shared_nu_Hz = _DEFAULT_SHARED_NU_HZ
         self._experimental_detrend = bool(resolved_psd_spec.detrend)
-        self._offset_spec = (
-            _default_offset_spec(self._shared_nu_Hz)
-            if offset_spec is None
-            else replace(offset_spec)
+        resolved_offset_spec = self._resolve_initial_offset_spec(
+            offsetspec=offsetspec,
+            offsetanalysis=offsetanalysis,
         )
+        self._offset_spec = resolved_offset_spec
         self._sampling_spec = (
             _default_sampling_spec()
-            if sampling_spec is None
-            else replace(sampling_spec)
+            if samplingspec is None
+            else replace(samplingspec)
         )
+        self._smoothing_enabled = smoothingspec is not None
         self._smoothing_spec = (
-            SmoothingSpec(smooth=False)
-            if smoothing_spec is None
-            else replace(smoothing_spec)
+            SmoothingSpec() if smoothingspec is None else replace(smoothingspec)
         )
         self._sampling_offset_override_enabled = np.zeros(
             len(traces),
@@ -102,20 +111,14 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
             len(traces),
             dtype=np.float64,
         )
-        self._initialize_sampling_offset_overrides(
-            enable=bool(sampling_spec is not None),
-        )
-        self._sampling_spec = replace(
-            self._sampling_spec,
-            Voff_mV=0.0,
-            Ioff_nA=0.0,
-        )
+        self._initialize_sampling_offset_overrides()
 
         self._psd: PSDTrace | None = None
+        self._downsampled_psd: PSDTrace | None = None
         self._offset: OffsetTrace | None = None
-        self._sampling: SamplingTrace | None = None
-        self._smoothed_sampling: SamplingTrace | None = None
-        self._downsampled_trace: IVTrace | None = None
+        self._sampling: Sample | None = None
+        self._smoothed_sampling: Sample | None = None
+        self._downsampled_trace: Trace | None = None
         self._fit_solution: Optional[SolutionDict] = None
         self._downsampled_t_s = np.empty((0,), dtype=np.float64)
         self._downsampled_V_mV = np.empty((0,), dtype=np.float64)
@@ -132,7 +135,6 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
         ]
         self._parameters: list[ParameterSpec] = []
         self._sync_active_fit_model()
-        self._smoothing_enabled = bool(self._smoothing_spec.smooth)
         self._initial_curve = np.empty((0,), dtype=np.float64)
         self._fit_curve = np.empty((0,), dtype=np.float64)
         self._fit_running = False
@@ -143,6 +145,9 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
         self._last_fit_error = ""
         self._last_fit_elapsed_s = 0.0
         self._last_fit_status = "idle"
+        self._init_psd_stage_state()
+        self._init_offset_batch_state()
+        self._init_sampling_stage_state()
 
         self._offset_status = self._pn.pane.Markdown(
             sizing_mode="stretch_width",
@@ -154,6 +159,12 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
 
         self._build_control_widgets()
         self._build_left_controls()
+        if psdanalysis is not None:
+            self._load_psd_analysis_preset(psdanalysis)
+        if offsetanalysis is not None:
+            self._load_offset_analysis_preset(offsetanalysis)
+        if samples is not None:
+            self._load_samples_preset(samples)
         self._recompute_pipeline(clear_fit=True)
         self._sync_control_widgets_from_specs()
 
@@ -177,7 +188,6 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
             "fit": self._fit_solution,
         }
 
-
     def get_layout(self):
         left_tabs = self._pn.Tabs(
             (
@@ -199,12 +209,15 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
             sizing_mode="stretch_width",
         )
         right_tabs = self._pn.Tabs(
+            ("Measurement", self._measurement_tab()),
+            ("Data", self._data_tab()),
             ("PSD Analysis", self._experimental_tab()),
             ("Offset Analysis", self._offset_tab()),
             ("Sampling", self._sampling_tab()),
             ("BCS fitting", self._fit_tab()),
             sizing_mode="stretch_width",
         )
+        self._right_tabs = right_tabs
         return self._pn.Row(
             self._pn.Column(
                 self._trace_selector,
@@ -221,10 +234,237 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
             sizing_mode="stretch_width",
         )
 
-
-    def _active_trace(self) -> IVTrace:
+    def _active_trace(self) -> Trace:
         return self.traces[self.active_index]
 
+    def _copy_stage_preset_entries(
+        self,
+        preset: object,
+        *,
+        collection_type: type,
+        single_name: str,
+        copy_fn: Callable[[object], object],
+    ) -> list[object]:
+        """Copy one positional preset into GUI-owned per-trace entries."""
+        if isinstance(preset, collection_type):
+            if len(preset) != len(self.traces):
+                raise ValueError(
+                    f"{collection_type.__name__} preset length must match "
+                    "GUI trace count.",
+                )
+            return [copy_fn(result) for result in preset]
+
+        if len(self.traces) != 1:
+            raise ValueError(
+                f"A bare {single_name} preset can only be loaded when the GUI "
+                f"has exactly one trace. Use {collection_type.__name__} for "
+                "multi-trace presets.",
+            )
+        return [copy_fn(preset)]
+
+    @staticmethod
+    def _copy_psd_trace(result: object) -> PSDTrace:
+        """Return a GUI-owned copy of one PSD result."""
+        psd = result
+        return {
+            "f_Hz": np.asarray(psd["f_Hz"], dtype=np.float64).copy(),
+            "I_psd_nA2_per_Hz": np.asarray(
+                psd["I_psd_nA2_per_Hz"],
+                dtype=np.float64,
+            ).copy(),
+            "V_psd_mV2_per_Hz": np.asarray(
+                psd["V_psd_mV2_per_Hz"],
+                dtype=np.float64,
+            ).copy(),
+            "nu_Hz": float(psd["nu_Hz"]),
+            "nyquist_Hz": float(psd["nyquist_Hz"]),
+        }
+
+    @staticmethod
+    def _copy_sample_trace(result: object) -> Sample:
+        """Return a GUI-owned copy of one sampled result."""
+        sample_result = result
+        return {
+            "meta": sample_result["meta"],
+            "Vbins_mV": np.asarray(
+                sample_result["Vbins_mV"],
+                dtype=np.float64,
+            ).copy(),
+            "Ibins_nA": np.asarray(
+                sample_result["Ibins_nA"],
+                dtype=np.float64,
+            ).copy(),
+            "I_nA": np.asarray(sample_result["I_nA"], dtype=np.float64).copy(),
+            "V_mV": np.asarray(sample_result["V_mV"], dtype=np.float64).copy(),
+            "dG_G0": np.asarray(sample_result["dG_G0"], dtype=np.float64).copy(),
+            "dR_R0": np.asarray(sample_result["dR_R0"], dtype=np.float64).copy(),
+        }
+
+    def _resolve_initial_offset_spec(
+        self,
+        *,
+        offsetspec: Optional[OffsetSpec],
+        offsetanalysis: Optional[OffsetTrace | OffsetTraces],
+    ) -> OffsetSpec:
+        if offsetanalysis is not None and offsetspec is None:
+            raise ValueError(
+                "offsetspec is required when passing offsetanalysis.",
+            )
+        if offsetspec is None:
+            return _default_offset_spec(self._shared_nu_Hz)
+        return replace(offsetspec)
+
+    def _init_psd_stage_state(self) -> None:
+        self._psd_stage_spec: PSDSpec | None = None
+        self._psd_stage_results: list[PSDTrace | None] = [
+            None for _ in range(len(self.traces))
+        ]
+
+    def _init_sampling_stage_state(self) -> None:
+        self._sampling_stage_spec: SamplingSpec | None = None
+        self._sampling_stage_smoothing_enabled: bool | None = None
+        self._sampling_stage_smoothing_spec: SmoothingSpec | None = None
+        self._sampling_stage_results: list[Sample | None] = [
+            None for _ in range(len(self.traces))
+        ]
+
+    @staticmethod
+    def _psd_specs_match(left: PSDSpec, right: PSDSpec) -> bool:
+        return bool(left.detrend is right.detrend)
+
+    @staticmethod
+    def _sampling_specs_match(left: SamplingSpec, right: SamplingSpec) -> bool:
+        return bool(
+            np.array_equal(left.Vbins_mV, right.Vbins_mV)
+            and np.array_equal(left.Ibins_nA, right.Ibins_nA)
+            and float(left.nu_Hz) == float(right.nu_Hz)
+            and int(left.upsample) == int(right.upsample)
+        )
+
+    @staticmethod
+    def _smoothing_specs_match(left: SmoothingSpec, right: SmoothingSpec) -> bool:
+        return bool(
+            int(left.median_bins) == int(right.median_bins)
+            and float(left.sigma_bins) == float(right.sigma_bins)
+            and str(left.mode) == str(right.mode)
+        )
+
+    def _current_psd_stage_spec(self) -> PSDSpec:
+        return PSDSpec(detrend=self._experimental_detrend)
+
+    def _current_sampling_stage_signature(
+        self,
+    ) -> tuple[SamplingSpec, bool, SmoothingSpec | None]:
+        return (
+            replace(self._sampling_spec),
+            bool(self._smoothing_enabled),
+            (replace(self._smoothing_spec) if self._smoothing_enabled else None),
+        )
+
+    def _clear_psd_stage_cache(self) -> None:
+        self._psd_stage_spec = None
+        self._psd_stage_results = [None for _ in range(len(self.traces))]
+
+    def _clear_sampling_stage_cache(
+        self,
+        *,
+        indices: list[int] | None = None,
+    ) -> None:
+        if indices is None:
+            self._sampling_stage_spec = None
+            self._sampling_stage_smoothing_enabled = None
+            self._sampling_stage_smoothing_spec = None
+            self._sampling_stage_results = [None for _ in range(len(self.traces))]
+            return
+
+        for index in indices:
+            if 0 <= int(index) < len(self._sampling_stage_results):
+                self._sampling_stage_results[int(index)] = None
+
+    def _get_cached_psd_stage_result(
+        self,
+        index: int,
+    ) -> PSDTrace | None:
+        if self._psd_stage_spec is None:
+            return None
+        if not self._psd_specs_match(
+            self._psd_stage_spec,
+            self._current_psd_stage_spec(),
+        ):
+            return None
+        if index < 0 or index >= len(self._psd_stage_results):
+            return None
+        return self._psd_stage_results[index]
+
+    def _get_cached_sampling_stage_result(
+        self,
+        index: int,
+    ) -> Sample | None:
+        if self._sampling_stage_spec is None:
+            return None
+        current_spec, current_enabled, current_smoothing = (
+            self._current_sampling_stage_signature()
+        )
+        if not self._sampling_specs_match(self._sampling_stage_spec, current_spec):
+            return None
+        if self._sampling_stage_smoothing_enabled != current_enabled:
+            return None
+        if current_enabled:
+            stored = self._sampling_stage_smoothing_spec
+            if stored is None or current_smoothing is None:
+                return None
+            if not self._smoothing_specs_match(stored, current_smoothing):
+                return None
+        if index < 0 or index >= len(self._sampling_stage_results):
+            return None
+        return self._sampling_stage_results[index]
+
+    def _stage_psd_result(self, index: int, result: PSDTrace) -> None:
+        self._psd_stage_spec = replace(self._current_psd_stage_spec())
+        self._psd_stage_results[index] = self._copy_psd_trace(result)
+
+    def _stage_sampling_result(self, index: int, result: Sample) -> None:
+        sampling_spec, smoothing_enabled, smoothing_spec = (
+            self._current_sampling_stage_signature()
+        )
+        self._sampling_stage_spec = sampling_spec
+        self._sampling_stage_smoothing_enabled = smoothing_enabled
+        self._sampling_stage_smoothing_spec = smoothing_spec
+        self._sampling_stage_results[index] = self._copy_sample_trace(result)
+
+    def _load_psd_analysis_preset(
+        self,
+        psd_analysis: PSDTrace | PSDTraces,
+    ) -> None:
+        copied = self._copy_stage_preset_entries(
+            psd_analysis,
+            collection_type=PSDTraces,
+            single_name="PSDTrace",
+            copy_fn=self._copy_psd_trace,
+        )
+        self._psd_stage_spec = replace(self._current_psd_stage_spec())
+        self._psd_stage_results = [None for _ in range(len(self.traces))]
+        for index, result in enumerate(copied):
+            self._psd_stage_results[index] = result
+
+    def _load_samples_preset(
+        self,
+        samples: Sample | Samples,
+    ) -> None:
+        copied = self._copy_stage_preset_entries(
+            samples,
+            collection_type=Samples,
+            single_name="Sample",
+            copy_fn=self._copy_sample_trace,
+        )
+        (
+            self._sampling_stage_spec,
+            self._sampling_stage_smoothing_enabled,
+            self._sampling_stage_smoothing_spec,
+        ) = self._current_sampling_stage_signature()
+        self._sampling_stage_results = [None for _ in range(len(self.traces))]
+        for index, result in enumerate(copied):
+            self._sampling_stage_results[index] = result
 
     def _sync_active_fit_model(self) -> None:
         self.model_key = get_model_key(self._fit_model_config)
@@ -235,46 +475,18 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
             parameters.extend(self._noise_parameters)
         self._parameters = parameters
 
-
-    def _sampling_offset_values(
-        self,
-        values: float | NDArray64,
-        *,
-        name: str,
-    ) -> NDArray64:
-        array = np.asarray(values, dtype=np.float64)
-        if array.ndim == 0 or array.size == 1:
-            return np.full(len(self.traces), float(array.reshape(-1)[0]))
-        if array.ndim != 1 or array.size != len(self.traces):
-            raise ValueError(
-                f"{name} must be scalar or have length {len(self.traces)}.",
-            )
-        return np.asarray(array, dtype=np.float64)
-
-
-    def _initialize_sampling_offset_overrides(self, *, enable: bool) -> None:
-        self._sampling_override_Voff_mV = self._sampling_offset_values(
-            self._sampling_spec.Voff_mV,
-            name="Voff_mV",
-        )
-        self._sampling_override_Ioff_nA = self._sampling_offset_values(
-            self._sampling_spec.Ioff_nA,
-            name="Ioff_nA",
-        )
-        if enable:
-            self._sampling_offset_override_enabled[:] = True
-
+    def _initialize_sampling_offset_overrides(self) -> None:
+        self._sampling_override_Voff_mV = np.zeros(len(self.traces), dtype=np.float64)
+        self._sampling_override_Ioff_nA = np.zeros(len(self.traces), dtype=np.float64)
 
     def _active_sampling_override_enabled(self) -> bool:
         return bool(self._sampling_offset_override_enabled[self.active_index])
-
 
     def _active_sampling_override_values(self) -> tuple[float, float]:
         return (
             float(self._sampling_override_Voff_mV[self.active_index]),
             float(self._sampling_override_Ioff_nA[self.active_index]),
         )
-
 
     def _active_sampling_offset_values(self) -> tuple[float, float]:
         if self._active_sampling_override_enabled():
@@ -285,7 +497,6 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
                 float(self._offset["Ioff_nA"]),
             )
         return (0.0, 0.0)
-
 
     def _set_active_sampling_override(
         self,
@@ -298,15 +509,18 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
         self._sampling_override_Voff_mV[self.active_index] = float(Voff_mV)
         self._sampling_override_Ioff_nA[self.active_index] = float(Ioff_nA)
 
-
-    def _active_sampling_spec(self) -> SamplingSpec:
-        Voff_mV, Ioff_nA = self._active_sampling_offset_values()
-        return replace(
-            self._sampling_spec,
-            Voff_mV=Voff_mV,
-            Ioff_nA=Ioff_nA,
-        )
-
+    def _active_sampling_offsetanalysis(self) -> OffsetTrace | None:
+        if self._active_sampling_override_enabled():
+            Voff_mV, Ioff_nA = self._active_sampling_override_values()
+            return {
+                "dGerr_G0": np.asarray([], dtype=np.float64),
+                "dRerr_R0": np.asarray([], dtype=np.float64),
+                "Voff_mV": float(Voff_mV),
+                "Ioff_nA": float(Ioff_nA),
+            }
+        if self._offset is None:
+            return None
+        return self._offset
 
     def _current_guess(self) -> NDArray64:
         return np.asarray(
@@ -314,35 +528,34 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
             dtype=np.float64,
         )
 
-
     def _require_psd(self) -> PSDTrace:
         if self._psd is None:
             raise RuntimeError("PSD state is not available.")
         return self._psd
 
+    def _require_downsampled_psd(self) -> PSDTrace:
+        if self._downsampled_psd is None:
+            raise RuntimeError("Downsampled PSD state is not available.")
+        return self._downsampled_psd
 
     def _require_offset(self) -> OffsetTrace:
         if self._offset is None:
             raise RuntimeError("Offset state is not available.")
         return self._offset
 
-
-    def _require_raw_sampling(self) -> SamplingTrace:
+    def _require_raw_sampling(self) -> Sample:
         if self._sampling is None:
             raise RuntimeError("Sampling state is not available.")
         return self._sampling
 
-
-    def _require_sampling(self) -> SamplingTrace:
-        if self._smoothing_spec.smooth and self._smoothed_sampling is not None:
+    def _require_sampling(self) -> Sample:
+        if self._smoothing_enabled and self._smoothed_sampling is not None:
             return self._smoothed_sampling
         return self._require_raw_sampling()
-
 
     def _notify_state_changed(self) -> None:
         if self._on_state_changed is not None:
             self._on_state_changed(self.state)
-
 
     def _set_shared_nu_Hz(self, value: float) -> bool:
         value = float(value)
@@ -352,15 +565,20 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
         self._shared_nu_Hz = value
         return changed
 
-
     def _compute_psd_stage(self) -> None:
         trace = self._active_trace()
-        downsampled_trace, self._psd = get_psd(
-            trace,
-            spec=PSDSpec(
-                nu_Hz=self._shared_nu_Hz,
-                detrend=self._experimental_detrend,
-            ),
+        cached_raw_psd = self._get_cached_psd_stage_result(self.active_index)
+        if cached_raw_psd is not None:
+            self._psd = self._copy_psd_trace(cached_raw_psd)
+        else:
+            self._psd = psd_analysis(
+                trace,
+                spec=self._current_psd_stage_spec(),
+            )
+        downsampled_trace = downsample_trace(trace, nu_Hz=self._shared_nu_Hz)
+        self._downsampled_psd = psd_analysis(
+            downsampled_trace,
+            spec=PSDSpec(detrend=self._experimental_detrend),
         )
         self._downsampled_trace = downsampled_trace
         self._downsampled_t_s = np.asarray(
@@ -376,35 +594,46 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
             dtype=np.float64,
         )
 
-
     def _compute_offset_stage(self) -> None:
-        self._offset = get_offset(self._active_trace(), spec=self._offset_spec)
+        cached_offset = self._get_cached_offset_batch_result(self.active_index)
+        if cached_offset is not None:
+            self._offset = cached_offset
+            return
+        self._offset = offset_analysis(self._active_trace(), spec=self._offset_spec)
 
-
-    def _require_downsampled_trace(self) -> IVTrace:
+    def _require_downsampled_trace(self) -> Trace:
         if self._downsampled_trace is None:
             raise RuntimeError("Downsampled trace is not available.")
         return self._downsampled_trace
 
-
     def _compute_sampling_stage(self) -> None:
-        self._sampling = get_sampling(
-            self._require_downsampled_trace(),
-            spec=self._active_sampling_spec(),
+        cached_sample = self._get_cached_sampling_stage_result(self.active_index)
+        if cached_sample is not None:
+            self._sampling = self._copy_sample_trace(cached_sample)
+            self._smoothed_sampling = (
+                self._copy_sample_trace(cached_sample)
+                if self._smoothing_enabled
+                else None
+            )
+            return
+
+        self._sampling = sample(
+            self._active_trace(),
+            samplingspec=self._sampling_spec,
+            offsetanalysis=self._active_sampling_offsetanalysis(),
+            show_progress=False,
         )
-        self._smoothing_enabled = bool(self._smoothing_spec.smooth)
-        if self._smoothing_spec.smooth:
-            self._smoothed_sampling = get_smoothed_sampling(
+        if self._smoothing_enabled:
+            self._smoothed_sampling = smooth(
                 self._require_raw_sampling(),
-                spec=self._smoothing_spec,
+                smoothingspec=self._smoothing_spec,
             )
         else:
             self._smoothed_sampling = None
 
-
     def _recompute_fit_curves(self) -> None:
         sampling = self._require_sampling()
-        V_mV = np.asarray(sampling["Vbin_mV"], dtype=np.float64)
+        V_mV = np.asarray(sampling["Vbins_mV"], dtype=np.float64)
         function = get_model_spec(self._fit_model_config).function
         self._initial_curve = np.asarray(
             function(V_mV, *self._current_guess()),
@@ -418,15 +647,12 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
                 dtype=np.float64,
             )
 
-
     def _clear_fit_solution(self) -> None:
         self._fit_solution = None
         self._reset_fit_status()
 
-
     def _set_fit_solution(self, solution: Optional[SolutionDict]) -> None:
         self._fit_solution = solution
-
 
     def _recompute_pipeline(
         self,
@@ -446,14 +672,14 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
             self._clear_fit_solution()
         self._recompute_fit_curves()
 
-
     def _refresh_all_views(self) -> None:
         self._refresh_left_plots()
+        self._refresh_data_views()
         self._refresh_experimental_views()
         self._refresh_offset_views()
+        self._refresh_offset_batch_views()
         self._refresh_sampling_views()
         self._refresh_fit_views()
-
 
     def _on_trace_changed(self, event: object) -> None:
         new_value = int(getattr(event, "new"))
@@ -471,26 +697,34 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
 
 
 def gui_app(
-    traces: IVTraces,
+    traces: Traces,
     *,
-    model: str = _DEFAULT_MODEL,
-    psd_spec: Optional[PSDSpec] = None,
-    psd_nu_Hz: float = 13.7,
-    offset_spec: Optional[OffsetSpec] = None,
-    sampling_spec: Optional[SamplingSpec] = None,
-    smoothing_spec: Optional[SmoothingSpec] = None,
-    maxfev: Optional[int] = None,
+    filespec: Optional[FileSpec] = None,
+    keysspec: Optional[KeysSpec] = None,
+    tracespec: Optional[TraceSpec] = None,
+    keys: Optional[Keys] = None,
+    psdspec: Optional[PSDSpec] = None,
+    psdanalysis: Optional[PSDTrace | PSDTraces] = None,
+    offsetspec: Optional[OffsetSpec] = None,
+    offsetanalysis: Optional[OffsetTrace | OffsetTraces] = None,
+    samples: Optional[Sample | Samples] = None,
+    samplingspec: Optional[SamplingSpec] = None,
+    smoothingspec: Optional[SmoothingSpec] = None,
     on_state_changed: Optional[Callable[[GUIStateDict], None]] = None,
 ):
     panel = GUIPanel(
         traces,
-        model=model,
-        psd_spec=psd_spec,
-        psd_nu_Hz=psd_nu_Hz,
-        offset_spec=offset_spec,
-        sampling_spec=sampling_spec,
-        smoothing_spec=smoothing_spec,
-        maxfev=maxfev,
+        filespec=filespec,
+        keysspec=keysspec,
+        tracespec=tracespec,
+        keys=keys,
+        psdspec=psdspec,
+        psdanalysis=psdanalysis,
+        offsetspec=offsetspec,
+        offsetanalysis=offsetanalysis,
+        samples=samples,
+        samplingspec=samplingspec,
+        smoothingspec=smoothingspec,
         on_state_changed=on_state_changed,
     )
     layout = panel.layout
@@ -499,15 +733,19 @@ def gui_app(
 
 
 def serve_gui(
-    traces: IVTraces,
+    traces: Traces,
     *,
-    model: str = _DEFAULT_MODEL,
-    psd_spec: Optional[PSDSpec] = None,
-    psd_nu_Hz: float = 13.7,
-    offset_spec: Optional[OffsetSpec] = None,
-    sampling_spec: Optional[SamplingSpec] = None,
-    smoothing_spec: Optional[SmoothingSpec] = None,
-    maxfev: Optional[int] = None,
+    filespec: Optional[FileSpec] = None,
+    keysspec: Optional[KeysSpec] = None,
+    tracespec: Optional[TraceSpec] = None,
+    keys: Optional[Keys] = None,
+    psdspec: Optional[PSDSpec] = None,
+    psdanalysis: Optional[PSDTrace | PSDTraces] = None,
+    offsetspec: Optional[OffsetSpec] = None,
+    offsetanalysis: Optional[OffsetTrace | OffsetTraces] = None,
+    samples: Optional[Sample | Samples] = None,
+    samplingspec: Optional[SamplingSpec] = None,
+    smoothingspec: Optional[SmoothingSpec] = None,
     port: int = 0,
     open_browser: bool = True,
     threaded: bool = True,
@@ -529,13 +767,17 @@ def serve_gui(
 
     app = gui_app(
         traces,
-        model=model,
-        psd_spec=psd_spec,
-        psd_nu_Hz=psd_nu_Hz,
-        offset_spec=offset_spec,
-        sampling_spec=sampling_spec,
-        smoothing_spec=smoothing_spec,
-        maxfev=maxfev,
+        filespec=filespec,
+        keysspec=keysspec,
+        tracespec=tracespec,
+        keys=keys,
+        psdspec=psdspec,
+        psdanalysis=psdanalysis,
+        offsetspec=offsetspec,
+        offsetanalysis=offsetanalysis,
+        samples=samples,
+        samplingspec=samplingspec,
+        smoothingspec=smoothingspec,
     )
     _ACTIVE_GUI_PANEL = getattr(app, "_gui_panel")
     _ACTIVE_GUI_SERVER = pn.serve(
@@ -550,15 +792,19 @@ def serve_gui(
 
 
 def run_gui(
-    traces: IVTraces,
+    traces: Traces,
     *,
-    model: str = _DEFAULT_MODEL,
-    psd_spec: Optional[PSDSpec] = None,
-    psd_nu_Hz: float = 13.7,
-    offset_spec: Optional[OffsetSpec] = None,
-    sampling_spec: Optional[SamplingSpec] = None,
-    smoothing_spec: Optional[SmoothingSpec] = None,
-    maxfev: Optional[int] = None,
+    filespec: Optional[FileSpec] = None,
+    keysspec: Optional[KeysSpec] = None,
+    tracespec: Optional[TraceSpec] = None,
+    keys: Optional[Keys] = None,
+    psdspec: Optional[PSDSpec] = None,
+    psdanalysis: Optional[PSDTrace | PSDTraces] = None,
+    offsetspec: Optional[OffsetSpec] = None,
+    offsetanalysis: Optional[OffsetTrace | OffsetTraces] = None,
+    samples: Optional[Sample | Samples] = None,
+    samplingspec: Optional[SamplingSpec] = None,
+    smoothingspec: Optional[SmoothingSpec] = None,
     port: int = 0,
     open_browser: bool = True,
     threaded: bool = True,
@@ -572,13 +818,17 @@ def run_gui(
 
     server = serve_gui(
         traces,
-        model=model,
-        psd_spec=psd_spec,
-        psd_nu_Hz=psd_nu_Hz,
-        offset_spec=offset_spec,
-        sampling_spec=sampling_spec,
-        smoothing_spec=smoothing_spec,
-        maxfev=maxfev,
+        filespec=filespec,
+        keysspec=keysspec,
+        tracespec=tracespec,
+        keys=keys,
+        psdspec=psdspec,
+        psdanalysis=psdanalysis,
+        offsetspec=offsetspec,
+        offsetanalysis=offsetanalysis,
+        samples=samples,
+        samplingspec=samplingspec,
+        smoothingspec=smoothingspec,
         port=port,
         open_browser=open_browser,
         threaded=threaded,
@@ -599,15 +849,19 @@ def run_gui(
 
 
 def gui(
-    traces: IVTraces,
+    traces: Traces,
     *,
-    model: str = _DEFAULT_MODEL,
-    psd_spec: Optional[PSDSpec] = None,
-    psd_nu_Hz: float = 13.7,
-    offset_spec: Optional[OffsetSpec] = None,
-    sampling_spec: Optional[SamplingSpec] = None,
-    smoothing_spec: Optional[SmoothingSpec] = None,
-    maxfev: Optional[int] = None,
+    filespec: Optional[FileSpec] = None,
+    keysspec: Optional[KeysSpec] = None,
+    tracespec: Optional[TraceSpec] = None,
+    keys: Optional[Keys] = None,
+    psdspec: Optional[PSDSpec] = None,
+    psdanalysis: Optional[PSDTrace | PSDTraces] = None,
+    offsetspec: Optional[OffsetSpec] = None,
+    offsetanalysis: Optional[OffsetTrace | OffsetTraces] = None,
+    samples: Optional[Sample | Samples] = None,
+    samplingspec: Optional[SamplingSpec] = None,
+    smoothingspec: Optional[SmoothingSpec] = None,
     port: int = 0,
     open_browser: bool = True,
     threaded: bool = True,
@@ -620,13 +874,17 @@ def gui(
     if wait:
         return run_gui(
             traces,
-            model=model,
-            psd_spec=psd_spec,
-            psd_nu_Hz=psd_nu_Hz,
-            offset_spec=offset_spec,
-            sampling_spec=sampling_spec,
-            smoothing_spec=smoothing_spec,
-            maxfev=maxfev,
+            filespec=filespec,
+            keysspec=keysspec,
+            tracespec=tracespec,
+            keys=keys,
+            psdspec=psdspec,
+            psdanalysis=psdanalysis,
+            offsetspec=offsetspec,
+            offsetanalysis=offsetanalysis,
+            samples=samples,
+            samplingspec=samplingspec,
+            smoothingspec=smoothingspec,
             port=port,
             open_browser=open_browser,
             threaded=threaded,
@@ -639,13 +897,17 @@ def gui(
 
     serve_gui(
         traces,
-        model=model,
-        psd_spec=psd_spec,
-        psd_nu_Hz=psd_nu_Hz,
-        offset_spec=offset_spec,
-        sampling_spec=sampling_spec,
-        smoothing_spec=smoothing_spec,
-        maxfev=maxfev,
+        filespec=filespec,
+        keysspec=keysspec,
+        tracespec=tracespec,
+        keys=keys,
+        psdspec=psdspec,
+        psdanalysis=psdanalysis,
+        offsetspec=offsetspec,
+        offsetanalysis=offsetanalysis,
+        samples=samples,
+        samplingspec=samplingspec,
+        smoothingspec=smoothingspec,
         port=port,
         open_browser=open_browser,
         threaded=threaded,

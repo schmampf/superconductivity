@@ -262,3 +262,30 @@ def test_get_traces_rejects_mismatched_keys_and_yvalues() -> None:
                 spec=KeysSpec(strip0="=", strip1="dBm"),
             ),
         )
+
+
+def test_get_traces_preserves_non_numeric_yvalue_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Trace metadata should keep raw string y-values when parsing fails."""
+    _patch_fake_h5(monkeypatch)
+
+    traces = traces_module.get_traces(
+        filespec=FileSpec(h5path="dummy.h5", measurement="test"),
+        keys=Keys.from_fields(
+            specific_keys=["nu=1dBm", "nu=5dBm"],
+            indices=np.asarray([0, 1], dtype=np.int64),
+            yvalues=np.asarray(["alpha", "beta"], dtype=object),
+            spec=KeysSpec(strip0="=", strip1="dBm"),
+        ),
+        tracespec=traces_module.TraceSpec(
+            amp_voltage=1.0,
+            amp_current=1.0,
+            r_ref_ohm=1.0,
+            trigger_values=1,
+        ),
+    )
+
+    assert traces[0]["meta"].yvalue == "alpha"
+    assert traces[1]["meta"].yvalue == "beta"
+    assert np.isnan(traces.yvalues).all()

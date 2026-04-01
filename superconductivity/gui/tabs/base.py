@@ -19,11 +19,15 @@ class GUITabsBaseMixin:
         )
         self._trace_selector.param.watch(self._on_trace_changed, "value")
 
+        self._build_trace_widgets()
+        self._build_data_widgets()
         self._build_psd_widgets()
         self._build_offset_widgets()
         self._build_sampling_widgets()
 
     def _sync_control_widgets_from_specs(self) -> None:
+        self._sync_trace_widgets_from_state()
+        self._sync_data_widgets_from_state()
         self._sync_psd_widgets_from_state()
         self._sync_offset_widgets_from_spec()
         self._sync_sampling_widgets_from_spec()

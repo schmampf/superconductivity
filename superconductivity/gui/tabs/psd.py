@@ -6,6 +6,7 @@ from panel.io.model import JSCode
 
 from ..style import gui_legend_html
 from ..state import _EXPERIMENTAL_TITLES
+
 _PSD_INFO_TITLES = {
     "parameter": "Parameter",
     "value": "Value",
@@ -15,15 +16,18 @@ _PSD_INFO_TITLES = {
 class GUIPSDTabMixin:
     def _build_psd_widgets(self) -> None:
         self._experimental_table = self._pn.widgets.Tabulator(
-            self._experimental_frame(),
+            self._experimental_settings_frame(),
             show_index=False,
             selectable=False,
             sortable=False,
             hidden_columns=["key"],
-            layout="fit_columns",
+            layout="fit_data_fill",
             sizing_mode="fixed",
-            width=320,
-            height=145,
+            width=220,
+            height=95,
+            widths={
+                "parameter": 130,
+            },
             editors={
                 "parameter": None,
                 "value": "adaptable",
@@ -49,9 +53,7 @@ class GUIPSDTabMixin:
                 ),
             },
             titles=_PSD_INFO_TITLES,
-            title_formatters={
-                key: {"type": "html"} for key in _PSD_INFO_TITLES
-            },
+            title_formatters={key: {"type": "html"} for key in _PSD_INFO_TITLES},
         )
         self._experimental_apply_button = self._pn.widgets.Button(
             name="PSD Analysis",
@@ -59,7 +61,7 @@ class GUIPSDTabMixin:
         )
         self._experimental_apply_button.on_click(self._on_experimental_apply)
         self._experimental_legend = self._pn.pane.HTML(
-            gui_legend_html(("raw", "downsampled", "cutoff")),
+            gui_legend_html(("raw", "downsampled")),
             sizing_mode="fixed",
             width=320,
         )
@@ -79,26 +81,13 @@ class GUIPSDTabMixin:
         )
         return self._pn.Column(
             self._experimental_apply_button,
-            self._pn.Row(
-                self._pn.Column(
-                    self._experimental_table,
-                    self._experimental_legend,
-                    width=320,
-                    sizing_mode="fixed",
-                ),
-                self._pn.Spacer(width=16),
-                self._experimental_plot_tabs,
-                sizing_mode="stretch_width",
-            ),
+            self._experimental_table,
+            self._experimental_legend,
+            self._experimental_plot_tabs,
             sizing_mode="stretch_width",
         )
 
-    def _experimental_frame(self) -> pd.DataFrame:
-        sigma_I_nA = np.nan
-        sigma_V_mV = np.nan
-        if self._psd is not None:
-            sigma_I_nA = float(self._psd["raw_sigma_I_nA"])
-            sigma_V_mV = float(self._psd["raw_sigma_V_mV"])
+    def _experimental_settings_frame(self) -> pd.DataFrame:
         return pd.DataFrame(
             [
                 {
@@ -111,22 +100,12 @@ class GUIPSDTabMixin:
                     "parameter": _EXPERIMENTAL_TITLES["detrend"],
                     "value": bool(self._experimental_detrend),
                 },
-                {
-                    "key": "sigma_V_mV",
-                    "parameter": _EXPERIMENTAL_TITLES["sigma_V_mV"],
-                    "value": sigma_V_mV,
-                },
-                {
-                    "key": "sigma_I_nA",
-                    "parameter": _EXPERIMENTAL_TITLES["sigma_I_nA"],
-                    "value": sigma_I_nA,
-                },
             ],
             dtype=object,
         )
 
     def _sync_psd_widgets_from_state(self) -> None:
-        self._experimental_table.value = self._experimental_frame()
+        self._experimental_table.value = self._experimental_settings_frame()
 
     def _experimental_settings_from_table(self) -> tuple[float, bool]:
         frame = self._experimental_table.value.reset_index(drop=True).set_index("key")
@@ -143,16 +122,20 @@ class GUIPSDTabMixin:
         try:
             nu_Hz, detrend = self._experimental_settings_from_table()
         except ValueError:
-            self._experimental_table.value = self._experimental_frame()
+            self._sync_psd_widgets_from_state()
             return
         self._set_shared_nu_Hz(nu_Hz)
+        previous_raw_spec = self._current_psd_stage_spec()
         self._experimental_detrend = detrend
+        if not self._psd_specs_match(previous_raw_spec, self._current_psd_stage_spec()):
+            self._clear_psd_stage_cache()
         self._recompute_pipeline(
             clear_fit=True,
             recompute_psd=True,
             recompute_offset=False,
             recompute_sampling=True,
         )
+        self._stage_psd_result(self.active_index, self._require_psd())
         self._sync_control_widgets_from_specs()
         self._refresh_all_views()
         self._notify_state_changed()
