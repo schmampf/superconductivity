@@ -25,6 +25,7 @@ _ALL_TIMEFRAME_LABEL = "all"
 _CLEAR_Y_ID = "__clear__"
 _CLEAR_Y_LABEL = "clear"
 _DATA_TABLE_HEIGHT = 240
+_DATA_AXIS_STEP = 0.07
 
 
 def _series_label(source: str, key: str) -> str:
@@ -531,7 +532,7 @@ class GUIDataTabMixin:
         """Build the current raw-data figure."""
         figure = go.Figure()
         figure.update_layout(
-            margin={"l": 70, "r": 20, "t": 20, "b": 110},
+            margin={"l": 20, "r": 20, "t": 20, "b": 110},
             showlegend=True,
             xaxis_title="<i>t</i> (s)",
             legend={
@@ -708,16 +709,14 @@ class GUIDataTabMixin:
             return figure
 
         extra_axes = max(0, len(plotted_traces) - 1)
-        step = 0.07
-        xaxis_domain = [0.0, max(0.55, 1.0 - step * extra_axes)]
         figure.update_layout(
             margin={
-                "l": 70,
-                "r": 20 + 45 * extra_axes,
+                "l": 20,
+                "r": 20,
                 "t": 20,
                 "b": 110,
             },
-            xaxis={"title": xaxis_title, "domain": xaxis_domain},
+            xaxis={"title": xaxis_title, "domain": [0.0, 1.0]},
         )
 
         for axis_index, (trace, axis_title, legend_label) in enumerate(
@@ -732,9 +731,11 @@ class GUIDataTabMixin:
 
             axis_name = self._data_axis_name(axis_index)
             axis_layout: dict[str, Any] = {
-                "title": {"text": axis_title, "font": {"color": color}},
                 "tickfont": {"color": color},
+                "tickformat": ".2g",
+                "ticks": "",
                 "linecolor": color,
+                "mirror": False,
                 "zeroline": False,
                 "side": "right",
             }
@@ -745,7 +746,10 @@ class GUIDataTabMixin:
                     {
                         "overlaying": "y",
                         "anchor": "free",
-                        "position": max(0.55, 1.0 - step * (axis_index - 2)),
+                        "position": max(
+                            0.55,
+                            1.0 - _DATA_AXIS_STEP * (axis_index - 1),
+                        ),
                         "showgrid": False,
                     },
                 )

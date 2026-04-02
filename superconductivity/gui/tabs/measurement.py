@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import ast
-from collections import OrderedDict
 import math
-from pathlib import Path
 import shutil
 import subprocess
 import sys
+from collections import OrderedDict
+from dataclasses import asdict
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -61,6 +62,20 @@ _TRACE_PARAMETER_LABELS = {
     "subtract_offset": "subtract_offset",
     "time_relative": "time_relative",
 }
+_MEASUREMENT_PAIR_TABLE_WIDTH = 360
+_MEASUREMENT_PAIR_GAP_WIDTH = 10
+_MEASUREMENT_ROW_WIDTH = (
+    2 * _MEASUREMENT_PAIR_TABLE_WIDTH + _MEASUREMENT_PAIR_GAP_WIDTH
+)
+_MEASUREMENT_SECTION_GAP_HEIGHT = 24
+_MEASUREMENT_ERROR_GAP_HEIGHT = 12
+_FILESPEC_BUTTON_STACK_WIDTH = 110
+_FILESPEC_ROW_GAP_WIDTH = _MEASUREMENT_PAIR_GAP_WIDTH
+_FILESPEC_TABLE_WIDTH = (
+    _MEASUREMENT_ROW_WIDTH
+    - _FILESPEC_BUTTON_STACK_WIDTH
+    - _FILESPEC_ROW_GAP_WIDTH
+)
 
 
 def _trace_table_value(value: Any) -> object:
@@ -183,6 +198,10 @@ class GUIMeasurementTabMixin:
 
     def _build_trace_widgets(self) -> None:
         self._traces_file_heading = self._pn.pane.HTML(
+            _table_heading_html("Choose File:"),
+            sizing_mode="stretch_width",
+        )
+        self._traces_measurement_heading = self._pn.pane.HTML(
             _table_heading_html("Choose Measurement:"),
             sizing_mode="stretch_width",
         )
@@ -190,7 +209,16 @@ class GUIMeasurementTabMixin:
             _table_heading_html("Handle Value Extraction:"),
             sizing_mode="stretch_width",
         )
+        self._traces_spec_heading = self._pn.pane.HTML(
+            _table_heading_html("Handle Trace Extraction:"),
+            sizing_mode="stretch_width",
+        )
         self._keysspec_error = self._pn.pane.HTML(
+            "",
+            visible=False,
+            sizing_mode="stretch_width",
+        )
+        self._tracespec_error = self._pn.pane.HTML(
             "",
             visible=False,
             sizing_mode="stretch_width",
@@ -198,13 +226,13 @@ class GUIMeasurementTabMixin:
         self._filespec_browse_button = self._pn.widgets.Button(
             name="Browse...",
             button_type="default",
-            width=110,
+            width=_FILESPEC_BUTTON_STACK_WIDTH,
         )
         self._filespec_browse_button.on_click(self._on_filespec_browse)
         self._filespec_update_button = self._pn.widgets.Button(
             name="Update All",
             button_type="primary",
-            width=110,
+            width=_FILESPEC_BUTTON_STACK_WIDTH,
         )
         self._filespec_update_button.on_click(self._on_update_file)
         self._filespec_button_stack = self._pn.Column(
@@ -213,8 +241,9 @@ class GUIMeasurementTabMixin:
             self._pn.VSpacer(),
             self._filespec_browse_button,
             self._pn.VSpacer(),
-            width=110,
+            width=_FILESPEC_BUTTON_STACK_WIDTH,
             height=112,
+            margin=0,
         )
         self._measurement_table = self._pn.widgets.Tabulator(
             self._measurement_frame(),
@@ -222,8 +251,8 @@ class GUIMeasurementTabMixin:
             selectable=1,
             sortable=False,
             layout="fit_columns",
-            sizing_mode="stretch_width",
-            width=320,
+            sizing_mode="fixed",
+            width=_MEASUREMENT_PAIR_TABLE_WIDTH,
             height=190,
             editors={
                 "measurement": None,
@@ -244,8 +273,8 @@ class GUIMeasurementTabMixin:
             selectable=False,
             sortable=False,
             layout="fit_columns",
-            sizing_mode="stretch_width",
-            width=320,
+            sizing_mode="fixed",
+            width=_MEASUREMENT_PAIR_TABLE_WIDTH,
             height=190,
             editors={
                 "specific_key": None,
@@ -261,7 +290,8 @@ class GUIMeasurementTabMixin:
             selectable=False,
             sortable=False,
             layout="fit_columns",
-            sizing_mode="stretch_width",
+            sizing_mode="fixed",
+            width=_MEASUREMENT_PAIR_TABLE_WIDTH,
             height=278,
             widths={
                 "trace_index": 70,
@@ -283,12 +313,12 @@ class GUIMeasurementTabMixin:
             selectable=False,
             sortable=False,
             hidden_columns=["key"],
-            layout="fit_data_fill",
-            sizing_mode="stretch_width",
+            layout="fit_columns",
+            sizing_mode="fixed",
+            width=_FILESPEC_TABLE_WIDTH,
             height=112,
             widths={
                 "parameter": 140,
-                "value": 900,
             },
             titles=_TRACES_TABLE_TITLES,
             title_formatters={key: {"type": "html"} for key in _TRACES_TABLE_TITLES},
@@ -299,8 +329,9 @@ class GUIMeasurementTabMixin:
             selectable=False,
             sortable=False,
             hidden_columns=["key"],
-            layout="fit_data_fill",
-            sizing_mode="stretch_width",
+            layout="fit_columns",
+            sizing_mode="fixed",
+            width=_MEASUREMENT_PAIR_TABLE_WIDTH,
             height=278,
             widths={
                 "parameter": 140,
@@ -320,8 +351,9 @@ class GUIMeasurementTabMixin:
             selectable=False,
             sortable=False,
             hidden_columns=["key"],
-            layout="fit_data_fill",
-            sizing_mode="stretch_width",
+            layout="fit_columns",
+            sizing_mode="fixed",
+            width=_MEASUREMENT_PAIR_TABLE_WIDTH,
             height=220,
             widths={
                 "parameter": 150,
@@ -329,33 +361,95 @@ class GUIMeasurementTabMixin:
             titles=_TRACES_TABLE_TITLES,
             title_formatters={key: {"type": "html"} for key in _TRACES_TABLE_TITLES},
         )
+        self._tracespec_core_table = self._pn.widgets.Tabulator(
+            self._tracespec_core_frame(),
+            show_index=False,
+            disabled=False,
+            selectable=False,
+            sortable=False,
+            hidden_columns=["key"],
+            layout="fit_columns",
+            sizing_mode="fixed",
+            width=_MEASUREMENT_PAIR_TABLE_WIDTH,
+            height=112,
+            widths={
+                "parameter": 150,
+            },
+            editors={
+                "parameter": None,
+                "value": {"type": "input"},
+            },
+            titles=_TRACES_TABLE_TITLES,
+            title_formatters={key: {"type": "html"} for key in _TRACES_TABLE_TITLES},
+        )
+        self._tracespec_core_table.on_edit(self._on_tracespec_core_edit)
+        self._tracespec_other_table = self._pn.widgets.Tabulator(
+            self._tracespec_other_frame(),
+            show_index=False,
+            disabled=False,
+            selectable=False,
+            sortable=False,
+            hidden_columns=["key"],
+            layout="fit_columns",
+            sizing_mode="fixed",
+            width=_MEASUREMENT_PAIR_TABLE_WIDTH,
+            height=148,
+            widths={
+                "parameter": 150,
+            },
+            editors={
+                "parameter": None,
+                "value": {"type": "input"},
+            },
+            titles=_TRACES_TABLE_TITLES,
+            title_formatters={key: {"type": "html"} for key in _TRACES_TABLE_TITLES},
+        )
+        self._tracespec_other_table.on_edit(self._on_tracespec_other_edit)
 
     def _measurement_tab(self):
         return self._pn.Column(
             self._traces_file_heading,
             self._pn.Row(
-                self._filespec_button_stack,
-                self._pn.Spacer(width=55),
                 self._filespec_table,
-                align="center",
-                sizing_mode="stretch_width",
+                self._filespec_button_stack,
+                sizing_mode="fixed",
+                width=_MEASUREMENT_ROW_WIDTH,
+                margin=0,
+                styles={"gap": f"{_FILESPEC_ROW_GAP_WIDTH}px"},
             ),
+            self._pn.Spacer(height=_MEASUREMENT_SECTION_GAP_HEIGHT),
+            self._traces_measurement_heading,
             self._pn.Row(
                 self._measurement_table,
                 self._specific_key_name_table,
-                sizing_mode="stretch_width",
+                sizing_mode="fixed",
+                width=_MEASUREMENT_ROW_WIDTH,
+                margin=0,
+                styles={"gap": f"{_MEASUREMENT_PAIR_GAP_WIDTH}px"},
             ),
-            self._pn.Spacer(height=24),
+            self._pn.Spacer(height=_MEASUREMENT_SECTION_GAP_HEIGHT),
             self._traces_keys_heading,
             self._pn.Row(
-                self._pn.Column(
-                    self._keysspec_table,
-                    self._keysspec_error,
-                    sizing_mode="stretch_width",
-                ),
+                self._keysspec_table,
                 self._keys_table,
-                sizing_mode="stretch_width",
+                sizing_mode="fixed",
+                width=_MEASUREMENT_ROW_WIDTH,
+                margin=0,
+                styles={"gap": f"{_MEASUREMENT_PAIR_GAP_WIDTH}px"},
             ),
+            self._pn.Spacer(height=_MEASUREMENT_SECTION_GAP_HEIGHT),
+            self._traces_spec_heading,
+            self._pn.Row(
+                self._tracespec_core_table,
+                self._tracespec_other_table,
+                sizing_mode="fixed",
+                width=_MEASUREMENT_ROW_WIDTH,
+                margin=0,
+                styles={"gap": f"{_MEASUREMENT_PAIR_GAP_WIDTH}px"},
+            ),
+            self._pn.Spacer(height=_MEASUREMENT_ERROR_GAP_HEIGHT),
+            self._keysspec_error,
+            self._tracespec_error,
             sizing_mode="stretch_width",
         )
 
@@ -566,6 +660,101 @@ class GUIMeasurementTabMixin:
             dtype=object,
         )
 
+    def _tracespec_core_frame(self) -> pd.DataFrame:
+        """Return the core gain/reference trace extraction parameters."""
+        frame = self._tracespec_frame().reset_index(drop=True)
+        return frame.loc[
+            frame["key"].isin(("amp_voltage", "amp_current", "r_ref_ohm"))
+        ].reset_index(drop=True)
+
+    def _tracespec_other_frame(self) -> pd.DataFrame:
+        """Return the remaining trace extraction parameters."""
+        frame = self._tracespec_frame().reset_index(drop=True)
+        return frame.loc[
+            frame["key"].isin(
+                (
+                    "trigger_values",
+                    "skip",
+                    "subtract_offset",
+                    "time_relative",
+                )
+            )
+        ].reset_index(drop=True)
+
+    @staticmethod
+    def _parse_tracespec_value(
+        *,
+        key: str,
+        value: object,
+    ) -> object:
+        """Parse one editable ``TraceSpec`` table value."""
+        if isinstance(value, str):
+            text = value.strip()
+            if text == "":
+                value = None
+            else:
+                value = text
+
+        if key in {"amp_voltage", "amp_current", "r_ref_ohm"}:
+            parsed = float(value)
+            if not math.isfinite(parsed):
+                raise ValueError(f"{key} must be finite.")
+            return parsed
+
+        if key == "trigger_values":
+            if value is None:
+                return None
+            try:
+                parsed = ast.literal_eval(value) if isinstance(value, str) else value
+            except (SyntaxError, ValueError):
+                parsed = value
+            if isinstance(parsed, int) and not isinstance(parsed, bool):
+                return int(parsed)
+            if isinstance(parsed, list):
+                parsed = tuple(parsed)
+            if isinstance(parsed, tuple) and all(
+                isinstance(item, int) and not isinstance(item, bool) for item in parsed
+            ):
+                return parsed
+            raise ValueError(
+                "trigger_values must be an int, a tuple/list of ints, or empty."
+            )
+
+        if key == "skip":
+            if value is None:
+                raise ValueError("skip must not be empty.")
+            try:
+                parsed = ast.literal_eval(value) if isinstance(value, str) else value
+            except (SyntaxError, ValueError):
+                parsed = value
+            if isinstance(parsed, int) and not isinstance(parsed, bool):
+                return int(parsed)
+            if isinstance(parsed, list):
+                parsed = tuple(parsed)
+            if (
+                isinstance(parsed, tuple)
+                and len(parsed) == 2
+                and all(
+                    isinstance(item, int) and not isinstance(item, bool)
+                    for item in parsed
+                )
+            ):
+                return parsed
+            raise ValueError("skip must be an int or a tuple/list of two ints.")
+
+        if key in {"subtract_offset", "time_relative"}:
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, str):
+                lowered = value.strip().lower()
+                if lowered in {"true", "1", "yes", "y"}:
+                    return True
+                if lowered in {"false", "0", "no", "n"}:
+                    return False
+            raise ValueError(f"{key} must be a boolean.")
+
+        return value
+
     def _measurement_names(self) -> list[str]:
         if self._filespec is None:
             return []
@@ -586,17 +775,10 @@ class GUIMeasurementTabMixin:
         return pd.DataFrame(
             {
                 "trace_index": [
-                    (
-                        ""
-                        if meta.index is None
-                        else int(meta.index)
-                    )
-                    for meta in metas
+                    ("" if meta.index is None else int(meta.index)) for meta in metas
                 ],
                 "specific_key": [meta.specific_key for meta in metas],
-                "yvalue": [
-                    _trace_yvalue_value(meta.yvalue) for meta in metas
-                ],
+                "yvalue": [_trace_yvalue_value(meta.yvalue) for meta in metas],
             },
             dtype=object,
         )
@@ -619,10 +801,13 @@ class GUIMeasurementTabMixin:
         self._keys_table.titles = self._keys_preview_titles()
         self._specific_key_name_table.value = self._specific_key_name_frame()
         self._filespec_table.value = self._filespec_frame()
-        if not hasattr(self, "_keysspec_draft_frame") or self._keysspec_draft_frame is None:
+        if (
+            not hasattr(self, "_keysspec_draft_frame")
+            or self._keysspec_draft_frame is None
+        ):
             self._keysspec_draft_frame = self._keysspec_frame()
         self._set_keysspec_table_value(self._keysspec_draft_frame.copy())
-        self._tracespec_table.value = self._tracespec_frame()
+        self._set_tracespec_table_values()
 
     def _set_keysspec_table_value(self, frame: pd.DataFrame) -> None:
         """Set the editable KeysSpec table without re-entering the watcher."""
@@ -644,6 +829,64 @@ class GUIMeasurementTabMixin:
             "</div>"
         )
         self._keysspec_error.visible = True
+
+    def _set_tracespec_error(self, message: str) -> None:
+        """Show one inline validation error for the TraceSpec tables."""
+        if message == "":
+            self._tracespec_error.object = ""
+            self._tracespec_error.visible = False
+            return
+        self._tracespec_error.object = (
+            '<div style="color: #b42318; font-size: 12px; line-height: 1.4;">'
+            f"{message}"
+            "</div>"
+        )
+        self._tracespec_error.visible = True
+
+    def _set_tracespec_table_values(self) -> None:
+        """Sync the hidden/full and visible TraceSpec tables from state."""
+        self._tracespec_table.value = self._tracespec_frame()
+        self._tracespec_core_table.value = self._tracespec_core_frame()
+        self._tracespec_other_table.value = self._tracespec_other_frame()
+
+    def _apply_tracespec_field_edit(self, *, key: str, value: object) -> None:
+        """Validate and store one edited TraceSpec field."""
+        spec = TraceSpec() if self._tracespec is None else self._tracespec
+        values = asdict(spec)
+        try:
+            values[key] = self._parse_tracespec_value(key=key, value=value)
+        except (TypeError, ValueError) as exc:
+            self._set_tracespec_error(str(exc))
+            self._set_tracespec_table_values()
+            return
+        self._tracespec = TraceSpec(**values)
+        self._set_tracespec_error("")
+        self._set_tracespec_table_values()
+
+    def _on_tracespec_table_edit(self, table: object, event: object) -> None:
+        """Handle one TraceSpec table edit event."""
+        if str(getattr(event, "column", "")) != "value":
+            return
+        try:
+            row = int(getattr(event, "row"))
+        except (TypeError, ValueError):
+            return
+        frame = table.value.reset_index(drop=True)
+        if row < 0 or row >= len(frame):
+            return
+        key = str(frame.at[row, "key"])
+        self._apply_tracespec_field_edit(
+            key=key,
+            value=getattr(event, "value"),
+        )
+
+    def _on_tracespec_core_edit(self, event: object) -> None:
+        """Handle edits for the core TraceSpec table."""
+        self._on_tracespec_table_edit(self._tracespec_core_table, event)
+
+    def _on_tracespec_other_edit(self, event: object) -> None:
+        """Handle edits for the auxiliary TraceSpec table."""
+        self._on_tracespec_table_edit(self._tracespec_other_table, event)
 
     def _reload_file_selection(self) -> None:
         """Reload keys and traces from the current file-related specs."""

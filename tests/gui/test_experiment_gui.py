@@ -576,14 +576,12 @@ def test_data_tab_interpolates_against_selected_x_quantity(
     assert len(panel._data_figure.data) == 2
     assert np.allclose(panel._data_figure.data[0].x, [100.0, 200.0, 300.0])
     assert np.allclose(panel._data_figure.data[0].y, [10.0, 20.0, 30.0])
-    assert panel._data_figure.layout.yaxis.title.text == (
-        "measurement: adwin/V1"
-    )
+    assert panel._data_figure.layout.yaxis.title.text is None
     assert panel._data_figure.layout.yaxis.side == "right"
-    assert panel._data_figure.layout.yaxis2.title.text == (
-        "status: motor/position/value"
-    )
+    assert panel._data_figure.layout.yaxis.tickformat == ".2g"
+    assert panel._data_figure.layout.yaxis2.title.text is None
     assert panel._data_figure.layout.yaxis2.side == "right"
+    assert panel._data_figure.layout.yaxis2.tickformat == ".2g"
 
 
 def test_data_tab_timeframe_selection_crops_visible_window(
@@ -694,6 +692,31 @@ def test_data_tab_time_axis_uses_measurement_relative_origin(
     assert panel._data_figure.layout.xaxis.title.text == (
         "<i>t</i> - <i>t</i><sub>0</sub> (s)"
     )
+
+
+def test_measurement_tab_tracespec_tables_are_editable() -> None:
+    panel = GUIPanel(_make_traces())
+
+    panel._on_tracespec_core_edit(
+        SimpleNamespace(row=0, column="value", value="2.5")
+    )
+    panel._on_tracespec_other_edit(
+        SimpleNamespace(row=1, column="value", value="(2, 3)")
+    )
+    panel._on_tracespec_other_edit(
+        SimpleNamespace(row=3, column="value", value="false")
+    )
+
+    tracespec_rows = _tracespec_rows(panel)
+    assert panel._tracespec is not None
+    assert panel._tracespec_core_table.layout == "fit_columns"
+    assert panel._tracespec_other_table.layout == "fit_columns"
+    assert panel._tracespec.amp_voltage == pytest.approx(2.5)
+    assert panel._tracespec.skip == (2, 3)
+    assert panel._tracespec.time_relative is False
+    assert tracespec_rows.at["amp_voltage", "value"] == pytest.approx(2.5)
+    assert tracespec_rows.at["skip", "value"] == "(2, 3)"
+    assert tracespec_rows.at["time_relative", "value"] is False
 
 
 def test_traces_tab_keysspec_table_is_editable() -> None:
