@@ -2,7 +2,7 @@
 
 from .containers import Sample, Samples
 from .pipeline import sample
-from .specs import SamplingSpec, SmoothingSpec
+from .specs import SamplingSpec
 from .transforms import (
     binning,
     downsample_trace,
@@ -15,7 +15,6 @@ from .transforms import (
 
 __all__ = [
     "SamplingSpec",
-    "SmoothingSpec",
     "Sample",
     "Samples",
     "downsample_trace",
