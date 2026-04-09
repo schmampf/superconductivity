@@ -11,10 +11,12 @@ import numpy as np
 from ...utilities.types import NDArray64
 from .bcs_jax import convolution_jax, integral_jax
 from .bcs_np import convolution_np, integral_np
+from .gap_distribution import apply_gap_distribution
 from .noise import apply_voltage_noise, make_bias_support_grid
 from .parameters import (
     ParameterSpec,
     make_bcs_parameters,
+    make_gap_distribution_parameters,
     make_noise_parameters,
     make_pat_addon_parameters,
 )
@@ -49,6 +51,11 @@ J_n^2\!\left(\frac{eA}{h\nu}\right)
 I_\mathrm{BCS}\!\left(V-n\frac{h\nu}{e}\right)
 """
 
+GAP_DIST_SUFFIX_HTML = r"""
+\Delta \sim \mathcal{N}(\Delta_0,\sigma_\Delta^2),\qquad
+I_\mathrm{gap}(V)=\left\langle I_0(V;\Delta)\right\rangle
+"""
+
 NOISE_SUFFIX_HTML = r"""
 \delta V \sim \mathcal{N}(0,\sigma_V^2),\qquad
 I_\mathrm{noise}(V)=\left\langle I_0(V+\delta V)\right\rangle
@@ -60,10 +67,20 @@ class BCSModelConfig:
     kernel: Kernel = "conv"
     backend: Backend = "jax"
     pat_enabled: bool = False
+    gap_distribution_enabled: bool = False
     noise_enabled: bool = False
+    gap_distribution_order: int = 41
     noise_oversample: int = 64
 
     def __post_init__(self) -> None:
+        gap_distribution_order = int(self.gap_distribution_order)
+        if gap_distribution_order < 2:
+            raise ValueError("gap_distribution_order must be >= 2.")
+        object.__setattr__(
+            self,
+            "gap_distribution_order",
+            gap_distribution_order,
+        )
         noise_oversample = int(self.noise_oversample)
         if noise_oversample < 2:
             raise ValueError("noise_oversample must be >= 2.")
@@ -119,6 +136,10 @@ _MODEL_CONFIGS = OrderedDict(
             "bcs_conv_noise",
             BCSModelConfig("conv", "jax", noise_enabled=True),
         ),
+        (
+            "bcs_conv_gapdist",
+            BCSModelConfig("conv", "jax", gap_distribution_enabled=True),
+        ),
         ("pat_int_jax", BCSModelConfig("int", "jax", pat_enabled=True)),
         (
             "pat_conv_jax",
@@ -132,6 +153,8 @@ def get_model_key(config: BCSModelConfig) -> str:
     key = f"bcs_{config.kernel}_{config.backend}"
     if config.pat_enabled:
         key += "_pat"
+    if config.gap_distribution_enabled:
+        key += "_gapdist"
     if config.noise_enabled:
         key += "_noise"
     return key
@@ -148,13 +171,14 @@ def _parse_canonical_model(model: str) -> BCSModelConfig:
     if backend not in {"np", "jax"}:
         raise KeyError(model)
     suffixes = parts[3:]
-    allowed_suffixes = {"pat", "noise"}
+    allowed_suffixes = {"pat", "gapdist", "noise"}
     if any(suffix not in allowed_suffixes for suffix in suffixes):
         raise KeyError(model)
     return BCSModelConfig(
         kernel=kernel,
         backend=backend,
         pat_enabled="pat" in suffixes,
+        gap_distribution_enabled="gapdist" in suffixes,
         noise_enabled="noise" in suffixes,
     )
 
@@ -192,6 +216,8 @@ def _compose_parameters(config: BCSModelConfig) -> tuple[ParameterSpec, ...]:
     parameters = list(_clone_parameters(make_bcs_parameters()))
     if config.pat_enabled:
         parameters.extend(_clone_parameters(make_pat_addon_parameters()))
+    if config.gap_distribution_enabled:
+        parameters.extend(_clone_parameters(make_gap_distribution_parameters()))
     if config.noise_enabled:
         parameters.extend(_clone_parameters(make_noise_parameters()))
     return tuple(parameters)
@@ -202,6 +228,8 @@ def _compose_label(config: BCSModelConfig) -> str:
     suffixes: list[str] = []
     if config.pat_enabled:
         suffixes.append("PAT")
+    if config.gap_distribution_enabled:
+        suffixes.append("gap dist.")
     if config.noise_enabled:
         suffixes.append("noise")
     if not suffixes:
@@ -220,6 +248,8 @@ def _compose_info(config: BCSModelConfig) -> OrderedDict[str, str]:
     info["kernel"] = "integral" if config.kernel == "int" else "convolution"
     info["backend"] = "NumPy" if config.backend == "np" else "JAX"
     info["PAT"] = "yes" if config.pat_enabled else "no"
+    info["gap_distribution"] = "yes" if config.gap_distribution_enabled else "no"
+    info["gap_distribution_order"] = str(config.gap_distribution_order)
     info["noise"] = "yes" if config.noise_enabled else "no"
     info["noise_oversample"] = str(config.noise_oversample)
     info["energy_grid"] = _energy_grid_summary(DEFAULT_E_MV)
@@ -232,6 +262,8 @@ def _compose_html(config: BCSModelConfig) -> str:
     equations = [_BASE_MODEL_SPECS[(config.kernel, config.backend)].html.strip()]
     if config.pat_enabled:
         equations.append(PAT_SUFFIX_HTML.strip())
+    if config.gap_distribution_enabled:
+        equations.append(GAP_DIST_SUFFIX_HTML.strip())
     if config.noise_enabled:
         equations.append(NOISE_SUFFIX_HTML.strip())
     return (
@@ -258,30 +290,49 @@ def _compose_function(config: BCSModelConfig) -> ModelFunction:
             )
 
         GN_G0, T_K, Delta_meV, gamma_meV = values[:4]
-        noise_index = 4 + (2 if config.pat_enabled else 0)
-        sigma_V_mV = float(values[noise_index]) if config.noise_enabled else 0.0
+        index = 4
+        A_mV = 0.0
+        nu_GHz = 0.0
+        if config.pat_enabled:
+            A_mV = float(values[index])
+            nu_GHz = float(values[index + 1])
+            index += 2
+        sigma_Delta_meV = (
+            float(values[index]) if config.gap_distribution_enabled else 0.0
+        )
+        if config.gap_distribution_enabled:
+            index += 1
+        sigma_V_mV = float(values[index]) if config.noise_enabled else 0.0
         V_evaluate = (
             make_bias_support_grid(V_requested, sigma_V_mV)
             if config.noise_enabled and sigma_V_mV > 0.0
             else V_requested
         )
-        current = np.asarray(
-            base_function(
-                V_evaluate,
-                DEFAULT_E_MV,
-                float(GN_G0),
-                float(T_K),
-                float(Delta_meV),
-                float(gamma_meV),
-            ),
-            dtype=np.float64,
-        )
 
-        index = 4
+        def base_curve(delta_value_meV: float) -> NDArray64:
+            return np.asarray(
+                base_function(
+                    V_evaluate,
+                    DEFAULT_E_MV,
+                    float(GN_G0),
+                    float(T_K),
+                    float(delta_value_meV),
+                    float(gamma_meV),
+                ),
+                dtype=np.float64,
+            )
+
+        if config.gap_distribution_enabled and sigma_Delta_meV > 0.0:
+            current = apply_gap_distribution(
+                base_curve,
+                float(Delta_meV),
+                sigma_Delta_meV,
+                config.gap_distribution_order,
+            )
+        else:
+            current = base_curve(float(Delta_meV))
+
         if config.pat_enabled:
-            A_mV = float(values[index])
-            nu_GHz = float(values[index + 1])
-            index += 2
             if A_mV != 0.0:
                 current = get_I_pat_nA(
                     V_evaluate,
@@ -325,6 +376,7 @@ _MODEL_OPTIONS_ENTRIES = (
     ("BCS integral", "bcs_int"),
     ("BCS integral (JAX)", "bcs_int_jax"),
     ("BCS convolution (JAX)", "bcs_conv_jax"),
+    ("BCS convolution + gap dist.", "bcs_conv_gapdist"),
     ("BCS convolution + noise", "bcs_conv_noise"),
     ("PAT integral (JAX)", "pat_int_jax"),
     ("PAT convolution (JAX)", "pat_conv_jax"),
