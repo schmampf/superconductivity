@@ -16,6 +16,7 @@ _FIT_CONFIG_LABELS = OrderedDict(
         ("jax", "JAX"),
         ("conv", "Conv"),
         ("pat_enabled", "PAT"),
+        ("gap_distribution_enabled", "Gap dist."),
         ("noise_enabled", "Noise"),
     ]
 )
@@ -31,12 +32,14 @@ class GUIFitTabMixin:
             name="Fit",
             button_type="primary",
             width=90,
+            margin=0,
         )
         self._fit_button.on_click(self._on_fit_clicked)
         self._spinner = self._pn.indicators.LoadingSpinner(
             value=False,
             width=20,
             height=20,
+            margin=0,
         )
 
         self._fit_config_table = self._pn.widgets.Tabulator(
@@ -61,6 +64,7 @@ class GUIFitTabMixin:
             },
             titles=_FIT_CONFIG_TITLES,
             title_formatters={key: {"type": "html"} for key in _FIT_CONFIG_TITLES},
+            margin=0,
         )
         self._fit_config_table.on_edit(self._on_fit_config_edit)
 
@@ -82,6 +86,7 @@ class GUIFitTabMixin:
             widths={
                 "key": 150,
             },
+            margin=0,
         )
         self._optimizer_info_table = self._pn.widgets.Tabulator(
             _mapping_frame(self._optimizer_info()),
@@ -95,10 +100,12 @@ class GUIFitTabMixin:
             widths={
                 "key": 150,
             },
+            margin=0,
         )
         self._model_html = self._pn.pane.LaTeX(
             get_model_spec(self._fit_model_config).html,
             sizing_mode="stretch_width",
+            margin=0,
         )
 
     def _build_parameter_table(
@@ -129,6 +136,7 @@ class GUIFitTabMixin:
                 "label": {"type": "html"},
                 "fixed": {"type": "tickCross"},
             },
+            margin=0,
         )
 
     def _fit_tab(self):
@@ -143,23 +151,28 @@ class GUIFitTabMixin:
                         self._pn.Column(
                             self._model_html,
                             sizing_mode="stretch_width",
+                            margin=0,
                         ),
                         sizing_mode="stretch_width",
+                        margin=0,
                     ),
                     sizing_mode="stretch_width",
+                    margin=0,
                 ),
             ),
             (
                 "Optimizer",
                 self._pn.Column(
-                    self._pn.pane.Markdown("### Backend model"),
+                    self._pn.pane.Markdown("### Backend model", margin=0),
                     self._model_info_table,
-                    self._pn.pane.Markdown("### Optimizer"),
+                    self._pn.pane.Markdown("### Optimizer", margin=0),
                     self._optimizer_info_table,
                     sizing_mode="stretch_width",
+                    margin=0,
                 ),
             ),
             sizing_mode="stretch_width",
+            margin=0,
         )
         return self._pn.Column(
             self._pn.Row(
@@ -167,8 +180,10 @@ class GUIFitTabMixin:
                 self._spinner,
                 self._fit_state,
                 sizing_mode="stretch_width",
+                margin=0,
             ),
             self._fit_inner_tabs,
+            margin=0,
             sizing_mode="stretch_width",
         )
 
@@ -218,6 +233,11 @@ class GUIFitTabMixin:
                     "key": "pat_enabled",
                     "parameter": _FIT_CONFIG_LABELS["pat_enabled"],
                     "value": bool(self._fit_model_config.pat_enabled),
+                },
+                {
+                    "key": "gap_distribution_enabled",
+                    "parameter": _FIT_CONFIG_LABELS["gap_distribution_enabled"],
+                    "value": bool(self._fit_model_config.gap_distribution_enabled),
                 },
                 {
                     "key": "noise_enabled",
@@ -361,6 +381,9 @@ class GUIFitTabMixin:
         if key == "pat_enabled":
             self._update_fit_model_config(pat_enabled=value)
             return
+        if key == "gap_distribution_enabled":
+            self._update_fit_model_config(gap_distribution_enabled=value)
+            return
         if key == "noise_enabled":
             self._update_fit_model_config(noise_enabled=value)
 
@@ -370,6 +393,7 @@ class GUIFitTabMixin:
         kernel: str | None = None,
         backend: str | None = None,
         pat_enabled: bool | None = None,
+        gap_distribution_enabled: bool | None = None,
         noise_enabled: bool | None = None,
     ) -> None:
         if self._fit_running:
@@ -383,11 +407,17 @@ class GUIFitTabMixin:
                 if pat_enabled is None
                 else pat_enabled
             ),
+            gap_distribution_enabled=(
+                self._fit_model_config.gap_distribution_enabled
+                if gap_distribution_enabled is None
+                else gap_distribution_enabled
+            ),
             noise_enabled=(
                 self._fit_model_config.noise_enabled
                 if noise_enabled is None
                 else noise_enabled
             ),
+            gap_distribution_order=self._fit_model_config.gap_distribution_order,
             noise_oversample=self._fit_model_config.noise_oversample,
         )
         self._sync_active_fit_model()
