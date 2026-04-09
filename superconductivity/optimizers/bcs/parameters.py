@@ -83,3 +83,15 @@ def make_noise_parameters() -> tuple[ParameterSpec, ...]:
             guess=0.0,
         ),
     )
+
+
+def make_gap_distribution_parameters() -> tuple[ParameterSpec, ...]:
+    return (
+        ParameterSpec(
+            name="sigma_Delta_meV",
+            label="<i>&sigma;</i><sub>&Delta;</sub> (meV)",
+            lower=0.0,
+            upper=0.05,
+            guess=0.002,
+        ),
+    )
