@@ -49,8 +49,15 @@ def _default_sampling_spec() -> SamplingSpec:
     return SamplingSpec(
         Vbins_mV=np.linspace(-1.6, 1.6, 1601, dtype=np.float64),
         Ibins_nA=np.linspace(-30.0, 30.0, 2001, dtype=np.float64),
+        apply_offset_correction=True,
+        apply_downsampling=True,
+        apply_upsampling=True,
+        apply_smoothing=True,
         nu_Hz=43.7,
-        upsample=1000,
+        N_up=1000,
+        median_bins=3,
+        sigma_bins=2.0,
+        mode="nearest",
     )
 
 
