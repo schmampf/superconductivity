@@ -200,39 +200,47 @@ class GUIMeasurementTabMixin:
         self._traces_file_heading = self._pn.pane.HTML(
             _table_heading_html("Choose File:"),
             sizing_mode="stretch_width",
+            margin=0,
         )
         self._traces_measurement_heading = self._pn.pane.HTML(
             _table_heading_html("Choose Measurement:"),
             sizing_mode="stretch_width",
+            margin=0,
         )
         self._traces_keys_heading = self._pn.pane.HTML(
             _table_heading_html("Handle Value Extraction:"),
             sizing_mode="stretch_width",
+            margin=0,
         )
         self._traces_spec_heading = self._pn.pane.HTML(
             _table_heading_html("Handle Trace Extraction:"),
             sizing_mode="stretch_width",
+            margin=0,
         )
         self._keysspec_error = self._pn.pane.HTML(
             "",
             visible=False,
             sizing_mode="stretch_width",
+            margin=0,
         )
         self._tracespec_error = self._pn.pane.HTML(
             "",
             visible=False,
             sizing_mode="stretch_width",
+            margin=0,
         )
         self._filespec_browse_button = self._pn.widgets.Button(
             name="Browse...",
             button_type="default",
             width=_FILESPEC_BUTTON_STACK_WIDTH,
+            margin=0,
         )
         self._filespec_browse_button.on_click(self._on_filespec_browse)
         self._filespec_update_button = self._pn.widgets.Button(
             name="Update All",
             button_type="primary",
             width=_FILESPEC_BUTTON_STACK_WIDTH,
+            margin=0,
         )
         self._filespec_update_button.on_click(self._on_update_file)
         self._filespec_button_stack = self._pn.Column(
@@ -261,6 +269,7 @@ class GUIMeasurementTabMixin:
             title_formatters={
                 key: {"type": "html"} for key in _MEASUREMENT_TABLE_TITLES
             },
+            margin=0,
         )
         self._measurement_table.param.watch(
             self._on_measurement_selection_changed,
@@ -283,6 +292,7 @@ class GUIMeasurementTabMixin:
             title_formatters={
                 key: {"type": "html"} for key in _SPECIFIC_KEY_NAME_TABLE_TITLES
             },
+            margin=0,
         )
         self._keys_table = self._pn.widgets.Tabulator(
             self._keys_preview_frame(),
@@ -305,6 +315,7 @@ class GUIMeasurementTabMixin:
             title_formatters={
                 key: {"type": "html"} for key in _SPECIFIC_KEY_TABLE_TITLES
             },
+            margin=0,
         )
         self._filespec_table = self._pn.widgets.Tabulator(
             self._filespec_frame(),
@@ -322,6 +333,7 @@ class GUIMeasurementTabMixin:
             },
             titles=_TRACES_TABLE_TITLES,
             title_formatters={key: {"type": "html"} for key in _TRACES_TABLE_TITLES},
+            margin=0,
         )
         self._keysspec_table = self._pn.widgets.Tabulator(
             self._keysspec_frame(),
@@ -342,6 +354,7 @@ class GUIMeasurementTabMixin:
             },
             titles=_TRACES_TABLE_TITLES,
             title_formatters={key: {"type": "html"} for key in _TRACES_TABLE_TITLES},
+            margin=0,
         )
         self._keysspec_table.on_edit(self._on_keysspec_edit)
         self._tracespec_table = self._pn.widgets.Tabulator(
@@ -360,6 +373,7 @@ class GUIMeasurementTabMixin:
             },
             titles=_TRACES_TABLE_TITLES,
             title_formatters={key: {"type": "html"} for key in _TRACES_TABLE_TITLES},
+            margin=0,
         )
         self._tracespec_core_table = self._pn.widgets.Tabulator(
             self._tracespec_core_frame(),
@@ -381,6 +395,7 @@ class GUIMeasurementTabMixin:
             },
             titles=_TRACES_TABLE_TITLES,
             title_formatters={key: {"type": "html"} for key in _TRACES_TABLE_TITLES},
+            margin=0,
         )
         self._tracespec_core_table.on_edit(self._on_tracespec_core_edit)
         self._tracespec_other_table = self._pn.widgets.Tabulator(
@@ -403,6 +418,7 @@ class GUIMeasurementTabMixin:
             },
             titles=_TRACES_TABLE_TITLES,
             title_formatters={key: {"type": "html"} for key in _TRACES_TABLE_TITLES},
+            margin=0,
         )
         self._tracespec_other_table.on_edit(self._on_tracespec_other_edit)
 
@@ -450,6 +466,7 @@ class GUIMeasurementTabMixin:
             self._pn.Spacer(height=_MEASUREMENT_ERROR_GAP_HEIGHT),
             self._keysspec_error,
             self._tracespec_error,
+            margin=0,
             sizing_mode="stretch_width",
         )
 
@@ -912,7 +929,7 @@ class GUIMeasurementTabMixin:
         )
         self._initialize_sampling_offset_overrides()
         self._clear_psd_stage_cache()
-        self._clear_sampling_stage_cache()
+        self._clear_sampling_batch_cache()
         self._clear_offset_batch_cache()
 
         options = OrderedDict(
