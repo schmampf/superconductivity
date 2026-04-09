@@ -1,13 +1,17 @@
+"""BTK transport model colocated with the MAR model family."""
+
+from __future__ import annotations
+
 import numpy as np
 
-from ..utilities.types import NDArray64
-from ..utilities.functions import bin_y_over_x
-from ..utilities.constants import G_0_muS
-
-from .bcs_np import get_Delta_meV, get_f
+from ...utilities.constants import G_0_muS
+from ...utilities.functions import bin_y_over_x
+from ...utilities.types import NDArray64
+from ..bcs_np import get_Delta_meV, get_f
 
 
 def get_Z_btk(tau: float) -> float:
+    """Return the BTK barrier parameter for one transmission value."""
     return np.sqrt(1.0 / tau - 1.0)
 
 
@@ -16,12 +20,10 @@ def get_AB_btk(
     Delta_meV: float,
     Z: float,
     gamma_meV: float,
-) -> tuple[
-    NDArray64,
-    NDArray64,
-]:
+) -> tuple[NDArray64, NDArray64]:
+    """Return BTK Andreev and normal reflection probabilities."""
     E_meV = np.array(np.abs(E_meV) + 1j * gamma_meV, dtype="complex128")
-    E_meV += 1e-300  # avoid runtime warning
+    E_meV += 1e-300
     u2 = 0.5 * (1 + np.sqrt(E_meV**2 - Delta_meV**2) / E_meV)
     v2 = 1 - u2
     Z2 = np.square(Z)
@@ -35,7 +37,7 @@ def get_AB_btk(
     diff = alpha - beta
 
     gamma2 = np.square(alpha + Z2 * diff) + np.square(etta * (2.0 * Z2 + 1.0))
-    gamma2 += 1e-300  # avoid runtime warning
+    gamma2 += 1e-300
     A = np.sqrt(np.abs((alpha2 + etta2) * (beta2 + etta2))) / gamma2
     term1 = np.square(diff * Z - 2.0 * etta)
     term2 = np.square(2.0 * etta * Z + diff)
@@ -54,25 +56,22 @@ def get_I_btk_nA(
     gamma_meV: float = 0.0,
     gamma_meV_min: float = 1e-4,
 ) -> NDArray64:
-
+    """Return total, one-electron, and two-electron BTK current."""
     G_N_muS = tau * G_0_muS
     I_NN_nA = V_mV * G_N_muS
 
     Delta_meV_T = get_Delta_meV(Delta_meV=Delta_meV, T_K=T_K)
-
     if Delta_meV_T == 0.0:
-        return np.vstack((I_NN_nA, I_NN_nA, np.zeros_like(I_NN_nA)))
+        return np.vstack((I_NN_nA, I_NN_nA, np.zeros_like(I_NN_nA))).T
 
     gamma_meV = gamma_meV_min if gamma_meV < gamma_meV_min else gamma_meV
 
-    # Determine stepsize in V and E
     dV_mV = np.abs(np.nanmax(V_mV) - np.nanmin(V_mV)) / (len(V_mV) - 1)
     V_max_mV = np.max(np.abs(V_mV))
 
     E_max_meV = np.max([Delta_meV_T * 10, V_max_mV])
     dE_meV = np.min([dV_mV, gamma_meV_min])
 
-    # create V and E axis
     V_mV_temp = np.arange(0.0, V_max_mV + dV_mV, dV_mV, dtype="float64")
     E_meV = np.arange(-E_max_meV, E_max_meV + dE_meV, dE_meV, dtype="float64")
 
@@ -95,16 +94,19 @@ def get_I_btk_nA(
     I_2e_nA = np.array(I_2e_mV, dtype="float64") * G_0_muS
     I_1e_nA = np.array(I_1e_mV, dtype="float64") * G_0_muS
 
-    # add negative voltage values
     I_2e_nA = np.concatenate((I_2e_nA, -np.flip(I_2e_nA[1:])))
     I_1e_nA = np.concatenate((I_1e_nA, -np.flip(I_1e_nA[1:])))
     V_mV_temp = np.concatenate((V_mV_temp, -np.flip(V_mV_temp[1:])))
 
-    # bin over originally obtained V-axis
     I_2e_nA = bin_y_over_x(V_mV_temp, I_2e_nA, V_mV)
     I_1e_nA = bin_y_over_x(V_mV_temp, I_1e_nA, V_mV)
 
     I_tot_nA = I_2e_nA + I_1e_nA
-    I_nA = np.vstack((I_tot_nA, I_1e_nA, I_2e_nA)).T
+    return np.vstack((I_tot_nA, I_1e_nA, I_2e_nA)).T
 
-    return I_nA
+
+__all__ = [
+    "get_AB_btk",
+    "get_I_btk_nA",
+    "get_Z_btk",
+]
