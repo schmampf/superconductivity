@@ -57,6 +57,7 @@ class GUIDataTabMixin:
             "",
             visible=False,
             sizing_mode="stretch_width",
+            margin=0,
         )
         self._data_y_table = self._pn.widgets.Tabulator(
             self._data_y_frame(),
@@ -74,6 +75,7 @@ class GUIDataTabMixin:
             title_formatters={
                 key: {"type": "html"} for key in _DATA_Y_TITLES
             },
+            margin=0,
         )
         self._data_y_table.param.watch(
             self._on_data_y_selection_changed,
@@ -95,6 +97,7 @@ class GUIDataTabMixin:
             title_formatters={
                 key: {"type": "html"} for key in _DATA_X_TITLES
             },
+            margin=0,
         )
         self._data_x_table.param.watch(
             self._on_data_x_selection_changed,
@@ -116,6 +119,7 @@ class GUIDataTabMixin:
             title_formatters={
                 key: {"type": "html"} for key in _DATA_TIMEFRAME_TITLES
             },
+            margin=0,
         )
         self._data_timeframe_table.param.watch(
             self._on_data_timeframe_selection_changed,
@@ -127,6 +131,7 @@ class GUIDataTabMixin:
             sizing_mode="stretch_width",
             height=480,
             config={"responsive": True},
+            margin=0,
         )
 
     def _data_tab(self):
@@ -139,6 +144,7 @@ class GUIDataTabMixin:
             ),
             self._data_status,
             self._data_pane,
+            margin=0,
             sizing_mode="stretch_width",
         )
 
@@ -535,6 +541,12 @@ class GUIDataTabMixin:
             margin={"l": 20, "r": 20, "t": 20, "b": 110},
             showlegend=True,
             xaxis_title="<i>t</i> (s)",
+            yaxis={
+                "side": "right",
+                "tickformat": ".2g",
+                "ticks": "",
+                "zeroline": False,
+            },
             legend={
                 "orientation": "h",
                 "x": 0.0,
