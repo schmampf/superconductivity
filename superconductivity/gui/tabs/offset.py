@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 from dataclasses import replace
 from queue import Empty, Queue
 from threading import Event
@@ -15,7 +14,7 @@ from ...evaluation.analysis import (
     offset_analysis,
 )
 from ...evaluation.traces import numeric_yvalue
-from ..state import _linspace_from_values
+from ..state import _linspace_from_values, _trace_label
 
 _OFFSET_GRID_PARAMETER_LABELS = {
     "Vbins_mV": "<i>V</i><sub>bins</sub> (mV)",
@@ -47,6 +46,24 @@ _OFFSET_BATCH_TITLES = {
     "Voff_mV": "<i>V</i><sub>off</sub> (mV)",
     "Ioff_nA": "<i>I</i><sub>off</sub> (nA)",
 }
+_OFFSET_PAIR_TABLE_WIDTH = 360
+_OFFSET_PAIR_GAP_WIDTH = 10
+_OFFSET_ROW_WIDTH = 2 * _OFFSET_PAIR_TABLE_WIDTH + _OFFSET_PAIR_GAP_WIDTH
+_OFFSET_SECTION_GAP_HEIGHT = 24
+_OFFSET_ACTION_HEIGHT = 32
+_OFFSET_ACTION_ROW_GAP_WIDTH = 10
+_OFFSET_ACTION_CONTAINER_WIDTH = _OFFSET_PAIR_TABLE_WIDTH
+_OFFSET_ACTION_BUTTON_WIDTH = 80
+_OFFSET_PROGRESS_WIDTH = _OFFSET_ACTION_CONTAINER_WIDTH
+
+
+def _offset_heading_html(text: str) -> str:
+    """Return heading markup styled close to table headers."""
+    return (
+        '<div style="font-size: 14px; font-weight: 600; line-height: 1.4;">'
+        f"{text}"
+        "</div>"
+    )
 
 
 def _run_offset_batch(
@@ -82,7 +99,8 @@ class GUIOffsetTabMixin:
         self._offset_batch_future = None
         self._offset_batch_timer = None
         self._offset_batch_completed = 0
-        self._offset_batch_display_index: int | None = None
+        self._offset_batch_display_index: int | None = int(self.active_index)
+        self._offset_display_selector_syncing = False
         self._offset_batch_stop_event = Event()
         self._offset_batch_stop_requested = False
 
@@ -106,11 +124,67 @@ class GUIOffsetTabMixin:
         self._clear_offset_batch_cache()
         self._offset_batch_spec = replace(spec)
 
-    def _stage_offset_result(self, index: int, offset: OffsetTrace) -> None:
+    def _stage_offset_result(
+        self,
+        index: int,
+        offset: OffsetTrace,
+        *,
+        select: bool = True,
+    ) -> None:
         self._offset_batch_results[index] = offset
         self._offset_batch_status[index] = "done"
         self._offset_batch_errors[index] = ""
-        self._offset_batch_display_index = int(index)
+        if select:
+            self._offset_batch_display_index = int(index)
+
+    def _offset_display_selector_options(self) -> dict[str, int]:
+        return {
+            _trace_label(index, trace): int(index)
+            for index, trace in enumerate(self.traces)
+        }
+
+    def _selected_offset_index(self) -> int:
+        if self._offset_batch_display_index is not None:
+            return int(self._offset_batch_display_index)
+        if hasattr(self, "_offset_display_selector"):
+            return int(self._offset_display_selector.value)
+        return int(self.active_index)
+
+    def _get_offset_result_for_index(self, index: int) -> OffsetTrace | None:
+        cached = self._get_cached_offset_batch_result(int(index))
+        if cached is not None:
+            return cached
+        if int(index) == int(self.active_index):
+            return self._offset
+        return None
+
+    def _set_offset_display_index(
+        self,
+        index: int,
+        *,
+        refresh_views: bool,
+    ) -> None:
+        index = int(index)
+        self._offset_batch_display_index = index
+        if hasattr(self, "_offset_display_selector"):
+            if int(self._offset_display_selector.value) != index:
+                self._offset_display_selector_syncing = True
+                try:
+                    self._offset_display_selector.value = index
+                finally:
+                    self._offset_display_selector_syncing = False
+        if refresh_views:
+            self._refresh_offset_batch_views()
+
+    def _sync_offset_display_index_from_active_change(
+        self,
+        *,
+        old_index: int,
+        new_index: int,
+    ) -> None:
+        if self._offset_batch_display_index != int(old_index):
+            return
+        self._set_offset_display_index(int(new_index), refresh_views=False)
 
     @staticmethod
     def _copy_offset_trace(offset: OffsetTrace) -> OffsetTrace:
@@ -152,13 +226,34 @@ class GUIOffsetTabMixin:
         self._offset_batch_state.object = "Loaded"
 
     def _build_offset_widgets(self) -> None:
+        self._offset_heading = self._pn.pane.HTML(
+            _offset_heading_html("Offset Analysis:"),
+            sizing_mode="stretch_width",
+            margin=0,
+        )
+        self._offset_specs_heading = self._pn.pane.HTML(
+            _offset_heading_html("Offset Specs:"),
+            sizing_mode="stretch_width",
+            margin=0,
+        )
+        self._offset_trace_selection_heading = self._pn.pane.HTML(
+            _offset_heading_html("Trace Selection:"),
+            sizing_mode="stretch_width",
+            margin=0,
+        )
+        self._offset_results_heading = self._pn.pane.HTML(
+            _offset_heading_html("Offset Results:"),
+            sizing_mode="stretch_width",
+            margin=0,
+        )
         self._offset_grid_table = self._pn.widgets.Tabulator(
             self._offset_grid_frame(),
             show_index=False,
             selectable=False,
             sortable=False,
             layout="fit_columns",
-            sizing_mode="stretch_width",
+            sizing_mode="fixed",
+            width=_OFFSET_PAIR_TABLE_WIDTH,
             height=180,
             editors={
                 "parameter": None,
@@ -171,6 +266,7 @@ class GUIOffsetTabMixin:
             },
             titles=_OFFSET_GRID_TITLES,
             title_formatters={key: {"type": "html"} for key in _OFFSET_GRID_TITLES},
+            margin=0,
         )
         self._offset_grid_table.on_edit(self._on_offset_spec_edited)
         self._offset_info_table = self._pn.widgets.Tabulator(
@@ -179,10 +275,10 @@ class GUIOffsetTabMixin:
             selectable=False,
             sortable=False,
             hidden_columns=["key"],
-            layout="fit_data_fill",
+            layout="fit_columns",
             sizing_mode="fixed",
-            width=320,
-            height=145,
+            width=_OFFSET_PAIR_TABLE_WIDTH,
+            height=180,
             widths={
                 "parameter": 150,
             },
@@ -203,38 +299,66 @@ class GUIOffsetTabMixin:
             },
             titles=_OFFSET_INFO_TITLES,
             title_formatters={key: {"type": "html"} for key in _OFFSET_INFO_TITLES},
+            margin=0,
         )
         self._offset_info_table.on_edit(self._on_offset_spec_edited)
         self._offset_apply_button = self._pn.widgets.Button(
-            name="Offset Analysis",
+            name="Single",
             button_type="primary",
+            sizing_mode="fixed",
+            width=_OFFSET_ACTION_BUTTON_WIDTH,
+            height=_OFFSET_ACTION_HEIGHT,
+            margin=0,
         )
         self._offset_apply_button.on_click(self._on_offset_apply)
         self._offset_batch_apply_button = self._pn.widgets.Button(
-            name="Offset Analysis (All)",
+            name="All",
             button_type="default",
+            sizing_mode="fixed",
+            width=_OFFSET_ACTION_BUTTON_WIDTH,
+            height=_OFFSET_ACTION_HEIGHT,
+            margin=0,
         )
         self._offset_batch_apply_button.on_click(self._on_offset_batch_apply)
         self._offset_batch_stop_button = self._pn.widgets.Button(
             name="Stop",
             button_type="danger",
             disabled=True,
+            sizing_mode="fixed",
+            width=_OFFSET_ACTION_BUTTON_WIDTH,
+            height=_OFFSET_ACTION_HEIGHT,
+            margin=0,
         )
         self._offset_batch_stop_button.on_click(self._on_offset_batch_stop)
         self._offset_batch_spinner = self._pn.indicators.LoadingSpinner(
             value=False,
             width=20,
             height=20,
+            margin=0,
         )
         self._offset_batch_progress = self._pn.indicators.Progress(
             value=0,
             max=len(self.traces),
             sizing_mode="stretch_width",
-            width=220,
+            height=_OFFSET_ACTION_HEIGHT,
+            margin=0,
         )
         self._offset_batch_state = self._pn.pane.Markdown(
             "Idle",
             sizing_mode="stretch_width",
+            margin=0,
+        )
+        self._offset_display_selector = self._pn.widgets.Select(
+            name="",
+            options=self._offset_display_selector_options(),
+            value=self._selected_offset_index(),
+            sizing_mode="fixed",
+            width=_OFFSET_PAIR_TABLE_WIDTH,
+            margin=0,
+        )
+        self._offset_display_selector.param.watch(
+            self._on_offset_display_index_changed,
+            "value",
         )
         self._offset_batch_table = self._pn.widgets.Tabulator(
             self._offset_batch_frame(),
@@ -258,6 +382,7 @@ class GUIOffsetTabMixin:
             },
             titles=_OFFSET_BATCH_TITLES,
             title_formatters={key: {"type": "html"} for key in _OFFSET_BATCH_TITLES},
+            margin=0,
         )
 
     @staticmethod
@@ -270,28 +395,83 @@ class GUIOffsetTabMixin:
     def _offset_tab(self):
         return self._pn.Column(
             self._pn.Row(
-                self._offset_apply_button,
-                self._offset_batch_apply_button,
-                self._offset_batch_stop_button,
-                self._offset_batch_spinner,
-                self._offset_batch_progress,
-                sizing_mode="stretch_width",
+                self._pn.Column(
+                    self._offset_heading,
+                    self._pn.Spacer(height=_OFFSET_ACTION_ROW_GAP_WIDTH),
+                    self._pn.Row(
+                        self._offset_apply_button,
+                        self._offset_batch_apply_button,
+                        self._offset_batch_stop_button,
+                        sizing_mode="fixed",
+                        width=_OFFSET_ACTION_CONTAINER_WIDTH,
+                        margin=0,
+                        styles={"gap": f"{_OFFSET_ACTION_ROW_GAP_WIDTH}px"},
+                    ),
+                    self._pn.Spacer(height=_OFFSET_ACTION_ROW_GAP_WIDTH),
+                    self._pn.Row(
+                        self._offset_batch_progress,
+                        sizing_mode="fixed",
+                        width=_OFFSET_PROGRESS_WIDTH,
+                        margin=0,
+                    ),
+                    width=_OFFSET_ACTION_CONTAINER_WIDTH,
+                    sizing_mode="fixed",
+                    margin=0,
+                ),
+                self._pn.Column(
+                    self._offset_trace_selection_heading,
+                    self._pn.Spacer(height=_OFFSET_ACTION_ROW_GAP_WIDTH),
+                    self._offset_display_selector,
+                    width=_OFFSET_PAIR_TABLE_WIDTH,
+                    sizing_mode="fixed",
+                    margin=0,
+                ),
+                sizing_mode="fixed",
+                width=_OFFSET_ROW_WIDTH,
+                margin=0,
+                styles={"gap": f"{_OFFSET_PAIR_GAP_WIDTH}px"},
             ),
+            self._pn.Spacer(height=_OFFSET_SECTION_GAP_HEIGHT),
+            self._offset_specs_heading,
             self._pn.Row(
-                self._offset_grid_table,
-                self._offset_info_table,
-                sizing_mode="stretch_width",
+                self._pn.Column(
+                    self._offset_grid_table,
+                    width=_OFFSET_PAIR_TABLE_WIDTH,
+                    sizing_mode="fixed",
+                    margin=0,
+                ),
+                self._pn.Column(
+                    self._offset_info_table,
+                    width=_OFFSET_PAIR_TABLE_WIDTH,
+                    sizing_mode="fixed",
+                    margin=0,
+                ),
+                sizing_mode="fixed",
+                width=_OFFSET_ROW_WIDTH,
+                margin=0,
+                styles={"gap": f"{_OFFSET_PAIR_GAP_WIDTH}px"},
             ),
+            self._pn.Spacer(height=_OFFSET_SECTION_GAP_HEIGHT),
+            self._offset_results_heading,
             self._pn.Row(
-                self._offset_g_pane,
-                self._offset_batch_v_pane,
-                sizing_mode="stretch_width",
+                self._pn.Column(
+                    self._offset_g_pane,
+                    width=_OFFSET_PAIR_TABLE_WIDTH,
+                    sizing_mode="fixed",
+                    margin=0,
+                ),
+                self._pn.Column(
+                    self._offset_r_pane,
+                    width=_OFFSET_PAIR_TABLE_WIDTH,
+                    sizing_mode="fixed",
+                    margin=0,
+                ),
+                sizing_mode="fixed",
+                width=_OFFSET_ROW_WIDTH,
+                margin=0,
+                styles={"gap": f"{_OFFSET_PAIR_GAP_WIDTH}px"},
             ),
-            self._pn.Row(
-                self._offset_r_pane,
-                self._offset_batch_i_pane,
-                sizing_mode="stretch_width",
-            ),
+            margin=0,
             sizing_mode="stretch_width",
         )
 
@@ -361,12 +541,7 @@ class GUIOffsetTabMixin:
         )
 
     def _offset_display_result(self) -> OffsetTrace | None:
-        index = self._offset_batch_display_index
-        if index is not None:
-            cached = self._get_cached_offset_batch_result(int(index))
-            if cached is not None:
-                return cached
-        return self._offset
+        return self._get_offset_result_for_index(self._selected_offset_index())
 
     def _build_offset_spec_from_table(self) -> OffsetSpec:
         grid_frame = self._offset_grid_table.value.reset_index(drop=True)
@@ -409,6 +584,12 @@ class GUIOffsetTabMixin:
     def _sync_offset_widgets_from_spec(self) -> None:
         self._offset_grid_table.value = self._offset_grid_frame()
         self._offset_info_table.value = self._offset_info_frame()
+        options = self._offset_display_selector_options()
+        self._offset_display_selector.options = options
+        selected_index = self._selected_offset_index()
+        if selected_index < 0 or selected_index >= len(self.traces):
+            selected_index = 0
+        self._set_offset_display_index(int(selected_index), refresh_views=False)
 
     def _on_offset_spec_edited(self, _: object) -> None:
         if self._offset_batch_running or self._offset_batch_spec is None:
@@ -416,20 +597,40 @@ class GUIOffsetTabMixin:
         self._clear_offset_batch_cache()
         self._refresh_offset_batch_views()
 
+    def _on_offset_display_index_changed(self, event: object) -> None:
+        if self._offset_display_selector_syncing:
+            return
+        new_value = int(getattr(event, "new"))
+        old_value = int(getattr(event, "old"))
+        if new_value == old_value:
+            return
+        self._set_offset_display_index(new_value, refresh_views=True)
+
     def _on_offset_apply(self, _: object) -> None:
         if self._offset_batch_running or self._fit_running:
             return
+        selected_index = self._selected_offset_index()
         offset_spec = self._build_offset_spec_from_table()
         self._offset_spec = offset_spec
         self._ensure_offset_stage_spec(offset_spec)
-        self._clear_sampling_stage_cache(indices=[int(self.active_index)])
+        self._clear_sampling_batch_cache(indices=[int(self.active_index)])
         self._recompute_pipeline(
             clear_fit=True,
             recompute_psd=False,
             recompute_offset=True,
             recompute_sampling=True,
         )
-        self._stage_offset_result(self.active_index, self._require_offset())
+        self._stage_offset_result(
+            self.active_index,
+            self._require_offset(),
+            select=(selected_index == int(self.active_index)),
+        )
+        if selected_index != int(self.active_index):
+            display_offset = offset_analysis(
+                self.traces[selected_index],
+                spec=replace(self._offset_spec),
+            )
+            self._stage_offset_result(selected_index, display_offset)
         self._sync_control_widgets_from_specs()
         self._refresh_all_views()
         self._notify_state_changed()
@@ -476,7 +677,10 @@ class GUIOffsetTabMixin:
         self._offset_batch_future = None
         self._offset_batch_running = False
         self._offset_batch_completed = 0
-        self._offset_batch_display_index = None
+        self._set_offset_display_index(
+            self._selected_offset_index(),
+            refresh_views=False,
+        )
         self._offset_batch_stop_event = Event()
         self._offset_batch_stop_requested = False
         self._offset_batch_spinner.value = False
@@ -510,7 +714,10 @@ class GUIOffsetTabMixin:
         self._offset_batch_queue = Queue()
         self._offset_batch_status = ["queued" for _ in range(len(self.traces))]
         self._offset_batch_running = True
-        self._offset_batch_display_index = None
+        self._set_offset_display_index(
+            self._selected_offset_index(),
+            refresh_views=False,
+        )
         self._offset_batch_stop_event = Event()
         self._offset_batch_stop_requested = False
         self._offset_batch_spinner.value = True
@@ -525,11 +732,18 @@ class GUIOffsetTabMixin:
         if hasattr(self, "_fit_button"):
             self._fit_button.disabled = True
         self._refresh_offset_batch_views()
-        run_order = [int(self.active_index)] + [
+        run_order: list[int] = []
+        for index in (
+            self._selected_offset_index(),
+            int(self.active_index),
+        ):
+            if index not in run_order:
+                run_order.append(int(index))
+        run_order.extend(
             index
             for index in range(len(self.traces))
-            if index != int(self.active_index)
-        ]
+            if index not in run_order
+        )
         self._offset_batch_future = self._executor.submit(
             _run_offset_batch,
             list(self.traces),
@@ -573,12 +787,14 @@ class GUIOffsetTabMixin:
 
             if state == "running":
                 self._offset_batch_status[index] = "running"
+                self._set_offset_display_index(int(index), refresh_views=False)
                 status_changed = True
                 continue
             if state == "failed":
                 self._offset_batch_status[index] = "failed"
                 self._offset_batch_errors[index] = str(message)
                 self._offset_batch_completed += 1
+                self._set_offset_display_index(int(index), refresh_views=False)
                 status_changed = True
                 continue
 
@@ -586,7 +802,8 @@ class GUIOffsetTabMixin:
             self._offset_batch_errors[index] = ""
             self._offset_batch_results[index] = offset
             self._offset_batch_completed += 1
-            self._clear_sampling_stage_cache(indices=[int(index)])
+            self._clear_sampling_batch_cache(indices=[int(index)])
+            self._set_offset_display_index(int(index), refresh_views=False)
             status_changed = True
             plot_changed = True
             if int(index) == int(self.active_index):
