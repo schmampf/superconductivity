@@ -35,7 +35,6 @@ from .evaluation.sampling import (
     Sample,
     Samples,
     SamplingSpec,
-    SmoothingSpec,
     binning,
     downsample_trace,
     downsample_traces,
