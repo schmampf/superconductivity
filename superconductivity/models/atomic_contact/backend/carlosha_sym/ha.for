@@ -22,12 +22,11 @@ c
 c FUNCTION zintegrand (calculation of the current density)
 c
 ******************
-        complex function zintegrand(w)
+        complex function zintegrand(w,v,temp,thop,eta,nan)
         implicit real (a-h,o-z)
         parameter (ns=520)
         integer nan
-        real w,curr,tau3(2,2)
-        real eta
+        real w,v,temp,thop,eta,curr,tau3(2,2)
         complex ui,wwj,omega,g0lr(2,2,-ns:ns),g0rr(2,2,-ns:ns),
      &          g0la(2,2,-ns:ns),g0ra(2,2,-ns:ns),
      &          g0kl(2,2,-ns:ns),g0kr(2,2,-ns:ns),
@@ -39,10 +38,6 @@ c
      &          aux1r(2,2),aux2r(2,2),aux3r(2,2),aux4r(2,2),
      &          aux1a(2,2),aux2a(2,2),aux3a(2,2),aux4a(2,2),
      &          tr(2,2,-ns:ns),ta(2,2,-ns:ns),tx(2,2),ty(2,2)
-
-        common/argum/v,temp,thop
-        common/dim/nan
-        common/dynes/eta
 
         pi=4.0*atan(1.0)
         ui=(0.0,1.0)
@@ -333,14 +328,15 @@ C ***************************************************************
 C ***************************************************************
 c------------------------------------------------------------------------
 c
-      complex function zint(llim,ulim,Atol,Rtol,ierr)
+      complex function zint(llim,ulim,Atol,Rtol,ierr,
+     &                      v,temp,thop,eta,nan)
 c
 c------------------------------------------------------------------------
 c
       implicit none
-      integer ierr
+      integer ierr, nan
       complex Atol, Rtol
-      real llim, ulim
+      real llim, ulim, v, temp, thop, eta
 c
       integer stksz
 c      parameter (stksz = 1024)
@@ -367,9 +363,9 @@ c   **Get the three points for the first Simpson integral.**
       lx = llim
       mx = (llim + ulim) / two
       ux = ulim
-      lz = zintegrand(lx)
-      mz = zintegrand(mx)
-      uz = zintegrand(ux)
+      lz = zintegrand(lx,v,temp,thop,eta,nan)
+      mz = zintegrand(mx,v,temp,thop,eta,nan)
+      uz = zintegrand(ux,v,temp,thop,eta,nan)
 c
 c   **Initialize the stacks.**
       xstk(1) = lx
@@ -382,7 +378,8 @@ c
  10   continue
 c
 c   **Call the recursive part.**
-      call zintrp(zres,lx,lz,mx,mz,ux,uz,istk,xstk,zstk,Atol,Rtol,itask)
+      call zintrp(zres,lx,lz,mx,mz,ux,uz,istk,xstk,zstk,
+     &            Atol,Rtol,itask,v,temp,thop,eta,nan)
 c
 c   **Check if we've exceeded the stack size.**
       if (3*(istk+1) .ge. stksz) then
@@ -423,15 +420,15 @@ c
 c**********************************************************************
 c
       subroutine zintrp(zres,lx,lz,mx,mz,ux,uz,istk,xstk,zstk,
-     &                  Atol,Rtol,itask)
+     &                  Atol,Rtol,itask,v,temp,thop,eta,nan)
 c
       implicit none
       integer stksz
       parameter (stksz = 1024)
 
-      integer istk, itask
+      integer istk, itask, nan
       complex zres, lz, mz, uz, Atol, Rtol, zstk(stksz)
-      real lx, mx, ux, xstk(stksz)
+      real lx, mx, ux, xstk(stksz), v, temp, thop, eta
 c
       complex ctest, lmz, umz, zintegrand
       real dx, lmx, umx, tmpr, tmpi
@@ -448,9 +445,9 @@ c
 c   **Do the five-point Simpson's rule as a check.
       dx = dx / two
       lmx = (lx + mx) / two
-      lmz = zintegrand(lmx)
+      lmz = zintegrand(lmx,v,temp,thop,eta,nan)
       umx = (ux + mx) / two
-      umz = zintegrand(umx)
+      umz = zintegrand(umx,v,temp,thop,eta,nan)
       zres = dx*(lz + two*mz + four*(lmz+umz) + uz) / three
 c
 c   **Check the absolute tolerance and then the relative tolerance.**
