@@ -8,7 +8,6 @@ import numpy as np
 
 from ...utilities.constants import G_0_muS
 from ...utilities.functions import bin_y_over_x, fill_nans
-from ...utilities.functions import upsample as upsample_xy
 from ...utilities.safety import (
     require_all_finite,
     require_min_size,
@@ -18,7 +17,7 @@ from ...utilities.safety import (
 from ...utilities.types import NDArray64
 from ..traces import Trace, Traces
 from .containers import Sample, Samples
-from .specs import SamplingSpec, SmoothingSpec, _validate_downsample_rate_Hz
+from .specs import SamplingSpec, _validate_downsample_rate_Hz
 
 if TYPE_CHECKING:
     from ..analysis import OffsetTrace, OffsetTraces
@@ -185,22 +184,16 @@ def _sample_trace(
     samplingspec: SamplingSpec,
 ) -> Sample:
     """Sample one prepared IV trace onto fixed V/I grids."""
-    v_down_mV, i_down_nA = _prepare_trace_for_sampling(trace=trace)
-    i_over_nA, v_over_mV = upsample_xy(
-        x=i_down_nA,
-        y=v_down_mV,
-        factor=samplingspec.upsample,
-        method="linear",
-    )
+    v_trace_mV, i_trace_nA = _prepare_trace_for_sampling(trace=trace)
 
     v_sampled_mV = bin_y_over_x(
-        x=i_over_nA,
-        y=v_over_mV,
+        x=i_trace_nA,
+        y=v_trace_mV,
         x_bins=samplingspec.Ibins_nA,
     )
     i_sampled_nA = bin_y_over_x(
-        x=v_over_mV,
-        y=i_over_nA,
+        x=v_trace_mV,
+        y=i_trace_nA,
         x_bins=samplingspec.Vbins_mV,
     )
 
@@ -242,7 +235,7 @@ def _sample_traces(
 
 def _smooth_supported_segment(
     y: NDArray64,
-    spec: SmoothingSpec,
+    spec: SamplingSpec,
 ) -> NDArray64:
     """Smooth one 1D curve on its finite supported segment."""
     y_arr = np.asarray(y, dtype=np.float64)
@@ -274,7 +267,7 @@ def _smooth_supported_segment(
 
 def _smooth_sample(
     sample: Sample,
-    spec: SmoothingSpec,
+    spec: SamplingSpec,
 ) -> Sample:
     """Smooth one sampled IV trace and recompute derivatives."""
     if spec.median_bins <= 1 and spec.sigma_bins <= 0.0:
@@ -300,7 +293,7 @@ def _smooth_sample(
 
 def _smooth_samples(
     samples: Samples,
-    spec: SmoothingSpec,
+    spec: SamplingSpec,
     show_progress: bool = False,
 ) -> Samples:
     """Smooth one collection of sampled IV traces."""
@@ -363,7 +356,7 @@ def _upsample_trace(
     *,
     factor: int,
 ) -> Trace:
-    """Oversample one IV trace in the ``I-V`` plane."""
+    """Oversample one IV trace by interpolating each trace array."""
     if int(factor) == 1:
         return _copy_trace_with_arrays(
             trace,
@@ -371,17 +364,20 @@ def _upsample_trace(
             I_nA=np.asarray(trace["I_nA"], dtype=np.float64),
         )
 
-    i_over_nA, v_over_mV = upsample_xy(
-        x=np.asarray(trace["I_nA"], dtype=np.float64),
-        y=np.asarray(trace["V_mV"], dtype=np.float64),
-        factor=int(factor),
-        method="linear",
-    )
+    factor = int(factor)
     t_raw = np.asarray(trace["t_s"], dtype=np.float64)
-    if t_raw.size >= 2:
-        t_over_s = np.linspace(t_raw[0], t_raw[-1], i_over_nA.size, dtype=np.float64)
-    else:
-        t_over_s = np.arange(i_over_nA.size, dtype=np.float64)
+    v_raw_mV = np.asarray(trace["V_mV"], dtype=np.float64)
+    i_raw_nA = np.asarray(trace["I_nA"], dtype=np.float64)
+    sample_index = np.arange(t_raw.size, dtype=np.float64)
+    sample_index_over = np.linspace(
+        0.0,
+        float(t_raw.size - 1),
+        t_raw.size * factor,
+        dtype=np.float64,
+    )
+    t_over_s = np.interp(sample_index_over, sample_index, t_raw)
+    v_over_mV = np.interp(sample_index_over, sample_index, v_raw_mV)
+    i_over_nA = np.interp(sample_index_over, sample_index, i_raw_nA)
     return _copy_trace_with_arrays(
         trace,
         V_mV=np.asarray(v_over_mV, dtype=np.float64),
@@ -455,11 +451,11 @@ def upsampling(
             )
         return Traces(
             traces=[
-                _upsample_trace(trace, factor=samplingspec.upsample)
+                _upsample_trace(trace, factor=samplingspec.N_up)
                 for trace in iterable
             ],
         )
-    return _upsample_trace(traces, factor=samplingspec.upsample)
+    return _upsample_trace(traces, factor=samplingspec.N_up)
 
 
 def binning(
@@ -481,17 +477,17 @@ def binning(
 def smooth(
     samples: Sample | Samples,
     *,
-    smoothingspec: SmoothingSpec,
+    samplingspec: SamplingSpec,
     show_progress: bool = False,
 ) -> Sample | Samples:
     """Smooth one sampled trace or one sampled-trace collection."""
     if isinstance(samples, Samples):
         return _smooth_samples(
             samples=samples,
-            spec=smoothingspec,
+            spec=samplingspec,
             show_progress=show_progress,
         )
-    return _smooth_sample(samples, spec=smoothingspec)
+    return _smooth_sample(samples, spec=samplingspec)
 
 
 __all__ = [
