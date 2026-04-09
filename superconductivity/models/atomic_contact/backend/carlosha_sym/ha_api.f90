@@ -2,48 +2,39 @@ module ha_sym_api
   implicit none
   integer, parameter :: ns = 520
 
-  ! Mirror the COMMON blocks from ha_sym.for
-  real :: v, temp, thop
-  real :: eta
-  integer :: nan
-
-  common /argum/ v, temp, thop
-  common /dynes/ eta
-  common /dim/  nan
-
 contains
 
-  subroutine ha_prepare_state(trans_in, temp_in, eta_in, v_in)
+  subroutine ha_prepare_state(trans_in, temp_in, eta_in, v_in, temp_out, thop_out, eta_out, nan_out)
     implicit none
     real, intent(in) :: trans_in, temp_in, eta_in, v_in
+    real, intent(out) :: temp_out, thop_out, eta_out
+    integer, intent(out) :: nan_out
     real :: trans_local
 
-    temp = temp_in
-    if (temp == 0.0) temp = 1.e-7
+    temp_out = temp_in
+    if (temp_out == 0.0) temp_out = 1.e-7
 
-    eta = eta_in
-    if (eta <= 0.0) eta = 1.e-6
+    eta_out = eta_in
+    if (eta_out <= 0.0) eta_out = 1.e-6
 
     trans_local = trans_in
     if (trans_local <= 0.0) then
-       thop = 0.0
+       thop_out = 0.0
     else
-       thop = sqrt((2.0-trans_local-2.0*sqrt(1.0-trans_local))/trans_local)
+       thop_out = sqrt((2.0-trans_local-2.0*sqrt(1.0-trans_local))/trans_local)
     end if
 
-    v = v_in
-
-    if (abs(v) < 1.e-12) then
-       nan = ns
+    if (abs(v_in) < 1.e-12) then
+       nan_out = ns
     else
-       nan = int(2.0/abs(v))
-       if (mod(nan,2) == 0) then
-          nan = nan + 7
+       nan_out = int(2.0/abs(v_in))
+       if (mod(nan_out,2) == 0) then
+          nan_out = nan_out + 7
        else
-          nan = nan + 6
+          nan_out = nan_out + 6
        end if
     end if
-    if (nan > ns) nan = ns
+    if (nan_out > ns) nan_out = ns
   end subroutine ha_prepare_state
 
   function ha_sym_curve(trans_in, temp_in, eta_in, wi, wf, voltages) result(currents)
@@ -54,15 +45,19 @@ contains
 
     complex :: Atol, Rtol
     complex, external :: zint
+    real :: temp_eval, thop_eval, eta_eval
     integer :: ierr, k
+    integer :: nan_eval
 
     Atol = (1.e-8, 1.0)
     Rtol = (1.e-6, 1.0)
     ierr = 0
 
     do k = 1, size(voltages)
-       call ha_prepare_state(trans_in, temp_in, eta_in, voltages(k))
-       currents(k) = real(zint(wi, wf, Atol, Rtol, ierr))
+       call ha_prepare_state(trans_in, temp_in, eta_in, voltages(k), &
+            temp_eval, thop_eval, eta_eval, nan_eval)
+       currents(k) = real(zint(wi, wf, Atol, Rtol, ierr, voltages(k), &
+            temp_eval, thop_eval, eta_eval, nan_eval))
     end do
   end function ha_sym_curve
 
