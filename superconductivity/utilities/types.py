@@ -21,8 +21,8 @@ ModelType: TypeAlias = tuple[ModelFunction, NDArray[np.bool_]]
 ParameterType: TypeAlias = tuple[float, tuple[float, float], bool]
 
 
-Number = Union[int, float]
-RGB = Tuple[Number, Number, Number]
-RGBA = Tuple[Number, Number, Number, Number]
-COLOR = Union[RGB, RGBA, Sequence[Number]]
-LIM = Optional[Tuple[Optional[float], Optional[float]]]
+Number: TypeAlias = Union[int, float]
+RGB: TypeAlias = Tuple[Number, Number, Number]
+RGBA: TypeAlias = Tuple[Number, Number, Number, Number]
+COLOR: TypeAlias = Union[RGB, RGBA, Sequence[Number]]
+LIM: TypeAlias = Optional[Tuple[Optional[float], Optional[float]]]
