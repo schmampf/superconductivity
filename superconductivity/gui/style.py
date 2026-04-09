@@ -3,7 +3,16 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Sequence
 
-from ..style.cpd5 import rot, schwarz, seeblau65, seeblau100, seegrau65, seegrau100
+from ..style.cpd5 import (
+    peach100,
+    rot,
+    schwarz,
+    seeblau35,
+    seeblau65,
+    seeblau100,
+    seegrau65,
+    seegrau100,
+)
 from ..style.plotly import mpl_color_to_plotly
 
 GUI_LINE_WIDTH = 2.0
@@ -12,7 +21,9 @@ GUI_MARKER_SIZE = 4
 _GUI_COLORS = {
     "raw": mpl_color_to_plotly(seegrau65),
     "downsampled": mpl_color_to_plotly(seegrau100),
+    "offset": mpl_color_to_plotly(peach100),
     "binned": mpl_color_to_plotly(schwarz),
+    "smoothed": mpl_color_to_plotly(seeblau35),
     "initial": mpl_color_to_plotly(seeblau65),
     "fit": mpl_color_to_plotly(seeblau100),
     "cutoff": mpl_color_to_plotly(rot),
@@ -21,7 +32,9 @@ _GUI_COLORS = {
 _GUI_TRACE_LABELS = {
     "raw": "Raw",
     "downsampled": "Downsampled",
+    "offset": "Offset",
     "binned": "Binned",
+    "smoothed": "Smoothed",
     "initial": "Initial",
     "fit": "Fit",
     "cutoff": "&sigma; cutoff",
@@ -39,12 +52,23 @@ _GUI_TRACE_STYLES = {
             "width": GUI_LINE_WIDTH,
         },
     },
+    "offset": {
+        "mode": "lines",
+        "line": {"color": _GUI_COLORS["offset"], "width": GUI_LINE_WIDTH},
+    },
     "binned": {
         "mode": "lines+markers",
         "line": {"color": _GUI_COLORS["binned"], "width": GUI_LINE_WIDTH},
         "marker": {
             "size": GUI_MARKER_SIZE,
             "color": _GUI_COLORS["binned"],
+        },
+    },
+    "smoothed": {
+        "mode": "lines",
+        "line": {
+            "color": _GUI_COLORS["smoothed"],
+            "width": GUI_LINE_WIDTH,
         },
     },
     "initial": {
