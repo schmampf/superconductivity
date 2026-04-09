@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pandas as pd
 import pytest
 
 pytest.importorskip("panel")
@@ -27,7 +28,6 @@ from superconductivity.evaluation.sampling import (
     Samples,
     sample,
 )
-from superconductivity.evaluation.sampling import SmoothingSpec
 from superconductivity.gui import GUIPanel, gui, gui_app
 
 gui_mod = importlib.import_module("superconductivity.gui.app")
@@ -46,7 +46,21 @@ def _trace_by_name(figure, name: str):
 
 
 def _experimental_setting_rows(panel: GUIPanel):
-    return panel._experimental_table.value.reset_index(drop=True).set_index("key")
+    return pd.DataFrame(
+        [
+            {
+                "key": "nu_Hz",
+                "parameter": panel._experimental_nu_slider.name,
+                "value": float(panel._experimental_nu_slider.value),
+            },
+            {
+                "key": "detrend",
+                "parameter": panel._experimental_detrend_toggle.name,
+                "value": bool(panel._experimental_detrend_toggle.value),
+            },
+        ],
+        dtype=object,
+    ).set_index("key")
 
 
 def _filespec_rows(panel: GUIPanel):
@@ -117,6 +131,20 @@ def _sampling_smoothing_rows(panel: GUIPanel):
     return panel._sampling_smoothing_table.value.reset_index(drop=True).set_index("key")
 
 
+def _sampling_with_smoothing(
+    spec: SamplingSpec,
+    *,
+    median_bins: int,
+    sigma_bins: float,
+) -> SamplingSpec:
+    return replace(
+        spec,
+        apply_smoothing=True,
+        median_bins=median_bins,
+        sigma_bins=sigma_bins,
+    )
+
+
 def _make_iv_trace(
     specific_key: str,
     index: int,
@@ -177,10 +205,12 @@ def test_gui_app_builds_without_server() -> None:
     assert panel._left_stage_selector.value == ["binned", "initial", "fit"]
     assert panel._left_v_quantity_selector.value == ["iv_v", "didv_v"]
     assert panel._left_i_quantity_selector.value == ["vi_i", "dvdi_i"]
-    assert len(panel._iv_figure.data) == 10
-    assert len(panel._vi_figure.data) == 10
+    assert len(panel._iv_figure.data) == 14
+    assert len(panel._vi_figure.data) == 14
     assert _trace_by_name(panel._iv_figure, "Raw").visible is False
+    assert _trace_by_name(panel._iv_figure, "Offset").visible is False
     assert _trace_by_name(panel._iv_figure, "Binned").visible is True
+    assert _trace_by_name(panel._iv_figure, "Smoothed").visible is False
     assert panel._iv_figure.layout.xaxis.matches == "x2"
     assert panel._vi_figure.layout.xaxis.matches == "x2"
     assert panel._iv_figure.layout.yaxis.title.text == "<i>I</i> (nA)"
@@ -201,22 +231,36 @@ def test_gui_app_builds_without_server() -> None:
     assert panel._experimental_psd_figure.data[0].mode == "lines"
     assert panel._experimental_psd_figure.data[1].name == "Downsampled"
     assert panel._experimental_psd_figure.data[1].mode == "lines"
-    assert panel._experimental_table.value.shape == (2, 3)
-    assert panel._experimental_table.titles["parameter"] == "Parameter"
-    assert panel._experimental_table.titles["value"] == "Value"
-    assert experimental_setting_rows.at["nu_Hz", "parameter"] == "<i>&nu;</i> (Hz)"
+    assert panel._experimental_nu_slider.name == "Sample Frequency (Hz)"
+    assert panel._experimental_nu_slider.value == pytest.approx(
+        panel._shared_nu_Hz
+    )
+    assert panel._experimental_detrend_toggle.name == "Detrend"
+    assert panel._experimental_detrend_toggle.value is True
     assert experimental_setting_rows.at["detrend", "parameter"] == "Detrend"
     assert len(panel._experimental_time_figure.layout.annotations) == 0
-    assert panel._experimental_apply_button.name == "PSD Analysis"
     assert panel._experimental_plot_tabs.active == 0
     assert panel._experimental_plot_tabs._names == ["S(f)", "V(t) / I(t)"]
-    assert panel._offset_apply_button.name == "Offset Analysis"
-    assert panel._offset_batch_apply_button.name == "Offset Analysis (All)"
+    assert panel._offset_apply_button.name == "Single"
+    assert panel._offset_batch_apply_button.name == "All"
     assert panel._offset_batch_stop_button.name == "Stop"
     assert panel._offset_batch_stop_button.disabled is True
+    assert panel._offset_display_selector.name == ""
+    assert panel._offset_display_selector.value == 0
     assert panel._offset_batch_progress.value == 0
     assert panel._offset_batch_state.object == "Idle"
-    assert panel._sampling_apply_button.name == "Sampling"
+    assert panel._sampling_apply_button.name == "Single"
+    assert panel._sampling_batch_apply_button.name == "All"
+    assert panel._sampling_batch_stop_button.name == "Stop"
+    assert panel._sampling_refresh_button.name == "Update"
+    assert panel._sampling_batch_stop_button.disabled is True
+    assert panel._sampling_batch_progress.value == 0
+    assert panel._sampling_stage_group.value == [
+        "apply_offset_correction",
+        "apply_downsampling",
+        "apply_upsampling",
+        "apply_smoothing",
+    ]
     assert "Downsampled" in panel._experimental_legend.object
     assert "Cutoff" not in panel._experimental_legend.object
     assert "flex-direction:row" in panel._experimental_legend.object
@@ -255,7 +299,7 @@ def test_gui_app_builds_without_server() -> None:
     sampling_info_rows = _sampling_info_rows(panel)
     sampling_smoothing_rows = _sampling_smoothing_rows(panel)
     assert panel._sampling_grid_table.value.shape == (2, 4)
-    assert panel._sampling_info_table.value.shape == (3, 3)
+    assert panel._sampling_info_table.value.shape == (2, 3)
     assert panel._sampling_smoothing_table.value.shape == (2, 3)
     assert np.issubdtype(
         panel._sampling_grid_table.value["count"].dtype,
@@ -266,18 +310,15 @@ def test_gui_app_builds_without_server() -> None:
     )
     assert panel._sampling_info_table.titles["parameter"] == "Parameter"
     assert panel._sampling_info_table.titles["value"] == "Value"
-    assert sampling_info_rows.at["upsample", "parameter"] == ("<i>N</i><sub>up</sub>")
-    assert sampling_info_rows.at["Voff_mV", "parameter"] == (
-        "<i>V</i><sub>off</sub> (mV)"
+    assert sampling_info_rows.at["nu_Hz", "parameter"] == "<i>&nu;</i> (Hz)"
+    assert sampling_info_rows.at["N_up", "parameter"] == ("<i>N</i><sub>up</sub>")
+    assert sampling_info_rows.at["nu_Hz", "value"] == pytest.approx(
+        panel._sampling_spec.nu_Hz
     )
-    assert sampling_info_rows.at["Ioff_nA", "parameter"] == (
-        "<i>I</i><sub>off</sub> (nA)"
+    assert sampling_info_rows.at["N_up", "value"] == pytest.approx(
+        panel._sampling_spec.N_up
     )
-    assert sampling_info_rows.at["upsample", "value"] == pytest.approx(
-        panel._sampling_spec.upsample
-    )
-    assert isinstance(sampling_info_rows.at["upsample", "value"], int)
-    assert panel._sampling_smooth_toggle.value is False
+    assert isinstance(sampling_info_rows.at["N_up", "value"], int)
     assert sampling_smoothing_rows.at["median_bins", "parameter"] == (
         "<i>N</i><sub>med</sub>"
     )
@@ -285,14 +326,15 @@ def test_gui_app_builds_without_server() -> None:
         "<i>&sigma;</i><sub>bins</sub>"
     )
     assert sampling_smoothing_rows.at["median_bins", "value"] == pytest.approx(
-        panel._smoothing_spec.median_bins
+        panel._sampling_spec.median_bins
     )
     assert isinstance(
         sampling_smoothing_rows.at["median_bins", "value"],
         int,
     )
-    assert panel._sampling_iv_figure.layout.title.text is None
-    assert panel._sampling_vi_figure.layout.title.text is None
+    assert panel._upsampled_trace is not None
+    assert panel._sampling_offset_v_figure.layout.title.text is None
+    assert panel._sampling_offset_i_figure.layout.title.text is None
     fit_config_rows = _fit_config_rows(panel)
     fit_parameter_rows = _fit_parameter_rows(panel)
     optimizer_rows = _optimizer_rows(panel)
@@ -324,10 +366,11 @@ def test_gui_app_builds_without_server() -> None:
     assert panel._filespec_table.value.shape == (3, 3)
     assert panel._keysspec_table.value.shape == (8, 3)
     assert panel._tracespec_table.value.shape == (7, 3)
-    assert panel._fit_config_table.value.shape == (4, 3)
+    assert panel._fit_config_table.value.shape == (5, 3)
     assert fit_config_rows.at["jax", "value"] is True
     assert fit_config_rows.at["conv", "value"] is True
     assert fit_config_rows.at["pat_enabled", "value"] is False
+    assert fit_config_rows.at["gap_distribution_enabled", "value"] is False
     assert fit_config_rows.at["noise_enabled", "value"] is False
     assert list(fit_parameter_rows.index) == [
         "GN_G0",
@@ -374,11 +417,10 @@ def test_gui_app_accepts_spec_presets() -> None:
         upsample=7,
     )
     sampling_spec = SamplingSpec(
-        upsample=6,
+        N_up=6,
         Vbins_mV=np.linspace(-0.25, 0.25, 41, dtype=np.float64),
         Ibins_nA=np.linspace(-3.0, 3.0, 61, dtype=np.float64),
-    )
-    smoothing_spec = SmoothingSpec(
+        apply_smoothing=True,
         median_bins=5,
         sigma_bins=1.25,
     )
@@ -392,7 +434,6 @@ def test_gui_app_accepts_spec_presets() -> None:
         psdspec=psd_spec,
         offsetspec=offset_spec,
         samplingspec=sampling_spec,
-        smoothingspec=smoothing_spec,
     )
 
     assert hasattr(app, "_gui_panel")
@@ -420,21 +461,16 @@ def test_gui_app_accepts_spec_presets() -> None:
     assert tracespec_rows.at["skip", "value"] == 5
     assert panel._shared_nu_Hz == pytest.approx(13.7)
     assert panel._experimental_detrend is psd_spec.detrend
-    assert experimental_setting_rows.at["nu_Hz", "value"] == pytest.approx(13.7)
     assert experimental_setting_rows.at["detrend", "value"] is False
     assert offset_rows.at["nu_Hz", "value"] == pytest.approx(11.0)
     assert offset_rows.at["upsample", "value"] == 7
     assert np.isfinite(float(offset_rows.at["Voff_mV", "value"]))
     assert np.isfinite(float(offset_rows.at["Ioff_nA", "value"]))
-    assert sampling_rows.at["upsample", "value"] == 6
-    assert sampling_rows.at["Voff_mV", "value"] == pytest.approx(
-        panel.state["offset"]["Voff_mV"]
+    assert sampling_rows.at["nu_Hz", "value"] == pytest.approx(
+        sampling_spec.nu_Hz
     )
-    assert sampling_rows.at["Ioff_nA", "value"] == pytest.approx(
-        panel.state["offset"]["Ioff_nA"]
-    )
-    assert panel._sampling_smooth_toggle.value is True
-    assert panel._smoothing_enabled is True
+    assert sampling_rows.at["N_up", "value"] == 6
+    assert panel._sampling_spec.apply_smoothing is True
     assert smoothing_rows.at["median_bins", "value"] == 5
     assert smoothing_rows.at["sigma_bins", "value"] == pytest.approx(1.25)
 
@@ -1389,19 +1425,17 @@ def test_gui_app_accepts_samples_preset() -> None:
         backend="numpy",
     )
     sampling_spec = SamplingSpec(
-        upsample=6,
+        N_up=6,
         Vbins_mV=np.linspace(-0.25, 0.25, 41, dtype=np.float64),
         Ibins_nA=np.linspace(-3.0, 3.0, 61, dtype=np.float64),
         nu_Hz=13.7,
-    )
-    smoothing_spec = SmoothingSpec(
+        apply_smoothing=True,
         median_bins=5,
         sigma_bins=1.25,
     )
     samples = sample(
         traces,
         samplingspec=sampling_spec,
-        smoothingspec=smoothing_spec,
         offsetanalysis=offsets,
         show_progress=False,
     )
@@ -1411,7 +1445,6 @@ def test_gui_app_accepts_samples_preset() -> None:
         offsetspec=offset_spec,
         offsetanalysis=offsets,
         samplingspec=sampling_spec,
-        smoothingspec=smoothing_spec,
         samples=samples,
     )
 
@@ -1419,7 +1452,7 @@ def test_gui_app_accepts_samples_preset() -> None:
 
     assert panel._sampling_stage_spec is not None
     assert panel._sampling_specs_match(panel._sampling_stage_spec, sampling_spec)
-    assert panel._sampling_stage_smoothing_enabled is True
+    assert panel._sampling_stage_spec.apply_smoothing is True
     assert np.allclose(panel.state["sampling"]["Vbins_mV"], samples[0]["Vbins_mV"])
     assert np.allclose(
         panel.state["sampling"]["I_nA"],
@@ -1440,12 +1473,11 @@ def test_gui_app_accepts_combined_stage_presets() -> None:
         upsample=7,
     )
     sampling_spec = SamplingSpec(
-        upsample=6,
+        N_up=6,
         Vbins_mV=np.linspace(-0.25, 0.25, 41, dtype=np.float64),
         Ibins_nA=np.linspace(-3.0, 3.0, 61, dtype=np.float64),
         nu_Hz=13.7,
-    )
-    smoothing_spec = SmoothingSpec(
+        apply_smoothing=True,
         median_bins=5,
         sigma_bins=1.25,
     )
@@ -1459,7 +1491,6 @@ def test_gui_app_accepts_combined_stage_presets() -> None:
     samples = sample(
         traces,
         samplingspec=sampling_spec,
-        smoothingspec=smoothing_spec,
         offsetanalysis=offsets,
         show_progress=False,
     )
@@ -1471,7 +1502,6 @@ def test_gui_app_accepts_combined_stage_presets() -> None:
         offsetspec=offset_spec,
         offsetanalysis=offsets,
         samplingspec=sampling_spec,
-        smoothingspec=smoothing_spec,
         samples=samples,
     )
 
@@ -1493,7 +1523,7 @@ def test_gui_rejects_invalid_stage_preset_shapes() -> None:
     single_psd = psd_analysis(one_trace, spec=psd_spec)[0]
     short_psds = psd_analysis(one_trace, spec=psd_spec)
     sampling_spec = SamplingSpec(
-        upsample=10,
+        N_up=10,
         Vbins_mV=np.linspace(-0.5, 0.5, 51, dtype=np.float64),
         Ibins_nA=np.linspace(-5.0, 5.0, 181, dtype=np.float64),
         nu_Hz=13.7,
@@ -1554,10 +1584,16 @@ def test_trace_change_repopulates_pipeline_and_left_plots() -> None:
     panel._trace_selector.value = 1
 
     after = np.asarray(panel.state["sampling"]["I_nA"], dtype=np.float64)
+    raw_after = np.asarray(panel._require_raw_sampling()["I_nA"], dtype=np.float64)
     assert panel.active_index == 1
     assert not np.allclose(before, after, equal_nan=True)
     assert np.allclose(
         _trace_by_name(panel._iv_figure, "Binned").y,
+        raw_after,
+        equal_nan=True,
+    )
+    assert np.allclose(
+        _trace_by_name(panel._iv_figure, "Smoothed").y,
         after,
         equal_nan=True,
     )
@@ -1599,8 +1635,8 @@ def test_left_quantity_selectors_rebuild_shared_x_stacks() -> None:
         "didv_i",
     ]
 
-    assert len(panel._iv_figure.data) == 20
-    assert len(panel._vi_figure.data) == 20
+    assert len(panel._iv_figure.data) == 28
+    assert len(panel._vi_figure.data) == 28
     assert panel._iv_figure.layout.xaxis.matches == "x4"
     assert panel._vi_figure.layout.xaxis.matches == "x4"
     assert panel._iv_figure.layout.yaxis3.title.text == (
@@ -1643,7 +1679,7 @@ def test_apply_buttons_update_expected_pipeline_stages(
     calls = {"psd": 0, "offset": 0, "sampling": 0}
     real_psd_analysis = gui_mod.psd_analysis
     real_offset_analysis = gui_mod.offset_analysis
-    real_sample = gui_mod.sample
+    real_binning = gui_mod.binning
 
     def wrapped_psd(*args, **kwargs):
         calls["psd"] += 1
@@ -1655,11 +1691,11 @@ def test_apply_buttons_update_expected_pipeline_stages(
 
     def wrapped_sampling(*args, **kwargs):
         calls["sampling"] += 1
-        return real_sample(*args, **kwargs)
+        return real_binning(*args, **kwargs)
 
     monkeypatch.setattr(gui_mod, "psd_analysis", wrapped_psd)
     monkeypatch.setattr(gui_mod, "offset_analysis", wrapped_offset)
-    monkeypatch.setattr(gui_mod, "sample", wrapped_sampling)
+    monkeypatch.setattr(gui_mod, "binning", wrapped_sampling)
 
     panel = GUIPanel(_make_traces())
     panel._set_fit_solution(_fake_solution(panel))
@@ -1685,10 +1721,10 @@ def test_apply_buttons_update_expected_pipeline_stages(
     calls.update(psd=0, offset=0, sampling=0)
     sampling_info_table = panel._sampling_info_table.value.copy()
     sampling_info_table.loc[
-        sampling_info_table["key"] == "upsample",
+        sampling_info_table["key"] == "N_up",
         "value",
     ] = (
-        panel._sampling_spec.upsample + 1
+        panel._sampling_spec.N_up + 1
     )
     panel._sampling_info_table.value = sampling_info_table
     panel._on_sampling_apply(SimpleNamespace())
@@ -1696,15 +1732,10 @@ def test_apply_buttons_update_expected_pipeline_stages(
     assert calls == {"psd": 0, "offset": 0, "sampling": 1}
 
     calls.update(psd=0, offset=0, sampling=0)
-    experimental_table = panel._experimental_table.value.copy()
-    experimental_table.loc[
-        experimental_table["key"] == "nu_Hz",
-        "value",
-    ] = (
-        panel._shared_nu_Hz + 1.0
+    panel._experimental_nu_slider.value = (
+        panel._experimental_nu_slider.value
+        + panel._experimental_nu_slider.step
     )
-    panel._experimental_table.value = experimental_table
-    panel._on_experimental_apply(SimpleNamespace())
 
     assert calls == {"psd": 2, "offset": 0, "sampling": 0}
 
@@ -1789,6 +1820,7 @@ def test_offset_batch_run_updates_progress_and_selection(
     panel._update_offset_batch_timer()
     rows = _offset_batch_rows(panel)
     assert rows.at[1, "status"] == "running"
+    assert panel._offset_display_selector.value == 1
 
     queue.put(("done", 1, offset_1, ""))
     panel._update_offset_batch_timer()
@@ -1800,18 +1832,23 @@ def test_offset_batch_run_updates_progress_and_selection(
     assert panel.active_index == 1
     assert panel.state["offset"]["Voff_mV"] == pytest.approx(offset_1["Voff_mV"])
     assert np.allclose(
-        np.asarray(panel._offset_batch_v_figure.data[2].customdata, dtype=np.int64),
+        np.asarray(panel._offset_batch_v_figure.data[1].customdata, dtype=np.int64),
         np.asarray([1], dtype=np.int64),
     )
+    assert np.asarray(panel._offset_batch_v_figure.data[2].customdata).size == 0
 
     queue.put(("done", 0, offset_0, ""))
     panel._update_offset_batch_timer()
     offset_rows = _offset_info_rows(panel)
     assert panel.active_index == 1
     assert panel._offset_batch_running is True
-    assert offset_rows.at["Voff_mV", "value"] == pytest.approx(offset_1["Voff_mV"])
-    assert offset_rows.at["Ioff_nA", "value"] == pytest.approx(offset_1["Ioff_nA"])
-    assert np.asarray(panel._offset_batch_v_figure.data[1].customdata).size == 0
+    assert panel._offset_display_selector.value == 0
+    assert offset_rows.at["Voff_mV", "value"] == pytest.approx(offset_0["Voff_mV"])
+    assert offset_rows.at["Ioff_nA", "value"] == pytest.approx(offset_0["Ioff_nA"])
+    assert np.allclose(
+        np.asarray(panel._offset_batch_v_figure.data[1].customdata, dtype=np.int64),
+        np.asarray([0], dtype=np.int64),
+    )
 
     future.finish()
     panel._update_offset_batch_timer()
@@ -1836,16 +1873,38 @@ def test_offset_batch_run_updates_progress_and_selection(
         np.asarray(panel._offset_batch_i_figure.data[0].customdata, dtype=np.int64),
         np.asarray([0, 1], dtype=np.int64),
     )
-    assert np.asarray(panel._offset_batch_i_figure.data[1].customdata).size == 0
     assert np.allclose(
-        np.asarray(panel._offset_batch_i_figure.data[2].customdata, dtype=np.int64),
-        np.asarray([1], dtype=np.int64),
+        np.asarray(panel._offset_batch_i_figure.data[1].customdata, dtype=np.int64),
+        np.asarray([0], dtype=np.int64),
     )
+    assert np.asarray(panel._offset_batch_i_figure.data[2].customdata).size == 0
 
     panel._on_offset_batch_table_selection(SimpleNamespace(new=[0]))
     assert panel.active_index == 1
     assert _offset_info_rows(panel).at["Voff_mV", "value"] == pytest.approx(
         offset_1["Voff_mV"]
+    )
+
+
+def test_offset_display_selector_decouples_offset_views_from_active_trace() -> None:
+    panel = GUIPanel(_make_traces())
+    panel._offset_batch_spec = replace(panel._offset_spec)
+
+    offset_0 = offset_analysis(panel.traces[0], spec=replace(panel._offset_spec))
+    offset_1 = offset_analysis(panel.traces[1], spec=replace(panel._offset_spec))
+    panel._stage_offset_result(0, offset_0, select=False)
+    panel._stage_offset_result(1, offset_1, select=False)
+    panel._trace_selector.value = 1
+    panel._offset_display_selector.value = 0
+
+    assert panel.active_index == 1
+    assert panel._offset_batch_display_index == 0
+    assert _offset_info_rows(panel).at["Voff_mV", "value"] == pytest.approx(
+        offset_0["Voff_mV"]
+    )
+    assert panel._offset_display_selector.value == 0
+    assert _offset_info_rows(panel).at["Voff_mV", "value"] == pytest.approx(
+        offset_0["Voff_mV"]
     )
 
 
@@ -2024,6 +2083,270 @@ def test_offset_spec_edit_clears_cached_batch_results() -> None:
     assert len(panel._offset_batch_i_figure.data[0].x) == 0
 
 
+def test_sampling_batch_run_updates_progress_and_offset_results(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    panel = GUIPanel(_make_traces())
+    panel._trace_selector.value = 1
+    captured: dict[str, object] = {}
+
+    class DummyTimer:
+        def __init__(self):
+            self.stopped = False
+
+        def stop(self):
+            self.stopped = True
+
+    class DummyFuture:
+        def __init__(self):
+            self._done = False
+
+        def done(self):
+            return self._done
+
+        def result(self):
+            return None
+
+        def finish(self):
+            self._done = True
+
+    future = DummyFuture()
+
+    class DummyExecutor:
+        def submit(
+            self,
+            function,
+            traces,
+            order,
+            spec,
+            offsetanalysis_by_index,
+            event_queue,
+            stop_event,
+        ):
+            captured["function"] = function
+            captured["traces"] = traces
+            captured["order"] = order
+            captured["spec"] = spec
+            captured["offsetanalysis_by_index"] = offsetanalysis_by_index
+            captured["queue"] = event_queue
+            captured["stop_event"] = stop_event
+            return future
+
+    def fake_add_periodic_callback(callback, period, start):
+        _ = callback, period, start
+        timer = DummyTimer()
+        captured["timer"] = timer
+        return timer
+
+    monkeypatch.setattr(
+        panel._pn.state,
+        "add_periodic_callback",
+        fake_add_periodic_callback,
+    )
+    panel._executor = DummyExecutor()
+
+    panel._on_sampling_batch_apply(SimpleNamespace())
+
+    assert captured["order"] == [1, 0]
+    assert panel._sampling_batch_running is True
+    assert panel._sampling_apply_button.disabled is True
+    assert panel._sampling_batch_apply_button.disabled is True
+    assert panel._sampling_batch_stop_button.disabled is False
+    assert panel._sampling_grid_table.disabled is True
+    assert panel._sampling_info_table.disabled is True
+    assert panel._sampling_smoothing_table.disabled is True
+    assert panel._fit_button.disabled is True
+    assert panel._sampling_batch_progress.value == 0
+    assert panel._sampling_batch_state.object == "Running"
+
+    sample_1 = sample(
+        panel.traces[1],
+        samplingspec=replace(panel._sampling_spec),
+        offsetanalysis=captured["offsetanalysis_by_index"][1],
+        show_progress=False,
+    )
+    sample_0 = sample(
+        panel.traces[0],
+        samplingspec=replace(panel._sampling_spec),
+        offsetanalysis=captured["offsetanalysis_by_index"][0],
+        show_progress=False,
+    )
+
+    queue = captured["queue"]
+    queue.put(("running", 1, None, ""))
+    panel._update_sampling_batch_timer()
+    assert panel._sampling_batch_status[1] == "running"
+
+    queue.put(("done", 1, sample_1, ""))
+    panel._update_sampling_batch_timer()
+    assert panel._sampling_batch_progress.value == 1
+    assert panel.active_index == 1
+    assert np.allclose(
+        np.asarray(panel.state["sampling"]["I_nA"], dtype=np.float64),
+        np.asarray(sample_1["I_nA"], dtype=np.float64),
+        equal_nan=True,
+    )
+    assert np.asarray(panel._sampling_offset_v_figure.data[0].customdata).size == 0
+    assert np.allclose(
+        np.asarray(
+            panel._sampling_offset_v_figure.data[1].customdata,
+            dtype=np.int64,
+        ),
+        np.asarray([1], dtype=np.int64),
+    )
+
+    queue.put(("done", 0, sample_0, ""))
+    panel._update_sampling_batch_timer()
+    assert panel._sampling_batch_progress.value == 2
+    assert np.asarray(panel._sampling_offset_v_figure.data[0].customdata).size == 0
+    assert np.asarray(panel._sampling_offset_i_figure.data[0].customdata).size == 0
+
+    future.finish()
+    panel._update_sampling_batch_timer()
+
+    assert panel._sampling_batch_running is False
+    assert panel._sampling_apply_button.disabled is False
+    assert panel._sampling_batch_apply_button.disabled is False
+    assert panel._sampling_batch_stop_button.disabled is True
+    assert panel._sampling_grid_table.disabled is False
+    assert panel._sampling_info_table.disabled is False
+    assert panel._sampling_smoothing_table.disabled is False
+    assert panel._fit_button.disabled is False
+    assert panel._sampling_batch_state.object == "Done"
+    assert captured["timer"].stopped is True
+    assert list(panel._sampling_batch_status) == ["done", "done"]
+
+
+def test_sampling_batch_can_be_stopped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    panel = GUIPanel(_make_traces())
+    captured: dict[str, object] = {}
+
+    class DummyTimer:
+        def __init__(self):
+            self.stopped = False
+
+        def stop(self):
+            self.stopped = True
+
+    class DummyFuture:
+        def __init__(self):
+            self._done = False
+
+        def done(self):
+            return self._done
+
+        def result(self):
+            return None
+
+        def finish(self):
+            self._done = True
+
+    future = DummyFuture()
+
+    class DummyExecutor:
+        def submit(
+            self,
+            function,
+            traces,
+            order,
+            spec,
+            offsetanalysis_by_index,
+            event_queue,
+            stop_event,
+        ):
+            _ = function, traces, order, spec, offsetanalysis_by_index
+            captured["queue"] = event_queue
+            captured["stop_event"] = stop_event
+            return future
+
+    def fake_add_periodic_callback(callback, period, start):
+        _ = callback, period, start
+        timer = DummyTimer()
+        captured["timer"] = timer
+        return timer
+
+    monkeypatch.setattr(
+        panel._pn.state,
+        "add_periodic_callback",
+        fake_add_periodic_callback,
+    )
+    panel._executor = DummyExecutor()
+
+    panel._on_sampling_batch_apply(SimpleNamespace())
+
+    assert panel._sampling_batch_stop_button.disabled is False
+    panel._on_sampling_batch_stop(SimpleNamespace())
+    assert panel._sampling_batch_stop_requested is True
+    assert captured["stop_event"].is_set() is True
+    assert panel._sampling_batch_stop_button.disabled is True
+    assert panel._sampling_batch_state.object == "Stopping"
+
+    sampled_0 = sample(
+        panel.traces[0],
+        samplingspec=replace(panel._sampling_spec),
+        offsetanalysis=None,
+        show_progress=False,
+    )
+    captured["queue"].put(("done", 0, sampled_0, ""))
+    future.finish()
+    panel._update_sampling_batch_timer()
+
+    assert list(panel._sampling_batch_status) == ["done", "stopped"]
+    assert panel._sampling_batch_running is False
+    assert panel._sampling_batch_state.object == "Stopped"
+    assert captured["timer"].stopped is True
+
+
+def test_sampling_spec_edit_clears_cached_batch_results() -> None:
+    panel = GUIPanel(_make_traces())
+    panel._sampling_stage_spec = panel._current_sampling_stage_signature()
+    panel._sampling_stage_results[0] = panel._copy_sample_trace(panel.state["sampling"])
+    panel._sampling_stage_results[1] = sample(
+        panel.traces[1],
+        samplingspec=replace(panel._sampling_spec),
+        offsetanalysis=None,
+        show_progress=False,
+    )
+    panel._sampling_batch_status = ["done", "done"]
+    panel._sampling_batch_completed = 2
+    panel._sampling_batch_progress.value = 2
+    panel._refresh_sampling_views()
+
+    assert np.asarray(panel._sampling_offset_v_figure.data[0].x).size == 0
+
+    panel._on_sampling_spec_edited(SimpleNamespace())
+
+    assert panel._sampling_stage_spec is None
+    assert panel._sampling_batch_running is False
+    assert list(panel._sampling_batch_status) == ["idle", "idle"]
+    assert panel._sampling_batch_progress.value == 0
+    assert np.asarray(panel._sampling_offset_v_figure.data[0].x).size == 0
+    assert np.asarray(panel._sampling_offset_i_figure.data[0].x).size == 0
+
+
+def test_sampling_offset_plots_follow_offset_results_not_sampling_cache() -> None:
+    panel = GUIPanel(_make_traces())
+    offset_1 = offset_analysis(panel.traces[1], spec=replace(panel._offset_spec))
+    panel._offset_batch_spec = replace(panel._offset_spec)
+    panel._stage_offset_result(1, offset_1, select=False)
+
+    panel._refresh_sampling_views()
+
+    assert np.allclose(
+        np.asarray(panel._sampling_offset_v_figure.data[0].x, dtype=np.float64),
+        np.asarray([offset_1["Voff_mV"]], dtype=np.float64),
+    )
+    assert np.allclose(
+        np.asarray(
+            panel._sampling_offset_v_figure.data[0].customdata,
+            dtype=np.int64,
+        ),
+        np.asarray([1], dtype=np.int64),
+    )
+
+
 def test_psd_apply_replaces_staged_preset_and_clears_stale_entries() -> None:
     traces = _make_traces()
     psd_spec = PSDSpec(detrend=False)
@@ -2034,13 +2357,7 @@ def test_psd_apply_replaces_staged_preset_and_clears_stale_entries() -> None:
         psdanalysis=psds,
     )
 
-    experimental_table = panel._experimental_table.value.copy()
-    experimental_table.loc[
-        experimental_table["key"] == "detrend",
-        "value",
-    ] = True
-    panel._experimental_table.value = experimental_table
-    panel._on_experimental_apply(SimpleNamespace())
+    panel._experimental_detrend_toggle.value = True
 
     assert panel._psd_stage_spec is not None
     assert panel._psd_stage_spec.detrend is True
@@ -2069,28 +2386,25 @@ def test_sampling_apply_replaces_staged_preset_and_clears_stale_entries() -> Non
         backend="numpy",
     )
     sampling_spec = SamplingSpec(
-        upsample=6,
+        N_up=6,
         Vbins_mV=np.linspace(-0.25, 0.25, 41, dtype=np.float64),
         Ibins_nA=np.linspace(-3.0, 3.0, 61, dtype=np.float64),
         nu_Hz=13.7,
-    )
-    smoothing_spec = SmoothingSpec(
+        apply_smoothing=True,
         median_bins=5,
         sigma_bins=1.25,
     )
     samples = sample(
         traces,
         samplingspec=sampling_spec,
-        smoothingspec=smoothing_spec,
         offsetanalysis=offsets,
         show_progress=False,
     )
     panel = GUIPanel(
         traces,
-                offsetspec=offset_spec,
+        offsetspec=offset_spec,
         offsetanalysis=offsets,
         samplingspec=sampling_spec,
-        smoothingspec=smoothing_spec,
         samples=samples,
     )
 
@@ -2135,9 +2449,6 @@ def test_gui_panel_matches_backend_outputs() -> None:
         equal_nan=True,
     )
     experimental_setting_rows = _experimental_setting_rows(panel)
-    assert experimental_setting_rows.at["nu_Hz", "value"] == pytest.approx(
-        panel._shared_nu_Hz
-    )
     assert bool(experimental_setting_rows.at["detrend", "value"]) is True
     offset_rows = _offset_info_rows(panel)
     assert offset_rows.at["nu_Hz", "value"] == pytest.approx(panel._offset_spec.nu_Hz)
@@ -2148,12 +2459,13 @@ def test_gui_panel_matches_backend_outputs() -> None:
     assert offset_rows.at["Ioff_nA", "value"] == pytest.approx(
         offset_expected["Ioff_nA"]
     )
-    sampling_rows = _sampling_info_rows(panel)
-    assert sampling_rows.at["Voff_mV", "value"] == pytest.approx(
-        offset_expected["Voff_mV"]
+    assert np.allclose(
+        np.asarray(panel._sampling_offset_v_figure.data[1].x, dtype=np.float64),
+        np.asarray([offset_expected["Voff_mV"]], dtype=np.float64),
     )
-    assert sampling_rows.at["Ioff_nA", "value"] == pytest.approx(
-        offset_expected["Ioff_nA"]
+    assert np.allclose(
+        np.asarray(panel._sampling_offset_i_figure.data[1].x, dtype=np.float64),
+        np.asarray([offset_expected["Ioff_nA"]], dtype=np.float64),
     )
 
 
@@ -2192,7 +2504,7 @@ def test_fit_uses_sampled_curve_and_updates_iv_overlay(
         _trace_by_name(panel._iv_figure, "Fit").y,
         fake_solution["I_fit_nA"],
     )
-    assert len(panel._vi_figure.data) == 10
+    assert len(panel._vi_figure.data) == 14
     assert _trace_by_name(panel._vi_figure, "Fit").visible is True
 
 
@@ -2231,8 +2543,16 @@ def test_fit_model_table_controls_active_model_and_parameters() -> None:
     assert _fit_parameter_rows(panel).at["A_mV", "guess"] == pytest.approx(0.25)
 
     panel._on_fit_config_edit(SimpleNamespace(row=3, column="value", value=True))
-    assert panel.model_key == "bcs_conv_jax_pat_noise"
-    assert list(_fit_parameter_rows(panel).index[-1:]) == ["sigma_V_mV"]
+    assert panel.model_key == "bcs_conv_jax_pat_gapdist"
+    assert list(_fit_parameter_rows(panel).index[-1:]) == ["sigma_Delta_meV"]
+    assert _model_rows(panel).at["gap_distribution_order", "value"] == "41"
+
+    panel._on_fit_config_edit(SimpleNamespace(row=4, column="value", value=True))
+    assert panel.model_key == "bcs_conv_jax_pat_gapdist_noise"
+    assert list(_fit_parameter_rows(panel).index[-2:]) == [
+        "sigma_Delta_meV",
+        "sigma_V_mV",
+    ]
     assert _model_rows(panel).at["noise_oversample", "value"] == "64"
     assert _optimizer_rows(panel).at["solver", "value"] == "scipy.optimize.curve_fit"
 
@@ -2313,7 +2633,7 @@ def test_sampling_apply_can_enable_smoothing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     panel = GUIPanel(_make_traces())
-    raw_sampling = np.asarray(panel.state["sampling"]["I_nA"], dtype=np.float64)
+    raw_sampling = np.asarray(panel._require_raw_sampling()["I_nA"], dtype=np.float64)
 
     def fake_smoothing(*args, **kwargs):
         _ = args, kwargs
@@ -2328,7 +2648,6 @@ def test_sampling_apply_can_enable_smoothing(
     )
 
     sampling_smoothing_table = panel._sampling_smoothing_table.value.copy()
-    panel._sampling_smooth_toggle.value = True
     sampling_smoothing_table.loc[
         sampling_smoothing_table["key"] == "median_bins",
         "value",
@@ -2340,7 +2659,7 @@ def test_sampling_apply_can_enable_smoothing(
     panel._sampling_smoothing_table.value = sampling_smoothing_table
     panel._on_sampling_apply(SimpleNamespace())
 
-    assert panel._smoothing_enabled is True
+    assert panel._sampling_spec.apply_smoothing is True
     assert np.allclose(
         panel.state["sampling"]["I_nA"],
         raw_sampling * 0.9,
@@ -2348,24 +2667,85 @@ def test_sampling_apply_can_enable_smoothing(
     )
     assert np.allclose(
         _trace_by_name(panel._iv_figure, "Binned").y,
+        raw_sampling,
+        equal_nan=True,
+    )
+    assert _trace_by_name(panel._iv_figure, "Smoothed").visible is False
+    assert np.allclose(
+        _trace_by_name(panel._iv_figure, "Smoothed").y,
         raw_sampling * 0.9,
         equal_nan=True,
     )
 
 
+def test_sampling_stage_group_updates_pipeline_flags() -> None:
+    panel = GUIPanel(_make_traces())
+
+    panel._sampling_stage_group.value = [
+        "apply_offset_correction",
+        "apply_downsampling",
+    ]
+    panel._on_sampling_apply(SimpleNamespace())
+
+    assert panel._sampling_spec.apply_offset_correction is True
+    assert panel._sampling_spec.apply_downsampling is True
+    assert panel._sampling_spec.apply_upsampling is False
+    assert panel._sampling_spec.apply_smoothing is False
+
+
 def test_sampling_offsets_follow_active_trace() -> None:
     panel = GUIPanel(_make_traces())
-    rows_0 = _sampling_info_rows(panel)
     offset_0 = panel.state["offset"]
-    assert rows_0.at["Voff_mV", "value"] == pytest.approx(offset_0["Voff_mV"])
-    assert rows_0.at["Ioff_nA", "value"] == pytest.approx(offset_0["Ioff_nA"])
+    assert np.allclose(
+        np.asarray(panel._sampling_offset_v_figure.data[1].x, dtype=np.float64),
+        np.asarray([offset_0["Voff_mV"]], dtype=np.float64),
+    )
+    assert np.allclose(
+        np.asarray(panel._sampling_offset_i_figure.data[1].x, dtype=np.float64),
+        np.asarray([offset_0["Ioff_nA"]], dtype=np.float64),
+    )
+    assert np.allclose(
+        np.asarray(
+            panel._sampling_offset_v_figure.data[1].customdata,
+            dtype=np.int64,
+        ),
+        np.asarray([0], dtype=np.int64),
+    )
 
     panel._trace_selector.value = 1
 
-    sampling_rows = _sampling_info_rows(panel)
     offset_1 = panel.state["offset"]
-    assert sampling_rows.at["Voff_mV", "value"] == pytest.approx(offset_1["Voff_mV"])
-    assert sampling_rows.at["Ioff_nA", "value"] == pytest.approx(offset_1["Ioff_nA"])
+    assert np.allclose(
+        np.asarray(panel._sampling_offset_v_figure.data[1].x, dtype=np.float64),
+        np.asarray([offset_1["Voff_mV"]], dtype=np.float64),
+    )
+    assert np.allclose(
+        np.asarray(panel._sampling_offset_i_figure.data[1].x, dtype=np.float64),
+        np.asarray([offset_1["Ioff_nA"]], dtype=np.float64),
+    )
+    assert np.allclose(
+        np.asarray(
+            panel._sampling_offset_i_figure.data[1].customdata,
+            dtype=np.int64,
+        ),
+        np.asarray([1], dtype=np.int64),
+    )
+
+
+def test_offset_and_sampling_plots_use_keysspec_html_label() -> None:
+    panel = GUIPanel(
+        _make_traces(),
+        keysspec=KeysSpec(html_label="<i>T</i> (K)"),
+    )
+
+    assert panel._offset_g_figure.layout.yaxis2.title.text == "<i>T</i> (K)"
+    assert panel._offset_r_figure.layout.yaxis2.title.text == "<i>T</i> (K)"
+    assert panel._sampling_offset_v_figure.layout.yaxis.title.text == (
+        "<i>T</i> (K)"
+    )
+    assert panel._sampling_offset_i_figure.layout.yaxis.title.text == (
+        "<i>T</i> (K)"
+    )
 
 
 def test_offset_info_values_are_display_rounded() -> None:

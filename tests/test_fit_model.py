@@ -47,6 +47,7 @@ def test_fit_model_supports_composed_bcs_config() -> None:
         "conv",
         "np",
         pat_enabled=True,
+        gap_distribution_enabled=True,
         noise_enabled=True,
     )
     spec = get_model_spec(model)
@@ -60,5 +61,5 @@ def test_fit_model_supports_composed_bcs_config() -> None:
         maxfev=20,
     )
 
-    assert len(solution["params"]) == 7
+    assert len(solution["params"]) == 8
     assert np.max(np.abs(solution["I_fit_nA"] - I_nA)) < 1e-6
