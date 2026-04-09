@@ -22,6 +22,8 @@ __pycache__/
 *.zip
 *.stl
 *.hdf5
+*.h5
+*.h5.lock
 
 plotly.min.js
 
