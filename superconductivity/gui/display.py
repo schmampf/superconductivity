@@ -9,15 +9,15 @@ from plotly.subplots import make_subplots
 
 from ..evaluation.traces import numeric_yvalue
 from .style import gui_trace_label, gui_trace_style
-from ..style.cpd5 import seeblau35
-from ..style.plotly import mpl_color_to_plotly
 from ..utilities.constants import G_0_muS
 from ..utilities.types import NDArray64
 
 _LEFT_STAGE_BUTTON_ORDER = (
     "raw",
     "downsampled",
+    "offset",
     "binned",
+    "smoothed",
     "initial",
     "fit",
 )
@@ -52,6 +52,19 @@ _LEFT_I_QUANTITY_LABELS = {
 
 
 class GUILeftMixin:
+    def _y_axis_html_label(self) -> str:
+        keys = getattr(self, "_keys", None)
+        if keys is not None:
+            html_label = getattr(keys, "html_label", None)
+            if isinstance(html_label, str) and html_label.strip() != "":
+                return html_label
+        keysspec = getattr(self, "_keysspec", None)
+        if keysspec is not None:
+            html_label = getattr(keysspec, "html_label", None)
+            if isinstance(html_label, str) and html_label.strip() != "":
+                return html_label
+        return "y"
+
     def _build_left_controls(self) -> None:
         self._left_stage_selector = self._pn.widgets.CheckButtonGroup(
             options=OrderedDict(
@@ -127,8 +140,12 @@ class GUILeftMixin:
         self._offset_batch_v_figure = self._build_offset_batch_figure(kind="V")
         self._offset_batch_i_figure = self._build_offset_batch_figure(kind="I")
 
-        self._sampling_iv_figure = self._build_sampling_preview(kind="IV")
-        self._sampling_vi_figure = self._build_sampling_preview(kind="VI")
+        self._sampling_offset_v_figure = self._build_sampling_offset_figure(
+            kind="V"
+        )
+        self._sampling_offset_i_figure = self._build_sampling_offset_figure(
+            kind="I"
+        )
 
         self._iv_pane = self._pn.pane.Plotly(
             self._iv_figure,
@@ -149,48 +166,56 @@ class GUILeftMixin:
             sizing_mode="stretch_width",
             height=420,
             config={"responsive": True},
+            margin=0,
         )
         self._experimental_psd_pane = self._pn.pane.Plotly(
             self._experimental_psd_figure,
             sizing_mode="stretch_width",
             height=420,
             config={"responsive": True},
+            margin=0,
         )
         self._offset_g_pane = self._pn.pane.Plotly(
             self._offset_g_figure,
             sizing_mode="stretch_width",
-            height=240,
+            height=480,
             config={"responsive": True},
+            margin=0,
         )
         self._offset_r_pane = self._pn.pane.Plotly(
             self._offset_r_figure,
             sizing_mode="stretch_width",
-            height=240,
+            height=480,
             config={"responsive": True},
+            margin=0,
         )
         self._offset_batch_v_pane = self._pn.pane.Plotly(
             self._offset_batch_v_figure,
             sizing_mode="stretch_width",
             height=240,
             config={"responsive": True},
+            margin=0,
         )
         self._offset_batch_i_pane = self._pn.pane.Plotly(
             self._offset_batch_i_figure,
             sizing_mode="stretch_width",
             height=240,
             config={"responsive": True},
+            margin=0,
         )
-        self._sampling_iv_pane = self._pn.pane.Plotly(
-            self._sampling_iv_figure,
+        self._sampling_offset_v_pane = self._pn.pane.Plotly(
+            self._sampling_offset_v_figure,
             sizing_mode="stretch_width",
-            height=260,
+            height=240,
             config={"responsive": True},
+            margin=0,
         )
-        self._sampling_vi_pane = self._pn.pane.Plotly(
-            self._sampling_vi_figure,
+        self._sampling_offset_i_pane = self._pn.pane.Plotly(
+            self._sampling_offset_i_figure,
             sizing_mode="stretch_width",
-            height=260,
+            height=240,
             config={"responsive": True},
+            margin=0,
         )
 
     def _left_trace(self, stage: str) -> go.Scatter:
@@ -209,6 +234,8 @@ class GUILeftMixin:
     def _left_trace_visible(self, stage: str) -> bool:
         if stage == "fit" and self._fit_solution is None:
             return False
+        if stage == "smoothed" and self._smoothed_sampling is None:
+            return False
         return stage in self._left_stage_selector.value
 
     def _on_left_v_relayout(self, event: object) -> None:
@@ -225,7 +252,6 @@ class GUILeftMixin:
 
     def _left_iv_stage_data(self, stage: str) -> tuple[NDArray64, NDArray64]:
         trace = self._active_trace()
-        sampling = self._require_sampling()
         if stage == "raw":
             return (
                 np.asarray(trace["V_mV"], dtype=np.float64),
@@ -236,11 +262,25 @@ class GUILeftMixin:
                 np.asarray(self._downsampled_V_mV, dtype=np.float64),
                 np.asarray(self._downsampled_I_nA, dtype=np.float64),
             )
+        if stage == "offset":
+            offset_trace = self._require_offset_corrected_trace()
+            return (
+                np.asarray(offset_trace["V_mV"], dtype=np.float64),
+                np.asarray(offset_trace["I_nA"], dtype=np.float64),
+            )
         if stage == "binned":
+            sampling = self._require_raw_sampling()
             return (
                 np.asarray(sampling["Vbins_mV"], dtype=np.float64),
                 np.asarray(sampling["I_nA"], dtype=np.float64),
             )
+        if stage == "smoothed":
+            sampling = self._require_sampling()
+            return (
+                np.asarray(sampling["Vbins_mV"], dtype=np.float64),
+                np.asarray(sampling["I_nA"], dtype=np.float64),
+            )
+        sampling = self._require_sampling()
         if stage == "initial":
             return (
                 np.asarray(sampling["Vbins_mV"], dtype=np.float64),
@@ -589,8 +629,8 @@ class GUILeftMixin:
         )
         figure.add_trace(
             go.Scatter(
-                x=self._downsampled_t_s,
-                y=self._downsampled_V_mV,
+                x=self._psd_downsampled_t_s,
+                y=self._psd_downsampled_V_mV,
                 mode=downsampled_style["mode"],
                 marker=downsampled_style.get("marker"),
                 line=downsampled_style["line"],
@@ -616,8 +656,8 @@ class GUILeftMixin:
         )
         figure.add_trace(
             go.Scatter(
-                x=self._downsampled_t_s,
-                y=self._downsampled_I_nA,
+                x=self._psd_downsampled_t_s,
+                y=self._psd_downsampled_I_nA,
                 mode=downsampled_style["mode"],
                 marker=downsampled_style.get("marker"),
                 line=downsampled_style["line"],
@@ -736,7 +776,12 @@ class GUILeftMixin:
         return figure
 
     def _build_offset_figure(self, *, kind: str) -> go.Figure:
-        figure = go.Figure()
+        figure = make_subplots(
+            rows=2,
+            cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.08,
+        )
         offset = self._require_offset()
         fit_style = gui_trace_style("fit")
         cutoff_style = gui_trace_style("cutoff")["line"]
@@ -745,13 +790,15 @@ class GUILeftMixin:
             y = np.asarray(offset["dGerr_G0"], dtype=np.float64)
             vline = float(offset["Voff_mV"])
             xlabel = "<i>V</i><sub>off</sub> (mV)"
-            ylabel = "<i>dG</i><sub>err</sub> / <i>G</i><sub>0</sub>"
+            ylabel_top = "<i>dG</i><sub>err</sub> / <i>G</i><sub>0</sub>"
+            batch_kind = "V"
         else:
             x = np.asarray(self._offset_spec.Ioff_nA, dtype=np.float64)
             y = np.asarray(offset["dRerr_R0"], dtype=np.float64)
             vline = float(offset["Ioff_nA"])
             xlabel = "<i>I</i><sub>off</sub> (nA)"
-            ylabel = "<i>dR</i><sub>err</sub> / <i>R</i><sub>0</sub>"
+            ylabel_top = "<i>dR</i><sub>err</sub> / <i>R</i><sub>0</sub>"
+            batch_kind = "I"
         figure.add_trace(
             go.Scatter(
                 x=x,
@@ -759,58 +806,131 @@ class GUILeftMixin:
                 mode=fit_style["mode"],
                 line=fit_style["line"],
                 name=gui_trace_label("fit"),
-            )
+                showlegend=False,
+            ),
+            row=1,
+            col=1,
         )
+        batch_style = gui_trace_style("fit")
+        for marker, name in (
+            (
+                {
+                    "size": batch_style.get("marker", {}).get("size", 7),
+                    "color": batch_style["line"]["color"],
+                },
+                "Batch",
+            ),
+            (
+                {
+                    "size": batch_style.get("marker", {}).get("size", 7),
+                    "color": "black",
+                    "symbol": "circle",
+                },
+                "Selected",
+            ),
+            (
+                {
+                    "size": batch_style.get("marker", {}).get("size", 7) + 1,
+                    "color": "black",
+                    "symbol": "circle",
+                },
+                "Active",
+            ),
+        ):
+            figure.add_trace(
+                go.Scatter(
+                    x=np.empty((0,), dtype=np.float64),
+                    y=np.empty((0,), dtype=np.float64),
+                    customdata=np.empty((0,), dtype=np.int64),
+                    mode="markers",
+                    marker=marker,
+                    name=name,
+                    showlegend=False,
+                ),
+                row=2,
+                col=1,
+            )
         figure.add_vline(
             x=vline,
+            row=1,
+            col=1,
             line_dash=cutoff_style["dash"],
             line_color=cutoff_style["color"],
             line_width=cutoff_style["width"],
         )
         figure.update_layout(
-            margin={"l": 70, "r": 20, "t": 20, "b": 40},
-            xaxis_title=xlabel,
-            yaxis_title=ylabel,
+            margin={"l": 70, "r": 0, "t": 20, "b": 40},
             showlegend=False,
+            uirevision=f"offset-{kind}",
+        )
+        figure.update_yaxes(title_text=ylabel_top, row=1, col=1)
+        figure.update_yaxes(
+            title_text=self._y_axis_html_label(),
+            row=2,
+            col=1,
+        )
+        figure.update_xaxes(
+            title_text=xlabel,
+            range=self._offset_batch_y_range(kind=batch_kind),
+            row=2,
+            col=1,
+        )
+        figure.update_yaxes(
+            range=self._offset_batch_x_range(),
+            row=2,
+            col=1,
         )
         return figure
 
-    def _build_sampling_preview(self, *, kind: str) -> go.Figure:
+    def _build_sampling_offset_figure(self, *, kind: str) -> go.Figure:
         figure = go.Figure()
-        sampling = self._require_sampling()
-        binned_style = gui_trace_style("binned")
-        if kind == "IV":
-            x = np.asarray(sampling["Vbins_mV"], dtype=np.float64)
-            y = np.asarray(sampling["I_nA"], dtype=np.float64)
-            xlabel = "<i>V</i> (mV)"
-            ylabel = "<i>I</i> (nA)"
-        else:
-            x = np.asarray(sampling["Ibins_nA"], dtype=np.float64)
-            y = np.asarray(sampling["V_mV"], dtype=np.float64)
-            xlabel = "<i>I</i> (nA)"
-            ylabel = "<i>V</i> (mV)"
+        fit_style = gui_trace_style("fit")
+        ylabel = "<i>V</i><sub>off</sub> (mV)" if kind == "V" else (
+            "<i>I</i><sub>off</sub> (nA)"
+        )
         figure.add_trace(
             go.Scatter(
-                x=x,
-                y=y,
-                mode=binned_style["mode"],
-                marker=binned_style.get("marker"),
-                line=binned_style["line"],
-                name=gui_trace_label("binned"),
+                x=np.empty((0,), dtype=np.float64),
+                y=np.empty((0,), dtype=np.float64),
+                customdata=np.empty((0,), dtype=np.int64),
+                mode="markers",
+                marker={
+                    "size": fit_style.get("marker", {}).get("size", 7),
+                    "color": fit_style["line"]["color"],
+                },
+                name="Batch",
+                showlegend=False,
+            )
+        )
+        figure.add_trace(
+            go.Scatter(
+                x=np.empty((0,), dtype=np.float64),
+                y=np.empty((0,), dtype=np.float64),
+                customdata=np.empty((0,), dtype=np.int64),
+                mode="markers",
+                marker={
+                    "size": fit_style.get("marker", {}).get("size", 7),
+                    "color": "black",
+                    "symbol": "circle",
+                },
+                name="Active",
+                showlegend=False,
             )
         )
         figure.update_layout(
-            margin={"l": 70, "r": 20, "t": 20, "b": 40},
-            xaxis_title=xlabel,
-            yaxis_title=ylabel,
+            margin={"l": 70, "r": 0, "t": 20, "b": 40},
+            xaxis_title=ylabel,
+            yaxis_title=self._y_axis_html_label(),
             showlegend=False,
+            uirevision=f"sampling-offset-{kind}",
         )
+        figure.update_xaxes(range=self._offset_batch_y_range(kind=kind))
+        figure.update_yaxes(range=self._offset_batch_x_range())
         return figure
 
     def _build_offset_batch_figure(self, *, kind: str) -> go.Figure:
         figure = go.Figure()
         fit_style = gui_trace_style("fit")
-        selected_color = mpl_color_to_plotly((*seeblau35, 0.35))
         ylabel = (
             "<i>V</i><sub>off</sub> (mV)"
             if kind == "V"
@@ -837,8 +957,8 @@ class GUILeftMixin:
                 customdata=np.empty((0,), dtype=np.int64),
                 mode="markers",
                 marker={
-                    "size": fit_style.get("marker", {}).get("size", 7) + 7,
-                    "color": selected_color,
+                    "size": fit_style.get("marker", {}).get("size", 7),
+                    "color": "black",
                     "symbol": "circle",
                 },
                 name="Selected",
@@ -861,8 +981,8 @@ class GUILeftMixin:
             )
         )
         figure.update_layout(
-            margin={"l": 70, "r": 20, "t": 20, "b": 40},
-            xaxis_title="<i>y</i>",
+            margin={"l": 70, "r": 0, "t": 20, "b": 40},
+            xaxis_title=self._y_axis_html_label(),
             yaxis_title=ylabel,
             showlegend=False,
             uirevision=f"offset-batch-{kind}",
@@ -892,6 +1012,56 @@ class GUILeftMixin:
             else np.asarray(self._offset_spec.Ioff_nA, dtype=np.float64)
         )
         return self._padded_axis_range(values)
+
+    def _sampling_offset_plot_points(
+        self,
+        *,
+        kind: str,
+    ) -> tuple[NDArray64, NDArray64, NDArray64]:
+        x_values: list[float] = []
+        y_values: list[float] = []
+        indices: list[int] = []
+        for index, trace in enumerate(self.traces):
+            if index == int(self.active_index):
+                continue
+            offset_values = self._sampling_display_offset_values_for_index(index)
+            if offset_values is None:
+                continue
+            yvalue = numeric_yvalue(trace["meta"].yvalue)
+            x_values.append(
+                float(offset_values[0] if kind == "V" else offset_values[1])
+            )
+            y_values.append(float(index) if yvalue is None else float(yvalue))
+            indices.append(int(index))
+        return (
+            np.asarray(x_values, dtype=np.float64),
+            np.asarray(y_values, dtype=np.float64),
+            np.asarray(indices, dtype=np.int64),
+        )
+
+    def _sampling_offset_active_point(
+        self,
+        *,
+        kind: str,
+    ) -> tuple[NDArray64, NDArray64, NDArray64]:
+        offset_values = self._sampling_display_offset_values_for_index(
+            self.active_index
+        )
+        if offset_values is None:
+            empty = np.empty((0,), dtype=np.float64)
+            empty_index = np.empty((0,), dtype=np.int64)
+            return empty, empty.copy(), empty_index
+        trace = self.traces[int(self.active_index)]
+        yvalue = numeric_yvalue(trace["meta"].yvalue)
+        y_axis_value = float(self.active_index) if yvalue is None else float(yvalue)
+        return (
+            np.asarray(
+                [float(offset_values[0] if kind == "V" else offset_values[1])],
+                dtype=np.float64,
+            ),
+            np.asarray([y_axis_value], dtype=np.float64),
+            np.asarray([int(self.active_index)], dtype=np.int64),
+        )
 
     @staticmethod
     def _padded_axis_range(values: NDArray64) -> list[float]:
@@ -941,38 +1111,38 @@ class GUILeftMixin:
         *,
         kind: str,
     ) -> tuple[NDArray64, NDArray64, NDArray64]:
-        _ = kind
-        empty_x = np.empty((0,), dtype=np.float64)
-        empty_index = np.empty((0,), dtype=np.int64)
-        return empty_x, empty_x.copy(), empty_index
+        index = self._offset_batch_display_index
+        if index is None:
+            empty_x = np.empty((0,), dtype=np.float64)
+            empty_index = np.empty((0,), dtype=np.int64)
+            return empty_x, empty_x.copy(), empty_index
+        offset = self._get_cached_offset_batch_result(int(index))
+        if offset is None:
+            empty_x = np.empty((0,), dtype=np.float64)
+            empty_index = np.empty((0,), dtype=np.int64)
+            return empty_x, empty_x.copy(), empty_index
+        trace = self.traces[int(index)]
+        yvalue = numeric_yvalue(trace["meta"].yvalue)
+        x_value = float(int(index)) if yvalue is None else float(yvalue)
+        y_value = float(offset["Voff_mV"]) if kind == "V" else float(offset["Ioff_nA"])
+        return (
+            np.asarray([x_value], dtype=np.float64),
+            np.asarray([y_value], dtype=np.float64),
+            np.asarray([int(index)], dtype=np.int64),
+        )
 
     def _offset_batch_active_point(
         self,
         *,
         kind: str,
     ) -> tuple[NDArray64, NDArray64, NDArray64]:
-        index = int(self.active_index)
-        offset = self._get_cached_offset_batch_result(index)
-        if offset is None:
-            empty_x = np.empty((0,), dtype=np.float64)
-            empty_index = np.empty((0,), dtype=np.int64)
-            return empty_x, empty_x.copy(), empty_index
-        trace = self.traces[index]
-        yvalue = numeric_yvalue(trace["meta"].yvalue)
-        x_value = (
-            float(index)
-            if yvalue is None
-            else float(yvalue)
-        )
-        y_value = float(offset["Voff_mV"]) if kind == "V" else float(offset["Ioff_nA"])
-        return (
-            np.asarray([x_value], dtype=np.float64),
-            np.asarray([y_value], dtype=np.float64),
-            np.asarray([index], dtype=np.int64),
-        )
+        _ = kind
+        empty_x = np.empty((0,), dtype=np.float64)
+        empty_index = np.empty((0,), dtype=np.int64)
+        return empty_x, empty_x.copy(), empty_index
 
     def _display_offset(self):
-        return self._require_offset()
+        return self._offset_display_result()
 
     def _gradient(self, x: NDArray64, y: NDArray64) -> NDArray64:
         x = np.asarray(x, dtype=np.float64)
@@ -1016,8 +1186,8 @@ class GUILeftMixin:
             trace["V_mV"],
             dtype=np.float64,
         )
-        self._experimental_time_figure.data[1].x = self._downsampled_t_s
-        self._experimental_time_figure.data[1].y = self._downsampled_V_mV
+        self._experimental_time_figure.data[1].x = self._psd_downsampled_t_s
+        self._experimental_time_figure.data[1].y = self._psd_downsampled_V_mV
         self._experimental_time_figure.data[2].x = np.asarray(
             trace["t_s"],
             dtype=np.float64,
@@ -1026,8 +1196,8 @@ class GUILeftMixin:
             trace["I_nA"],
             dtype=np.float64,
         )
-        self._experimental_time_figure.data[3].x = self._downsampled_t_s
-        self._experimental_time_figure.data[3].y = self._downsampled_I_nA
+        self._experimental_time_figure.data[3].x = self._psd_downsampled_t_s
+        self._experimental_time_figure.data[3].y = self._psd_downsampled_I_nA
 
         self._experimental_psd_figure.data[0].x = np.asarray(
             raw_psd["f_Hz"],
@@ -1074,32 +1244,84 @@ class GUILeftMixin:
             self._offset_spec.Voff_mV,
             dtype=np.float64,
         )
-        self._offset_g_figure.data[0].y = np.asarray(
-            offset["dGerr_G0"],
-            dtype=np.float64,
-        )
         self._offset_g_figure.layout.shapes = ()
-        self._offset_g_figure.add_vline(
-            x=float(offset["Voff_mV"]),
-            line_dash=gui_trace_style("cutoff")["line"]["dash"],
-            line_color=gui_trace_style("cutoff")["line"]["color"],
-            line_width=gui_trace_style("cutoff")["line"]["width"],
+        if offset is None:
+            self._offset_g_figure.data[0].y = np.empty((0,), dtype=np.float64)
+        else:
+            self._offset_g_figure.data[0].y = np.asarray(
+                offset["dGerr_G0"],
+                dtype=np.float64,
+            )
+            self._offset_g_figure.add_vline(
+                x=float(offset["Voff_mV"]),
+                row=1,
+                col=1,
+                line_dash=gui_trace_style("cutoff")["line"]["dash"],
+                line_color=gui_trace_style("cutoff")["line"]["color"],
+                line_width=gui_trace_style("cutoff")["line"]["width"],
+            )
+        x_v, y_v, indices_v = self._offset_batch_plot_points(kind="V")
+        self._offset_g_figure.data[1].x = y_v
+        self._offset_g_figure.data[1].y = x_v
+        self._offset_g_figure.data[1].customdata = indices_v
+        selected_x_v, selected_y_v, selected_indices_v = (
+            self._offset_batch_selected_point(kind="V")
+        )
+        self._offset_g_figure.data[2].x = selected_y_v
+        self._offset_g_figure.data[2].y = selected_x_v
+        self._offset_g_figure.data[2].customdata = selected_indices_v
+        active_x_v, active_y_v, active_indices_v = self._offset_batch_active_point(
+            kind="V"
+        )
+        self._offset_g_figure.data[3].x = active_y_v
+        self._offset_g_figure.data[3].y = active_x_v
+        self._offset_g_figure.data[3].customdata = active_indices_v
+        self._offset_g_figure.update_yaxes(
+            title_text=self._y_axis_html_label(),
+            row=2,
+            col=1,
         )
 
         self._offset_r_figure.data[0].x = np.asarray(
             self._offset_spec.Ioff_nA,
             dtype=np.float64,
         )
-        self._offset_r_figure.data[0].y = np.asarray(
-            offset["dRerr_R0"],
-            dtype=np.float64,
-        )
         self._offset_r_figure.layout.shapes = ()
-        self._offset_r_figure.add_vline(
-            x=float(offset["Ioff_nA"]),
-            line_dash=gui_trace_style("cutoff")["line"]["dash"],
-            line_color=gui_trace_style("cutoff")["line"]["color"],
-            line_width=gui_trace_style("cutoff")["line"]["width"],
+        if offset is None:
+            self._offset_r_figure.data[0].y = np.empty((0,), dtype=np.float64)
+        else:
+            self._offset_r_figure.data[0].y = np.asarray(
+                offset["dRerr_R0"],
+                dtype=np.float64,
+            )
+            self._offset_r_figure.add_vline(
+                x=float(offset["Ioff_nA"]),
+                row=1,
+                col=1,
+                line_dash=gui_trace_style("cutoff")["line"]["dash"],
+                line_color=gui_trace_style("cutoff")["line"]["color"],
+                line_width=gui_trace_style("cutoff")["line"]["width"],
+            )
+        x_i, y_i, indices_i = self._offset_batch_plot_points(kind="I")
+        self._offset_r_figure.data[1].x = y_i
+        self._offset_r_figure.data[1].y = x_i
+        self._offset_r_figure.data[1].customdata = indices_i
+        selected_x_i, selected_y_i, selected_indices_i = (
+            self._offset_batch_selected_point(kind="I")
+        )
+        self._offset_r_figure.data[2].x = selected_y_i
+        self._offset_r_figure.data[2].y = selected_x_i
+        self._offset_r_figure.data[2].customdata = selected_indices_i
+        active_x_i, active_y_i, active_indices_i = self._offset_batch_active_point(
+            kind="I"
+        )
+        self._offset_r_figure.data[3].x = active_y_i
+        self._offset_r_figure.data[3].y = active_x_i
+        self._offset_r_figure.data[3].customdata = active_indices_i
+        self._offset_r_figure.update_yaxes(
+            title_text=self._y_axis_html_label(),
+            row=2,
+            col=1,
         )
 
         self._offset_g_pane.object = self._offset_g_figure
@@ -1124,6 +1346,9 @@ class GUILeftMixin:
             self._offset_batch_v_figure.data[2].x = active_x_v
             self._offset_batch_v_figure.data[2].y = active_y_v
             self._offset_batch_v_figure.data[2].customdata = active_indices_v
+            self._offset_batch_v_figure.update_xaxes(
+                title_text=self._y_axis_html_label(),
+            )
 
         x_i, y_i, indices_i = self._offset_batch_plot_points(kind="I")
         with self._offset_batch_i_figure.batch_update():
@@ -1142,28 +1367,53 @@ class GUILeftMixin:
             self._offset_batch_i_figure.data[2].x = active_x_i
             self._offset_batch_i_figure.data[2].y = active_y_i
             self._offset_batch_i_figure.data[2].customdata = active_indices_i
+            self._offset_batch_i_figure.update_xaxes(
+                title_text=self._y_axis_html_label(),
+            )
 
         self._offset_batch_v_pane.object = self._offset_batch_v_figure
         self._offset_batch_i_pane.object = self._offset_batch_i_figure
         self._offset_batch_table.value = self._offset_batch_frame()
+        self._refresh_offset_views()
 
     def _refresh_sampling_views(self) -> None:
-        sampling = self._require_sampling()
-        self._sampling_iv_figure.data[0].x = np.asarray(
-            sampling["Vbins_mV"],
-            dtype=np.float64,
+        x_v, y_v, indices_v = self._sampling_offset_plot_points(kind="V")
+        active_x_v, active_y_v, active_indices_v = (
+            self._sampling_offset_active_point(kind="V")
         )
-        self._sampling_iv_figure.data[0].y = np.asarray(
-            sampling["I_nA"],
-            dtype=np.float64,
+        with self._sampling_offset_v_figure.batch_update():
+            self._sampling_offset_v_figure.data[0].x = x_v
+            self._sampling_offset_v_figure.data[0].y = y_v
+            self._sampling_offset_v_figure.data[0].customdata = indices_v
+            self._sampling_offset_v_figure.data[1].x = active_x_v
+            self._sampling_offset_v_figure.data[1].y = active_y_v
+            self._sampling_offset_v_figure.data[1].customdata = active_indices_v
+            self._sampling_offset_v_figure.update_xaxes(
+                range=self._offset_batch_y_range(kind="V"),
+            )
+            self._sampling_offset_v_figure.update_yaxes(
+                title_text=self._y_axis_html_label(),
+                range=self._offset_batch_x_range(),
+            )
+
+        x_i, y_i, indices_i = self._sampling_offset_plot_points(kind="I")
+        active_x_i, active_y_i, active_indices_i = (
+            self._sampling_offset_active_point(kind="I")
         )
-        self._sampling_vi_figure.data[0].x = np.asarray(
-            sampling["Ibins_nA"],
-            dtype=np.float64,
-        )
-        self._sampling_vi_figure.data[0].y = np.asarray(
-            sampling["V_mV"],
-            dtype=np.float64,
-        )
-        self._sampling_iv_pane.object = self._sampling_iv_figure
-        self._sampling_vi_pane.object = self._sampling_vi_figure
+        with self._sampling_offset_i_figure.batch_update():
+            self._sampling_offset_i_figure.data[0].x = x_i
+            self._sampling_offset_i_figure.data[0].y = y_i
+            self._sampling_offset_i_figure.data[0].customdata = indices_i
+            self._sampling_offset_i_figure.data[1].x = active_x_i
+            self._sampling_offset_i_figure.data[1].y = active_y_i
+            self._sampling_offset_i_figure.data[1].customdata = active_indices_i
+            self._sampling_offset_i_figure.update_xaxes(
+                range=self._offset_batch_y_range(kind="I"),
+            )
+            self._sampling_offset_i_figure.update_yaxes(
+                title_text=self._y_axis_html_label(),
+                range=self._offset_batch_x_range(),
+            )
+
+        self._sampling_offset_v_pane.object = self._sampling_offset_v_figure
+        self._sampling_offset_i_pane.object = self._sampling_offset_i_figure
