@@ -232,9 +232,7 @@ def test_gui_app_builds_without_server() -> None:
     assert panel._experimental_psd_figure.data[1].name == "Downsampled"
     assert panel._experimental_psd_figure.data[1].mode == "lines"
     assert panel._experimental_nu_slider.name == "Sample Frequency (Hz)"
-    assert panel._experimental_nu_slider.value == pytest.approx(
-        panel._shared_nu_Hz
-    )
+    assert panel._experimental_nu_slider.value == pytest.approx(panel._shared_nu_Hz)
     assert panel._experimental_detrend_toggle.name == "Detrend"
     assert panel._experimental_detrend_toggle.value is True
     assert experimental_setting_rows.at["detrend", "parameter"] == "Detrend"
@@ -342,13 +340,20 @@ def test_gui_app_builds_without_server() -> None:
     assert panel._fit_button.name == "Fit"
     assert panel._fit_state.object == "Idle"
     assert panel._right_tabs._names == [
+        "Experimental",
+        "Fitting",
+        "Theory",
+    ]
+    assert panel._experimental_tabs._names == [
         "Measurement",
         "Data",
         "PSD Analysis",
         "Offset Analysis",
         "Sampling",
-        "BCS fitting",
     ]
+    assert panel._fitting_tabs._names == ["BCS fitting", "MAR fitting"]
+    assert panel._theory_tabs._names == ["BCS", "MAR", "RCSJ"]
+    assert [len(tab.objects) for tab in panel._theory_tabs.objects] == [0, 0, 0]
     assert panel._filespec_browse_button.name == "Browse..."
     assert panel._filespec_update_button.name == "Update All"
     assert panel._measurement_table.value.shape == (0, 1)
@@ -466,9 +471,7 @@ def test_gui_app_accepts_spec_presets() -> None:
     assert offset_rows.at["upsample", "value"] == 7
     assert np.isfinite(float(offset_rows.at["Voff_mV", "value"]))
     assert np.isfinite(float(offset_rows.at["Ioff_nA", "value"]))
-    assert sampling_rows.at["nu_Hz", "value"] == pytest.approx(
-        sampling_spec.nu_Hz
-    )
+    assert sampling_rows.at["nu_Hz", "value"] == pytest.approx(sampling_spec.nu_Hz)
     assert sampling_rows.at["N_up", "value"] == 6
     assert panel._sampling_spec.apply_smoothing is True
     assert smoothing_rows.at["median_bins", "value"] == 5
@@ -600,9 +603,7 @@ def test_data_tab_interpolates_against_selected_x_quantity(
 
     y_rows = _data_y_rows(panel)
     v1_row = int(y_rows.index[y_rows["key"] == "adwin/V1"][0])
-    motor_row = int(
-        y_rows.index[y_rows["key"] == "motor/position/value"][0]
-    )
+    motor_row = int(y_rows.index[y_rows["key"] == "motor/position/value"][0])
     panel._on_data_y_selection_changed(SimpleNamespace(new=[v1_row, motor_row]))
 
     x_rows = _data_x_rows(panel)
@@ -733,9 +734,7 @@ def test_data_tab_time_axis_uses_measurement_relative_origin(
 def test_measurement_tab_tracespec_tables_are_editable() -> None:
     panel = GUIPanel(_make_traces())
 
-    panel._on_tracespec_core_edit(
-        SimpleNamespace(row=0, column="value", value="2.5")
-    )
+    panel._on_tracespec_core_edit(SimpleNamespace(row=0, column="value", value="2.5"))
     panel._on_tracespec_other_edit(
         SimpleNamespace(row=1, column="value", value="(2, 3)")
     )
@@ -767,9 +766,7 @@ def test_traces_tab_keysspec_table_is_editable() -> None:
         (6, "<i>A</i>"),
     ]
     for row, value in edits:
-        panel._on_keysspec_edit(
-            SimpleNamespace(row=row, column="value", value=value)
-        )
+        panel._on_keysspec_edit(SimpleNamespace(row=row, column="value", value=value))
 
     assert panel._keysspec is None
     assert panel._keys is None
@@ -1001,7 +998,6 @@ def test_traces_tab_lists_keys_preview_only_when_file_is_available() -> None:
     assert list(specific_key_rows["yvalue"]) == []
 
 
-
 def test_traces_tab_keys_preview_is_independent_of_active_trace(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1185,9 +1181,7 @@ def test_traces_tab_update_file_uses_selected_measurement(
         gui_measurement_mod,
         "get_keys",
         lambda *, filespec, keysspec: (
-            loaded_keys_a
-            if filespec.measurement == "measurement_a"
-            else loaded_keys_b
+            loaded_keys_a if filespec.measurement == "measurement_a" else loaded_keys_b
         ),
     )
     monkeypatch.setattr(
@@ -1265,9 +1259,7 @@ def test_traces_tab_measurement_selection_auto_updates_keys_and_traces(
         gui_measurement_mod,
         "get_keys",
         lambda *, filespec, keysspec: (
-            loaded_keys_a
-            if filespec.measurement == "measurement_a"
-            else loaded_keys_b
+            loaded_keys_a if filespec.measurement == "measurement_a" else loaded_keys_b
         ),
     )
     monkeypatch.setattr(
@@ -1733,8 +1725,7 @@ def test_apply_buttons_update_expected_pipeline_stages(
 
     calls.update(psd=0, offset=0, sampling=0)
     panel._experimental_nu_slider.value = (
-        panel._experimental_nu_slider.value
-        + panel._experimental_nu_slider.step
+        panel._experimental_nu_slider.value + panel._experimental_nu_slider.step
     )
 
     assert calls == {"psd": 2, "offset": 0, "sampling": 0}
@@ -2353,7 +2344,7 @@ def test_psd_apply_replaces_staged_preset_and_clears_stale_entries() -> None:
     psds = psd_analysis(traces, spec=psd_spec)
     panel = GUIPanel(
         traces,
-                psdspec=psd_spec,
+        psdspec=psd_spec,
         psdanalysis=psds,
     )
 
@@ -2740,12 +2731,8 @@ def test_offset_and_sampling_plots_use_keysspec_html_label() -> None:
 
     assert panel._offset_g_figure.layout.yaxis2.title.text == "<i>T</i> (K)"
     assert panel._offset_r_figure.layout.yaxis2.title.text == "<i>T</i> (K)"
-    assert panel._sampling_offset_v_figure.layout.yaxis.title.text == (
-        "<i>T</i> (K)"
-    )
-    assert panel._sampling_offset_i_figure.layout.yaxis.title.text == (
-        "<i>T</i> (K)"
-    )
+    assert panel._sampling_offset_v_figure.layout.yaxis.title.text == ("<i>T</i> (K)")
+    assert panel._sampling_offset_i_figure.layout.yaxis.title.text == ("<i>T</i> (K)")
 
 
 def test_offset_info_values_are_display_rounded() -> None:
@@ -2789,6 +2776,6 @@ def test_run_gui_returns_last_state(
 
     result = gui_mod.run_gui(
         _make_traces(),
-            )
+    )
 
     assert result is expected

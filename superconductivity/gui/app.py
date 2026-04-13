@@ -100,9 +100,7 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
         )
         self._offset_spec = resolved_offset_spec
         self._sampling_spec = (
-            _default_sampling_spec()
-            if samplingspec is None
-            else replace(samplingspec)
+            _default_sampling_spec() if samplingspec is None else replace(samplingspec)
         )
         self._sampling_offset_override_enabled = np.zeros(
             len(traces),
@@ -224,13 +222,32 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
             ),
             sizing_mode="stretch_width",
         )
-        right_tabs = self._pn.Tabs(
+        self._experimental_tabs = self._pn.Tabs(
             ("Measurement", self._measurement_tab()),
             ("Data", self._data_tab()),
             ("PSD Analysis", self._experimental_tab()),
             ("Offset Analysis", self._offset_tab()),
             ("Sampling", self._sampling_tab()),
+            sizing_mode="stretch_width",
+            margin=0,
+        )
+        self._fitting_tabs = self._pn.Tabs(
             ("BCS fitting", self._fit_tab()),
+            ("MAR fitting", self._mar_fit_tab()),
+            sizing_mode="stretch_width",
+            margin=0,
+        )
+        self._theory_tabs = self._pn.Tabs(
+            ("BCS", self._bcs_theory_tab()),
+            ("MAR", self._mar_theory_tab()),
+            ("RCSJ", self._rcsj_theory_tab()),
+            sizing_mode="stretch_width",
+            margin=0,
+        )
+        right_tabs = self._pn.Tabs(
+            ("Experimental", self._experimental_tabs),
+            ("Fitting", self._fitting_tabs),
+            ("Theory", self._theory_tabs),
             sizing_mode="fixed",
             width=_GUI_PANEL_WIDTH,
         )
