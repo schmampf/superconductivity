@@ -19,10 +19,10 @@ for maximally efficient or fully general microscopic modeling.
 
 import numpy as np
 
-from ..utilities.constants import G_0_muS
-from ..utilities.functions import bin_y_over_x
-from ..utilities.types import NDArray64
-from .basics import get_Delta_meV, get_T_c_K, get_dos, get_f
+from ...utilities.constants import G_0_muS
+from ...utilities.functions import bin_y_over_x
+from ...utilities.types import NDArray64
+from ..basics import get_Delta_meV, get_dos, get_f, get_T_c_K
 
 
 def get_I_bcs_nA(

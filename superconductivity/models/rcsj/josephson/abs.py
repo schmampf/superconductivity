@@ -36,15 +36,11 @@ explicit and makes it easy to compare against analytic limits.
 """
 
 import numpy as np
-
 from tqdm import tqdm
 
-from ..utilities.types import NDArray64
-
-from ..utilities.constants import k_B_meV
-from ..utilities.constants import G_0_muS
-
-from .basics import get_Delta_meV
+from ....utilities.constants import G_0_muS, k_B_meV
+from ....utilities.types import NDArray64
+from ...basics import get_Delta_meV
 
 
 def get_Ic_ab(

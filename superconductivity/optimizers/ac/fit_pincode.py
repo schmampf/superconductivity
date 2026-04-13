@@ -5,7 +5,6 @@ from typing import Dict, Optional
 import jax.numpy as jnp
 import numpy as np
 from jax import Array, device_put, jit, vmap
-from models.bcs_jnp import bin_y_over_x as bin_y_over_x_jax
 from numpy.typing import NDArray
 from optimizers.fit_pincode_helper import (
     chi2_for_all,
@@ -13,6 +12,8 @@ from optimizers.fit_pincode_helper import (
     normalize_I,
     normalize_V,
 )
+
+from superconductivity.models.bcs.bcs_jnp import bin_y_over_x as bin_y_over_x_jax
 
 from ..utilities.constants import G_0_muS
 from ..utilities.functions import NDArray64, bin_y_over_x

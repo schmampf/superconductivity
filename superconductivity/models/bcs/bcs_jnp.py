@@ -2,10 +2,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from ..utilities.constants import G_0_muS
-from ..utilities.functions_jax import jbin_y_over_x as bin_y_over_x
-from ..utilities.types import JNDArray, NDArray64
-from .basics_jnp import get_Delta_jnp_meV, get_dos_jnp, get_f_jnp
+from ...utilities.constants import G_0_muS
+from ...utilities.functions_jax import jbin_y_over_x as bin_y_over_x
+from ...utilities.types import JNDArray, NDArray64
+from ..basics_jnp import get_Delta_jnp_meV, get_dos_jnp, get_f_jnp
 
 G_0_muS_jax: JNDArray = jnp.array(G_0_muS)
 

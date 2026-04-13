@@ -20,14 +20,9 @@ Units and conventions
 import numpy as np
 from scipy.special import jv
 
-from ..utilities.types import NDArray64
-
-from ..utilities.constants import G_0_muS
-from ..utilities.constants import h_e_pVs
-
-from .abs import get_Ic_ab
-from .abs import get_Ic_ab_nA
-from .abs import get_cpr_abs
+from ....utilities.constants import G_0_muS, h_e_pVs
+from ....utilities.types import NDArray64
+from .abs import get_cpr_abs, get_Ic_ab, get_Ic_ab_nA
 
 
 def get_I_p(
