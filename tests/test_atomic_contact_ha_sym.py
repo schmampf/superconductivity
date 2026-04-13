@@ -2,16 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from superconductivity.models import ha_sym as legacy_ha_sym
 from superconductivity.models.mar import ha_sym as mar_ha_sym
-
-
-def test_legacy_ha_sym_module_reexports_mar_functions() -> None:
-    assert legacy_ha_sym.get_I_ha_sym_nA is mar_ha_sym.get_I_ha_sym_nA
-    assert not hasattr(legacy_ha_sym, "get_I_nA_nonuniform")
-    assert not hasattr(legacy_ha_sym, "ha_sym_nonuniform_worker")
-    assert not hasattr(legacy_ha_sym, "explore_cached_ha_sym")
-    assert not hasattr(legacy_ha_sym, "suppress_logging")
 
 
 def test_ha_sym_direct_path_works_without_cache(
@@ -34,7 +25,7 @@ def test_ha_sym_direct_path_works_without_cache(
     )
 
     V_mV = np.array([-0.2, -0.1, 0.0, 0.1, 0.2], dtype=np.float64)
-    I_direct = legacy_ha_sym.get_I_ha_sym_nA(
+    I_direct = mar_ha_sym.get_I_ha_sym_nA(
         V_mV=V_mV,
         tau=0.4,
         T_K=0.0,

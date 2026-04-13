@@ -16,102 +16,9 @@ c   ***************************************************************
 c
 c VARIABLE DEFINITION
 c
-       implicit real*8 (a-h,o-z)
-       integer n,m,iv,ierr
-       complex*16 ui,curri,curr,zint,Atol,Rtol
-      
-       common/param/dmvt1,dmvt2,eta1,eta2
-       common/dim/n,m
-       common/hop/t,t2,temp,v
-c
-c READING THE DATA SET
-c ********************
-c
-c The program reads the input parameters from a external file
-c
-c List of parameter:
-c
-c  trans= normal transmission coefficient (can be varied from 0 to 1).
-c         The normal linear conductance of this single-mode contact
-c         at zero temperature is given by:   G=(2e**2/h)*trans
-
-c  temp= temperature/Delta1(zero temperature)
-
-c  eta = Dynes parameter 
-
-c  vi= Initial value of the voltage.
-
-c  vf= Final value of the voltage.
-
-c  vstep= Step in the voltage values.
-c
-c  ratio = Delta2/Delta1   (Delta2 < Delta1)
-
-       m = 0
-       read(5,*)temp
-       read(5,*)d1,d2
-       read(5,*)trans
-       read(5,*)eta1,eta2
-       read(5,*)vi,vf,vstep
-
-c       vi=-vf
-
-       eta1 = eta1/d1
-       eta2 = eta2/d1
-c temp in units of d1
-       temp = 0.08617d0*temp/d1
-c ratio
-       ratio = d2/d1
-c voltage in reduced units
-       vi = vi/d1
-       vf = vf/d1
-       vstep = vstep/d1
-       iv = int((vf-vi)/vstep)
-c hopping element
-       t = dsqrt((2.d0-trans-2.d0*dsqrt(1.d0-trans))/trans)
-       t2=t*t
-c some constants
-       pi=4.d0*datan(1.d0)
-       ui=(0.d0,1.d0)
-c precision of the energy integration
-       Atol=(1.d-12,1.d-12)
-       Rtol=(1.d-9,1.d-9)
-       ierr=0
-
-       if(temp.eq.0.d0) temp = 1.d-7
-       if(eta.eq.0.d0) eta = 1.d-6
-c limits of the energy integration
-       wf = dabs(vf)*5.d0
-       wi = -wf
-
-c Subroutine gap calculates the gap at finite temperature.
-       call gap(temp,dmvt1)
-       call gap(temp/ratio,dmvt2)
-       write(*,*)'#','gap1 = ',dmvt1,' gap2 = ',dmvt2
-       dmvt2 = dmvt2*ratio
-c       stop
-
-c Voltage loop
-
-       DO k=1,iv+1
-          v = vi + dfloat(k)*vstep
-          n = int(2.0/dabs(v))
-          if (mod(n,2).eq.0) then
-              n = n + 6
-          else
-              n = n + 7
-          end if
-          if (dabs(v).lt.0.002d0) then
-              curri = 0.d0
-          else
-              curri = zint(wi,wf,Atol,Rtol,ierr)
-          end if
-c Write voltage in mV and current in nA
-          write(*,*)v*d1,dreal(curri)*d1*77.48d0
-c          write(*,*)v*d1,dreal(curri)*d1/trans
-       END DO
-
-       END
+c  NOTE (2026-04): the public wrapper entry points have been moved
+c  into ha_api.f90. This file now contains the historical numerical
+c  kernel semantics used by that API layer.
 
 *************************************************************************
 *************************************************************************
@@ -140,10 +47,10 @@ c
 	    gsl(2,2) = gsl(1,1)
         end if
         if (dmvr.eq.0) then
-	    gsl(1,1) = (0.d0,1.d0)
-	    gsl(1,2) = (0.d0,0.d0)
-	    gsl(2,1) = (0.d0,0.d0)
-	    gsl(2,2) = (0.d0,1.d0)
+	    gsr(1,1) = (0.d0,1.d0)
+	    gsr(1,2) = (0.d0,0.d0)
+	    gsr(2,1) = (0.d0,0.d0)
+	    gsr(2,2) = (0.d0,1.d0)
         else
             u = dcmplx(z,-etar)/dmvr
 	    gsr(1,1) = -u/cdsqrt(1.d0-u**2)
@@ -428,78 +335,6 @@ c          stop
 
         return
         end
-*********************************************************************
-c SUBROUTINE GAP
-******************
-c
-c This subroutine calculates the gap parameter at finite temperature
-c within the BCS theory.
-c
-    
-      subroutine gap(temp,gapt)
-      implicit real*8 (a-h,o-z)
-      common/spar/gamma,pi
-      external fct
-
-      np=10000
-      eps=1.d-5
-      gamma=0.5772156649
-      pi=4.d0*datan(1.d0)
-      gapt=1.d0
-c tempf = temp/tempcritical
-      tempf=temp*pi/dexp(gamma)
-c
-c WARNINGS
-c
-      if(tempf.gt.1.d0) then
-         write(*,*)'# TEMPERATURE IS GREATER THAN THE CRITICAL
-     +               TEMPERATURE!'
-         gapt=0.d0
-         return
-      end if
-
-      if(tempf.eq.0.d0) then
-         gapt=1.d0
-         return
-      end if
-
-      if (tempf.gt.0.99d0) then
-          gapt=dexp(gamma)*dsqrt((8.d0*(1.d0-tempf))/(7.d0*1.202d0))
-          return
-      end if
-      
- 10   xw=(50.d00*tempf)/(gapt*pi*dexp(-gamma))
-      dw=xw/dfloat(np)
-      a=0.d0
-      do 20 j=0,np
-         x=dfloat(j)*dw
-         dww=dw
-         if(j.eq.0.or.j.eq.np) dww=dw/2.0
-         a=a+fct(x,gapt,tempf)*dww
- 20   continue
-      gaptf=dexp(a)
-      if (abs(gaptf-gapt).lt.eps) then
-          gapt=gaptf
-      else
-          gapt=gaptf
-          go to 10
-      end if 
-      end
-C **************************************************************
-      function fct(x,gapt,tempf)
-      implicit real*8 (a-h,o-z)
-      common/spar/gamma,pi
-
-      w=gapt*dsqrt(x*x + 1.d0)*pi*dexp(-gamma)
-      if ((w/tempf).lt.50.d0) then
-         fermi=1.d0/(1.d0 + dexp(w/tempf))
-      else
-         fermi=0.d0
-      end if
-      fct=-2.d0*fermi/dsqrt(x*x + 1.d0)
-      return
-      end
-C **************************************************************
 c------------------------------------------------------------------------
 c
       complex*16 function zint(llim,ulim,Atol,Rtol,ierr)

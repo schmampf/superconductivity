@@ -2,68 +2,12 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from ..utilities.constants import G_0_muS, k_B_meV
+from ..utilities.constants import G_0_muS
 from ..utilities.functions_jax import jbin_y_over_x as bin_y_over_x
 from ..utilities.types import JNDArray, NDArray64
+from .basics_jnp import get_Delta_jnp_meV, get_dos_jnp, get_f_jnp
 
-k_B_meV_jax: JNDArray = jnp.array(k_B_meV)
 G_0_muS_jax: JNDArray = jnp.array(G_0_muS)
-
-const176: JNDArray = jnp.array(1.76)
-const174: JNDArray = jnp.array(1.74)
-
-
-jax.config.update("jax_enable_x64", True)
-
-
-@jax.jit
-def get_Delta_jnp_meV(Delta_meV: JNDArray, T_K: JNDArray) -> JNDArray:
-    """Docstring"""
-    T_C = Delta_meV / (const176 * k_B_meV_jax)
-    return jnp.select(
-        [T_K < 0.0, T_K == 0.0, (T_K > 0.0) & (T_K < T_C), T_C <= T_K],
-        [
-            jnp.full_like(Delta_meV, jnp.nan),
-            Delta_meV,
-            Delta_meV * jnp.tanh(const174 * jnp.sqrt(T_C / T_K - 1.0)),
-            jnp.full_like(Delta_meV, 0.0),
-        ],
-        default=jnp.nan,
-    )
-
-
-@jax.jit
-def get_f_jnp(E_meV: JNDArray, T_K: JNDArray) -> JNDArray:
-    """Docstring"""
-    exponent = E_meV / (k_B_meV_jax * T_K)
-    exponent = jnp.clip(exponent, -100.0, 100.0)
-    return jnp.where(
-        T_K == 0,
-        jnp.where(E_meV < 0, 1.0, 0.0),
-        1 / (jnp.exp(exponent) + 1),
-    )
-
-
-@jax.jit
-def get_dos_jnp(
-    E_meV: JNDArray,
-    Delta_meV: JNDArray,
-    gamma_meV: JNDArray,
-) -> JNDArray:
-    """Docstring"""
-    # Ensure complex energy
-    E_meV_complex = E_meV + 1j * gamma_meV
-
-    # Calculate denominator safely
-    dos = E_meV_complex / jnp.sqrt(E_meV_complex**2 - Delta_meV**2)
-    dos = jnp.abs(jnp.real(dos))
-    # dos = jnp.real(dos)
-    # dos = jnp.maximum(dos, 0.0)
-
-    # Clip unphysical values and set NaNs to 0
-    dos = jnp.nan_to_num(dos, nan=0.0, posinf=100.0, neginf=0.0)
-    dos = jnp.clip(dos, 0.0, 100.0)
-    return dos
 
 
 @jax.jit

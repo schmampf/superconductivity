@@ -16,8 +16,7 @@ from numpy.typing import NDArray
 from scipy.optimize import curve_fit
 from tqdm.auto import tqdm
 
-from ..models.ha_sym import get_I_ha_sym_nA as get_I_nA
-from ..models.ha_sym import ha_sym_nonuniform_worker
+from ...models.mar import get_I_ha_sym_nA as get_I_nA
 from ..utilities.constants import G_0_muS
 from ..utilities.types import NDArray64
 from .fit_atomic_contacts_helper import (
@@ -221,7 +220,7 @@ def fit_atomic_contact(
     jobs: list[
         tuple[
             tuple[int, int, int, int],
-            tuple[NDArray64, float, float, float, float, bool],
+            tuple[NDArray64, float, float, float, float],
         ]
     ] = []
     for itau, tau_i in enumerate(tau_theo):
@@ -235,7 +234,6 @@ def fit_atomic_contact(
                         T_K_i,
                         Delta_i,
                         gamma_i,
-                        True,
                     )
                     jobs.append((idx, args))
 
@@ -260,8 +258,9 @@ def fit_atomic_contact(
     with ProcessPoolExecutor(max_workers=n_worker) as ex:
         futures = {
             ex.submit(
-                ha_sym_nonuniform_worker,
+                get_I_nA,
                 *args,
+                caching=True,
             ): idx
             for idx, args in jobs
         }

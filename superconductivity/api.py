@@ -77,18 +77,20 @@ from .models.abs import (
     get_rho,
 )
 
-# imports from bcs
-from .models.bcs_np import get_Delta_meV, get_dos, get_f, get_I_bcs_nA, get_T_c_K
+# imports from BCS basics / tunneling
+from .models.basics import get_Delta_meV, get_dos, get_f, get_T_c_K
+from .models.bcs_np import get_I_bcs_nA
 
 # imports from btk
-from .models.btk import get_AB_btk, get_I_btk_nA, get_Z_btk
-
-# import from fcs
-from .models.fcs_pbar import get_I_fcs_pbar_nA as get_I_fcs_nA
-from .models.ha_asym import get_I_ha_asym_nA
-
-# import from ha
-from .models.ha_sym import get_I_ha_sym_nA as get_I_ha_nA
+from .models.mar import (
+    get_AB_btk,
+    get_Imar_nA,
+    get_I_btk_nA,
+    get_I_fcs_nA,
+    get_I_ha_asym_nA,
+    get_I_ha_sym_nA as get_I_ha_nA,
+    get_Z_btk,
+)
 
 # import from pat
 from .models.pat import get_I_pat_nA

@@ -1,0 +1,21 @@
+python module _ha_asym_backend
+    interface
+        module ha_asym_api
+            subroutine ha_prepare_curve_state(trans_in,temp_in,dmvt1_in,dmvt2_in,eta1_in,eta2_in,dmvt1_out,dmvt2_out,eta1_out,eta2_out,t_out,t2_out,temp_out,mmax_out)
+                real*8 intent(in) :: trans_in,temp_in,dmvt1_in,dmvt2_in,eta1_in,eta2_in
+                real*8 intent(out) :: dmvt1_out,dmvt2_out,eta1_out,eta2_out,t_out,t2_out,temp_out
+                integer intent(out) :: mmax_out
+            end subroutine ha_prepare_curve_state
+            subroutine ha_prepare_voltage_state(v_in,v_out,n_out)
+                real*8 intent(in) :: v_in
+                real*8 intent(out) :: v_out
+                integer intent(out) :: n_out
+            end subroutine ha_prepare_voltage_state
+            function ha_asym_curve(trans_in,temp_in,dmvt1_in,dmvt2_in,eta1_in,eta2_in,voltages) result(currents)
+                real*8 intent(in) :: trans_in,temp_in,dmvt1_in,dmvt2_in,eta1_in,eta2_in
+                real*8 dimension(:), intent(in) :: voltages
+                real*8 dimension(size(voltages)), intent(out) :: currents
+            end function ha_asym_curve
+        end module ha_asym_api
+    end interface
+end python module _ha_asym_backend

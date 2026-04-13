@@ -7,110 +7,23 @@ c   ***************************************************************
 c
 c VARIABLE DEFINITION
 c
-       implicit real*8 (a-h,o-z)
-       parameter (ns=2000)
-       integer ierr,nmax,nchi
-       complex*16 ui,cvec(3)
-       complex*16 p(-ns:ns)
-       real*8 curr(-ns:ns)
-
-       common/param/v,trans,temp,dmvt1,dmvt2,eta1,eta2
-       common/ndimen/nmax,nchi
-      
-c Reading the input parameters 
-
-       read(5,*)trans
-       read(5,*)temp
-       read(5,*)delta1,delta2
-       read(5,*)eta1,eta2
-       read(5,*)vi,vf,dv
-       read(5,*)nmax,iw,nchi
-
-c BEGINNING OF THE PROGRAM SENTENCES
-c **********************************
-c
-c Some constants and parameters
-       pi = 4.0d0*datan(1.0d0)
-       ui = (0.d0,1.0d0)
-c Number of voltage points
-       iv = int((vf-vi)/dv)
-c Flags
-       if(temp.eq.0.d0) temp = 1.d-7
-       if(eta1.eq.0.d0) eta1 = 1.d-6
-       if(eta2.eq.0.d0) eta2 = 1.d-6
-
-c Subroutine gap calculates the gap at finite temperature.
-       if (delta1.gt.0.d0) then
-           call gap(0.08617d0*temp/delta1,dmvt1)
-           dmvt1 = dmvt1*delta1
-       else
-           dmvt1 = 0.d0
-       end if
-       if (delta2.gt.0.d0) then
-           call gap(0.08617d0*temp/delta2,dmvt2)
-           dmvt2 = dmvt2*delta2
-       else
-           dmvt2 = 0.d0
-       end if
-c       write(*,*)'#','delta1 = ',dmvt1,' delta2 = ',dmvt2
-c Temperature in meV
-       temp = 0.08617d0*temp
-
-c Voltage loop
-
-       DO k=0,iv
-          v = vi + dfloat(k)*dv
-          wi = -v
-          wf = 0.d0
-          de = (wf-wi)/dfloat(iw)
-
-          current = 0.d0
-          snoise = 0.d0
-          c3 = 0.d0
-          do j=-2*nmax-2,2*nmax+2
-             curr(j) = 0.d0
-          end do
-	  do i=0,iw
-	     w = wi + dfloat(i)*de
-             dee = de
-	     call green(cvec,w,3,p)
-             if(i.eq.0.or.i.eq.iw) dee = de/2.d0
-             current = current + dreal(cvec(1))*dee
-             snoise = snoise + dreal(cvec(2))*dee
-             c3 = c3 + dreal(cvec(3))*dee
-             do j=-2*nmax-2,2*nmax+2
-                curr(j) = curr(j) + dabs(dfloat(j))*dreal(p(j))*dee
-             end do
-          end do
-          
-c Voltage in mV and current in nA
-          do j=-2*nmax-2,2*nmax+2
-             curr(j) = curr(j)*77.4809d0
-          end do
-          current = current*77.4809d0
-
-        write(*,200)v,current,curr(-1)-curr(1),
-     &  curr(-2)-curr(2),curr(-3)-curr(3),curr(-4)-curr(4),
-     &  curr(-5)-curr(5),curr(-6)-curr(6),curr(-7)-curr(7),
-     &  curr(-8)-curr(8),curr(-9)-curr(9),curr(-10)-curr(10)
-
-       END DO
-
- 100   format(1x,24f15.10)
- 200   format(1x,12f20.15)
-
-       END
+c  NOTE (2026-04): the public wrapper entry points have been moved
+c  into fcs_api.f90. This file now contains only the numerical kernel
+c  used by that API layer.
 
 *************************************************************************
 c
 c SUBROUTINE GREEN (calculation of the probabilities, current and noise)
 c
 ******************
-        subroutine green(cvec,w,ndim,p)
+        subroutine green(cvec,w,ndim,p,v,trans,temp,delta1,delta2,
+     &                   eta1,eta2,nan,nchi,
+     &                   f,g1r,f1r,g1a,f1a,g2r,f2r,g2a,f2a,
+     &                   a,b,c,aux1,aux2,work,ipiv)
         implicit real*8 (a-h,o-z)
         parameter (ns=2000)
-        integer nan,ndim
-	real*8 w,f(-ns:ns),ap(-ns:ns)
+        integer nan,ndim,nchi
+	real*8 w,v,trans,temp,delta1,delta2,eta1,eta2,f(-ns:ns)
         complex*16 ui,wwj1,wwj2,omega1,omega2,ep,em,cvec(ndim),
      &          g1r(-ns:ns),f1r(-ns:ns),g1a(-ns:ns),f1a(-ns:ns),
      &          g2r(-ns:ns),f2r(-ns:ns),g2a(-ns:ns),f2a(-ns:ns),
@@ -118,9 +31,6 @@ c
      &          aux1(4,4),aux2(4,4),det,p(-ns:ns)
         complex*16 work(4**2)
         integer ipiv(4), info
-
-        common/param/v,trans,temp,delta1,delta2,eta1,eta2
-        common/ndimen/nan,nchi
 
         pi=4.0d0*datan(1.0d0)
         ui = (0.d0,1.d0)
@@ -311,77 +221,3 @@ c Current and noise:
  100    format(1x,9f14.10)
 	return
 	end
-
-c ***************************************************************
-c SUBROUTINE GAP
-c ***************************************************************
-c
-c This subroutine calculates the gap parameter at finite temperature
-c within the BCS theory.
-c
-    
-      subroutine gap(temp,gapt)
-      implicit real*8 (a-h,o-z)
-      common/spar/gamma,pi
-      external fct
-
-      np=10000
-      eps=0.00001d0
-      gamma=0.5772156649d0
-      pi=4.d0*datan(1.0d0)
-      gapt=1.0d0
-c tempf = temp/tempcritical
-      tempf=temp*pi/dexp(gamma)
-
-c
-c WARNINGS
-c
-      if(tempf.gt.1.0d0) then
-         write(*,*)' BEWARE: THE TEMPERATURE IS GREATER THAN THE BCS CRITICAL
-     +               TEMPERATURE!'
-         gapt=0.0
-         return
-      end if
-
-      if(tempf.eq.0.0d0) then
-         gapt=1.0d0
-         return
-      end if
-
-      if (tempf.gt.0.990d0) then
-          gapt=dexp(gamma)*dsqrt((8.d0*(1.0d0-tempf))/(7.0d0*1.202d0))
-          return
-      end if
-      
- 10   xw=(50.0d0*tempf)/(gapt*pi*dexp(-gamma))
-      dw=xw/dfloat(np)
-      a=0.d0
-      do 20 j=0,np
-         x=dfloat(j)*dw
-         dww=dw
-         if(j.eq.0.or.j.eq.np) dww=dw/2.0d0
-         a=a+fct(x,gapt,tempf)*dww
- 20   continue
-      gaptf=dexp(a)
-      if (dabs(gaptf-gapt).lt.eps) then
-          gapt=gaptf
-      else
-          gapt=gaptf
-          go to 10
-      end if 
-      end
-c ***************************************************************
-      function fct(x,gapt,tempf)
-      implicit real*8 (a-h,o-z)
-      common/spar/gamma,pi
-
-      w=gapt*dsqrt(x*x + 1.0d0)*pi*dexp(-gamma)
-      if ((w/tempf).lt.50.0d0) then
-         fermi=1.0d0/(1.0d0 + dexp(w/tempf))
-      else
-         fermi=0.0d0
-      end if
-      fct=-2.0*fermi/dsqrt(x*x + 1.0d0)
-      return
-      end
-c ***************************************************************

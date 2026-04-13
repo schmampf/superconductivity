@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from ...utilities.constants import G_0_muS
-from ...utilities.functions import bin_y_over_x
-from ...utilities.types import NDArray64
-from ..bcs_np import get_Delta_meV, get_f
+from ....utilities.constants import G_0_muS
+from ....utilities.functions import bin_y_over_x
+from ....utilities.types import NDArray64
+from ...basics import get_Delta_meV, get_f
 
 
 def get_Z_btk(tau: float) -> float:

@@ -23,15 +23,3 @@ h_e_fVs: float = h_e_Vs * 1e15
 # h_e_pVs = 0.004135667696923859 pVs
 # G_0_muS = 77.48091729863648 µS
 # k_B_meV = 0.08617333262145178 mV/K
-
-# parameter tolerances
-V_tol_mV: int = 6  # meV
-tau_tol: int = 4
-T_tol_K: int = 4  # K
-Delta_tol_meV: int = 6  # meV
-gamma_tol_meV: int = 9  # meV
-
-# FCS settings
-m_max: int = 10
-iw: int = 2003
-nchi: int = 66

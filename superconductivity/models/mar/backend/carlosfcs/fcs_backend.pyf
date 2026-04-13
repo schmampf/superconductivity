@@ -1,0 +1,22 @@
+python module _fcs_backend
+    interface
+        module fcs_api
+            subroutine fcs_prepare_curve_state(trans_in,temp_in,dmvt1_in,dmvt2_in,eta1_in,eta2_in,nmax_in,nchi_in,trans_out,temp_out,dmvt1_out,dmvt2_out,eta1_out,eta2_out,nmax_out,nchi_out)
+                real*8 intent(in) :: trans_in,temp_in,dmvt1_in,dmvt2_in,eta1_in,eta2_in
+                integer intent(in) :: nmax_in,nchi_in
+                real*8 intent(out) :: trans_out,temp_out,dmvt1_out,dmvt2_out,eta1_out,eta2_out
+                integer intent(out) :: nmax_out,nchi_out
+            end subroutine fcs_prepare_curve_state
+            subroutine fcs_prepare_voltage_state(v_in,v_out)
+                real*8 intent(in) :: v_in
+                real*8 intent(out) :: v_out
+            end subroutine fcs_prepare_voltage_state
+            function fcs_curve(trans_in,temp_in,dmvt1_in,dmvt2_in,eta1_in,eta2_in,voltages,nmax_in,iw_in,nchi_in) result(currents)
+                real*8 intent(in) :: trans_in,temp_in,dmvt1_in,dmvt2_in,eta1_in,eta2_in
+                real*8 dimension(:), intent(in) :: voltages
+                integer intent(in) :: nmax_in,iw_in,nchi_in
+                real*8 dimension(size(voltages),nmax_in+1), intent(out) :: currents
+            end function fcs_curve
+        end module fcs_api
+    end interface
+end python module _fcs_backend
