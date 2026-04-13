@@ -8,6 +8,7 @@ from .analysis import (
     offset_analysis,
     psd_analysis,
 )
+from .calibration import CalibrationResult, CalibrationSpec, calibrate
 from .sampling import (
     Sample,
     Samples,
@@ -40,6 +41,7 @@ from .traces import (
     list_measurement_keys,
     list_specific_keys,
 )
+from ..utilities.axis import AxisSpec
 
 __all__ = [
     "FileSpec",
@@ -67,6 +69,10 @@ __all__ = [
     "PSDTrace",
     "PSDTraces",
     "psd_analysis",
+    "AxisSpec",
+    "CalibrationSpec",
+    "CalibrationResult",
+    "calibrate",
     "Sample",
     "Samples",
     "SamplingSpec",
