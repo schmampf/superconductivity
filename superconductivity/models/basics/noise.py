@@ -53,45 +53,41 @@ def make_bias_support_grid(
 
 
 def apply_voltage_noise(
-    V_support_mV: NDArray64,
-    I_support_nA: NDArray64,
+    V_mV: NDArray64,
+    I_nA: NDArray64,
     sigmaV_mV: float,
     order: int,
-    *,
-    V_out_mV: NDArray64 | None = None,
 ) -> NDArray64:
     """Average a theory curve over Gaussian voltage fluctuations.
 
+    The output is always returned on the input support grid ``V_mV``.
+    Typical usage is to evaluate a model on a padded support grid built with
+    :func:`make_bias_support_grid`, smooth it here, and then explicitly
+    interpolate back to the originally requested voltage grid in the caller.
+
     Parameters
     ----------
-    V_support_mV
+    V_mV
         Voltage support points of the theory curve in mV. Must be strictly
         increasing.
-    I_support_nA
-        Theory current on ``V_support_mV`` in nA.
+    I_nA
+        Theory current on ``V_mV`` in nA.
     sigmaV_mV
         Standard deviation of the voltage fluctuations in mV.
     order
         Kernel resolution hint. The current implementation performs a
         deterministic Gaussian-kernel average on the internal support grid and
         requires ``order >= 2``.
-    V_out_mV
-        Output voltage grid. Defaults to ``V_support_mV``.
 
     Returns
     -------
     NDArray64
-        Mean current on ``V_out_mV`` after voltage-noise averaging.
+        Mean current on ``V_mV`` after voltage-noise averaging.
     """
-    V_support, I_support = _validate_curve_inputs(V_support_mV, I_support_nA)
+    V_support, I_support = _validate_curve_inputs(V_mV, I_nA)
     sigma_V = _validate_sigma(sigmaV_mV, "sigmaV_mV")
-    V_out = V_support if V_out_mV is None else to_1d_float64(V_out_mV, "V_out_mV")
-    require_all_finite(V_out, "V_out_mV")
-    require_min_size(V_out, 2, "V_out_mV")
-    if np.any(np.diff(V_out) <= 0.0):
-        raise ValueError("V_out_mV must be strictly increasing.")
     if sigma_V == 0.0:
-        return np.interp(V_out, V_support, I_support)
+        return I_support.copy()
 
     order_int = int(order)
     if order_int < 2:
@@ -103,7 +99,6 @@ def apply_voltage_noise(
             V_support,
             I_support,
             sigma_V,
-            V_out,
         )
 
     sigma_bins = sigma_V / step
@@ -112,26 +107,24 @@ def apply_voltage_noise(
     kernel = np.exp(-0.5 * (offsets / sigma_bins) ** 2)
     kernel /= np.sum(kernel)
     I_padded = np.pad(I_support, radius, mode="edge")
-    I_smoothed = np.convolve(I_padded, kernel, mode="valid")
-    return np.asarray(np.interp(V_out, V_support, I_smoothed), dtype=np.float64)
+    return np.convolve(I_padded, kernel, mode="valid")
 
 
 def _apply_voltage_noise_general(
-    V_support_mV: NDArray64,
-    I_support_nA: NDArray64,
+    V_mV: NDArray64,
+    I_nA: NDArray64,
     sigmaV_mV: float,
-    V_out_mV: NDArray64,
 ) -> NDArray64:
     """Fallback Gaussian average for nonuniform support grids."""
-    edges = np.empty(V_support_mV.size + 1, dtype=np.float64)
-    edges[1:-1] = 0.5 * (V_support_mV[:-1] + V_support_mV[1:])
-    edges[0] = V_support_mV[0] - 0.5 * (V_support_mV[1] - V_support_mV[0])
-    edges[-1] = V_support_mV[-1] + 0.5 * (V_support_mV[-1] - V_support_mV[-2])
+    edges = np.empty(V_mV.size + 1, dtype=np.float64)
+    edges[1:-1] = 0.5 * (V_mV[:-1] + V_mV[1:])
+    edges[0] = V_mV[0] - 0.5 * (V_mV[1] - V_mV[0])
+    edges[-1] = V_mV[-1] + 0.5 * (V_mV[-1] - V_mV[-2])
     widths = np.diff(edges)
-    delta = (V_out_mV[:, None] - V_support_mV[None, :]) / sigmaV_mV
+    delta = (V_mV[:, None] - V_mV[None, :]) / sigmaV_mV
     weights = np.exp(-0.5 * delta**2) * widths[None, :]
     weights /= np.sum(weights, axis=1, keepdims=True)
-    return np.asarray(weights @ I_support_nA, dtype=np.float64)
+    return np.asarray(weights @ I_nA, dtype=np.float64)
 
 
 def _validate_curve_inputs(

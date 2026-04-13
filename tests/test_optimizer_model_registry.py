@@ -122,9 +122,9 @@ def test_registry_stacks_noise_after_pat() -> None:
         V_support,
         pat_support,
         guess[6],
-        config.noise_oversample,
-        V_out_mV=V_mV,
+        config.noise_oversample
     )
+    pat_noise = np.interp(V_mV, V_support, pat_noise)
 
     assert np.allclose(composed, pat_noise)
 

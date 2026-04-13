@@ -282,12 +282,15 @@ def _compose_function(config: BCSModelConfig) -> ModelFunction:
             )
 
         if config.noise_enabled:
-            current = apply_voltage_noise(
+            current = np.interp(
+                V_requested,
                 V_evaluate,
-                current,
-                sigmaV_mV,
-                config.noise_oversample,
-                V_out_mV=V_requested,
+                apply_voltage_noise(
+                    V_evaluate,
+                    current,
+                    sigmaV_mV,
+                    config.noise_oversample,
+                ),
             )
 
         return np.asarray(current, dtype=np.float64)

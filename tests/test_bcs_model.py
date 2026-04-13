@@ -190,8 +190,8 @@ def test_get_Ibcs_nA_matches_explicit_pat_then_noise_staging() -> None:
         V_support,
         pat,
         0.04,
-        64,
-        V_out_mV=V_mV,
+        64
     )
+    staged = np.interp(V_mV, V_support, staged)
 
     assert np.allclose(direct, staged)

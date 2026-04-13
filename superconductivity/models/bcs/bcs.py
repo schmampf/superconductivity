@@ -3,20 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import TypeAlias
 
 import numpy as np
 
 from ...utilities.types import NDArray64
 from ..basics.noise import apply_voltage_noise, make_bias_support_grid
-from .backend import (
-    DEFAULT_E_MV,
-    PAT_N_MAX,
-    Backend,
-    Kernel,
-)
+from .backend import DEFAULT_E_MV, PAT_N_MAX, Backend, Kernel
 
 _NOISE_OVERSAMPLE = 64
-_ModelFunction = Callable[[NDArray64, NDArray64, float, float, float, float], NDArray64]
+_ModelFunction: TypeAlias = Callable[
+    [NDArray64, NDArray64, float, float, float, float], NDArray64
+]
+
 
 def get_Ibcs_nA(
     V_mV: NDArray64,
@@ -132,21 +131,24 @@ def get_Ibcs_nA(
     if sigma_value == 0.0:
         return current_out
     if current_out.ndim == 1:
-        return apply_voltage_noise(
+        current_smoothed = apply_voltage_noise(
             V_evaluate,
             current_out,
             sigma_value,
             _NOISE_OVERSAMPLE,
-            V_out_mV=V_requested,
         )
+        return np.asarray(np.interp(V_requested, V_evaluate, current_smoothed), dtype=np.float64)
     return np.asarray(
         [
-            apply_voltage_noise(
+            np.interp(
+                V_requested,
                 V_evaluate,
-                row,
-                sigma_value,
-                _NOISE_OVERSAMPLE,
-                V_out_mV=V_requested,
+                apply_voltage_noise(
+                    V_evaluate,
+                    row,
+                    sigma_value,
+                    _NOISE_OVERSAMPLE,
+                ),
             )
             for row in current_out
         ],
@@ -163,7 +165,9 @@ def _resolve_base_function(*, kernel: Kernel, backend: Backend) -> _ModelFunctio
         from .backend.jax import convolution_jax, integral_jax
 
         return integral_jax if kernel == "int" else convolution_jax
-    raise ValueError("backend must be 'np' or 'jax' and kernel must be 'int' or 'conv'.")
+    raise ValueError(
+        "backend must be 'np' or 'jax' and kernel must be 'int' or 'conv'."
+    )
 
 
 def _normalize_amplitudes(A_mV: NDArray64 | float) -> tuple[NDArray64, bool]:

@@ -132,6 +132,7 @@ from .style.thesislayout import get_ext, get_figure, map_layout, theory_layout
 
 # import utilities
 from .utilities.constants import G0_muS, h_pVs, kB_meV_K
+from .utilities.binning import bin
 from .utilities.functions import bin_y_over_x, ragged_to_array, upsample
 from .utilities.functions_jax import jinterp_y_of_x
 from .utilities.types import NDArray64

@@ -12,8 +12,7 @@ import numpy as np
 from ...utilities.constants import G0_muS
 from ...utilities.functions import bin_y_over_x, fill_nans
 from ...utilities.functions import upsample as upsample_xy
-from ...utilities.safety import (require_all_finite, require_min_size,
-                                 to_1d_float64)
+from ...utilities.safety import require_all_finite, require_min_size, to_1d_float64
 from ...utilities.types import NDArray64
 from ..sampling import downsample_trace
 from ..traces import Trace, Traces
@@ -419,6 +418,4 @@ __all__ = [
     "OffsetTrace",
     "OffsetTraces",
     "offset_analysis",
-]
-]
 ]
