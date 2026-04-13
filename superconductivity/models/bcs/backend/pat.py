@@ -59,8 +59,8 @@ def get_I_pat_nA(
     a_m: NDArray64 = m * A_mV_1d / nu_mV
     n = np.arange(-n_max, n_max + 1, dtype=np.int32)
 
-    G_N_muS = np.mean(np.stack(get_dydx(x=V_mV, y=I_nA)), axis=0)
-    I_i_nA: JInterpolator = jinterp_y_of_x(x=V_mV, y=I_nA, dydx=G_N_muS)
+    GN_G0_muS = np.mean(np.stack(get_dydx(x=V_mV, y=I_nA)), axis=0)
+    I_i_nA: JInterpolator = jinterp_y_of_x(x=V_mV, y=I_nA, dydx=GN_G0_muS)
 
     V_nm_mV: NDArray64 = (n / m) * nu_mV
 

@@ -52,8 +52,8 @@ def get_I_rstj_nA(
     seed : int, default=1
         PRNG seed for thermal noise.
     GN_G0 : float, default=1.0
-        Dimensionless normal conductance ``G_N = G/G_0`` used to set the
-        thermal-noise resistor via ``R_noise = 1 / (G_N * G_0)``.
+        Dimensionless normal conductance ``GN_G0 = G/G_0`` used to set the
+        thermal-noise resistor via ``R_noise = 1 / (GN_G0 * G_0)``.
     n_realizations : int, default=1
         Number of independent stochastic trajectories to average per
         ``(A_mV, I_bias)`` point. Larger values reduce Monte-Carlo noise and

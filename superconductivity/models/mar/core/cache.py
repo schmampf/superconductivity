@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from collections.abc import Iterator
+import threading
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
-import threading
 
 import numpy as np
 
 from ....utilities.types import NDArray64
-from .voltage import dequantize_voltage_mV
-from .voltage import V_TOL_MV
+from .voltage import V_TOL_MV, dequantize_voltage_mV
 
 try:  # pragma: no cover - platform dependent.
     import fcntl
@@ -165,16 +163,16 @@ def merge_sorted_curve(
     V_cached_q: NDArray64,
     I_cached_nA: NDArray64,
     V_missing_q: NDArray64,
-    I_missing_nA: NDArray64,
+    I_missinGN_G0A: NDArray64,
 ) -> tuple[NDArray64, NDArray64]:
     """Merge cached and newly evaluated positive-voltage points."""
     if V_missing_q.size == 0:
         return V_cached_q, I_cached_nA
     if V_cached_q.size == 0:
-        return V_missing_q, I_missing_nA
+        return V_missing_q, I_missinGN_G0A
 
     V_all_q = np.concatenate((V_cached_q, V_missing_q))
-    I_all_nA = np.concatenate((I_cached_nA, I_missing_nA))
+    I_all_nA = np.concatenate((I_cached_nA, I_missinGN_G0A))
 
     sort_idx = np.argsort(V_all_q)
     V_all_q = V_all_q[sort_idx]
@@ -217,7 +215,7 @@ def ensure_curve_cached(
     if V_missing_q.size == 0:
         return V_cached_q, I_cached_nA
 
-    I_missing_nA = np.asarray(
+    I_missinGN_G0A = np.asarray(
         evaluate_missing_q(V_missing_q),
         dtype=np.float64,
     )
@@ -225,7 +223,7 @@ def ensure_curve_cached(
         V_cached_q=V_cached_q,
         I_cached_nA=I_cached_nA,
         V_missing_q=V_missing_q,
-        I_missing_nA=I_missing_nA,
+        I_missinGN_G0A=I_missinGN_G0A,
     )
     save_curve(
         cache_file=cache_file,

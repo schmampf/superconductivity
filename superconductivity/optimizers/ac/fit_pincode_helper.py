@@ -112,7 +112,7 @@ def generate_pincodes(
 def generate_constrained_pincodes(
     ch_max: int,
     tau: NDArray64,
-    G_N: float,
+    GN_G0: float,
     T_tol: float = 0.3,
 ) -> NDArray[np.int32]:
     """
@@ -123,7 +123,7 @@ def generate_constrained_pincodes(
     ----------
     ch_max :
         Number of channels in the pincode.
-    G_N, T_tol :
+    GN_G0, T_tol :
         Inclusive bounds for sum(tau_i) over the pincode.
 
     Returns
@@ -134,7 +134,7 @@ def generate_constrained_pincodes(
     n_tau = tau.shape[0]
     tau_max = np.max(tau)
 
-    T_min, T_max = G_N - T_tol, G_N + T_tol
+    T_min, T_max = GN_G0 - T_tol, GN_G0 + T_tol
 
     results: list[list[int]] = []
 

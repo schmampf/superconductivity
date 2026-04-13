@@ -57,8 +57,8 @@ def get_I_btk_nA(
     gamma_meV_min: float = 1e-4,
 ) -> NDArray64:
     """Return total, one-electron, and two-electron BTK current."""
-    G_N_muS = tau * G0_muS
-    I_NN_nA = V_mV * G_N_muS
+    GN_G0_muS = tau * G0_muS
+    I_NN_nA = V_mV * GN_G0_muS
 
     Delta_meV_T = get_Delta_meV(Delta_meV=Delta_meV, T_K=T_K)
     if Delta_meV_T == 0.0:

@@ -35,22 +35,22 @@ TAU_THEO: NDArray64 = np.array(THEO["transmission"], dtype=np.float64)
 TAU_THEO_JAX: Array = device_put(TAU_THEO)
 
 
-def handle_G_N(
+def handle_GN_G0(
     V_mV: NDArray64,
     I_nA: NDArray64,
-    G_N: Optional[float] = None,
+    GN_G0: Optional[float] = None,
     Delta_0_meV: float = 0.18,
     V_threshhold: float = 2.5,
 ) -> float:
-    if G_N is None:
+    if GN_G0 is None:
         logic: NDArray[np.bool] = V_mV >= V_threshhold * Delta_0_meV
-        G_N: float = np.nanmean(
+        GN_G0: float = np.nanmean(
             np.gradient(
                 I_nA[logic] / G0_muS,
                 V_mV[logic],
             )
         )
-    return G_N
+    return GN_G0
 
 
 def get_pincode(
@@ -58,14 +58,14 @@ def get_pincode(
     I_nA: NDArray64,
     Delta_meV: float = 0.18,
     ch_max: int = 4,
-    G_N: Optional[float] = None,
+    GN_G0: Optional[float] = None,
 ):
-    G_N: float = handle_G_N(V_mV, I_nA, G_N)
+    GN_G0: float = handle_GN_G0(V_mV, I_nA, GN_G0)
 
     all_pincode_indices: NDArray[np.int32] = generate_constrained_pincodes(
         ch_max=ch_max,
         tau=TAU_THEO,
-        G_N=G_N,
+        GN_G0=GN_G0,
     )
 
     # convert exp data to jnp

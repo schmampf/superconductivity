@@ -166,7 +166,7 @@ def get_I_rstj_slow_nA(
     T_eff_K : float, default=0.15
         Effective noise temperature in kelvin.
     GN_G0 : float, default=1.0
-        Dimensionless normal conductance ``G_N = G/G_0`` used for the shunt.
+        Dimensionless normal conductance ``GN_G0 = G/G_0`` used for the shunt.
     ramp_rate_nA_per_s : float, default=1.0
         DC current ramp speed in nA/s.
     attempt_rate_GHz : float, default=10.0
@@ -283,4 +283,6 @@ def get_I_rstj_slow_nA(
             x=V_arr_mV,
             method="linear",
         )
+    return np.asarray(I_out_nA, dtype=np.float64)
+    return np.asarray(I_out_nA, dtype=np.float64)
     return np.asarray(I_out_nA, dtype=np.float64)

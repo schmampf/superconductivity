@@ -124,9 +124,9 @@ def plot_atomic_contact(
     dIdV_exp: NDArray64 = np.gradient(I_exp_nA, V_exp_mV) / G0_muS
     dIdV_fit: NDArray64 = np.gradient(I_fit_nA, V_exp_mV) / G0_muS
 
-    G_N_min: NDArray64 = np.ones_like(V_exp_mV) * Tau_min
-    G_N_max: NDArray64 = np.ones_like(V_exp_mV) * Tau_max
-    G_N_fit: NDArray64 = np.ones_like(V_exp_mV) * Tau_fit
+    GN_G0_min: NDArray64 = np.ones_like(V_exp_mV) * Tau_min
+    GN_G0_max: NDArray64 = np.ones_like(V_exp_mV) * Tau_max
+    GN_G0_fit: NDArray64 = np.ones_like(V_exp_mV) * Tau_fit
 
     # endregion
 
@@ -211,8 +211,8 @@ def plot_atomic_contact(
     ax_dIdV_fit.plot(V_exp_mV, dIdV_fit, "-", color="red")
     ax_dIdV_fit.plot(V_exp_mV, dIdV_exp, ".", color=colors(2), ms=1)
 
-    ax_dIdV_fit.fill_between(V_exp_mV, G_N_min, G_N_max, color="lightblue")
-    ax_dIdV_fit.plot(V_exp_mV, G_N_fit, color=colors(0))
+    ax_dIdV_fit.fill_between(V_exp_mV, GN_G0_min, GN_G0_max, color="lightblue")
+    ax_dIdV_fit.plot(V_exp_mV, GN_G0_fit, color=colors(0))
 
     # weigths/chi fit
     ax_w_fit.plot(V_masked_mV, weights_fit_masked, "x", color=colors(0), ms=3)

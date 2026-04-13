@@ -11,11 +11,11 @@ Units and conventions
 ---------------------
 - Energies are expressed in meV and voltages in mV.
 - Temperatures are expressed in K.
-- `G_N` denotes the *dimensionless* normal conductance
+- `GN_G0` denotes the *dimensionless* normal conductance
 
       g = G / G_0,
 
-  i.e. the physical conductance is `G = G_N * G_0`.
+  i.e. the physical conductance is `G = GN_G0 * G_0`.
 - “Dimensionless current” refers to the normalization
 
       I_dimless = I / (G_0 * Δ(0)),
@@ -31,7 +31,7 @@ Units and conventions
 Notes
 -----
 Several functions here return *dimensionless* quantities even when the input
-contains physical units. This is deliberate: it keeps the scaling with `G_N`
+contains physical units. This is deliberate: it keeps the scaling with `GN_G0`
 explicit and makes it easy to compare against analytic limits.
 """
 
@@ -45,7 +45,7 @@ from ...basics import get_Delta_meV
 
 def get_Ic_ab(
     Delta_meV: float = 0.18,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
     T_K: float = 0.0,
 ) -> float:
     """Ambegaokar--Baratoff critical current in dimensionless units.
@@ -60,9 +60,9 @@ def get_Ic_ab(
     ----------
     Delta_meV
         Zero-temperature superconducting gap Δ(0) in meV.
-    G_N
-        Dimensionless normal conductance `g = G/G_0` (so `G = G_N * G_0`).
-        For a tunnel junction, the AB result scales linearly with `G_N`.
+    GN_G0
+        Dimensionless normal conductance `g = G/G_0` (so `G = GN_G0 * G_0`).
+        For a tunnel junction, the AB result scales linearly with `GN_G0`.
     T_K
         Temperature in kelvin.
 
@@ -77,7 +77,7 @@ def get_Ic_ab(
 
         I_c(T) R_N = (π Δ(T) / 2e) tanh(Δ(T) / (2 k_B T)).
 
-    Using `R_N = 1/(G_N G_0)` and normalizing by `G_0 Δ(0)` yields the
+    Using `R_N = 1/(GN_G0 G_0)` and normalizing by `G_0 Δ(0)` yields the
     dimensionless form implemented here.
     """
     Delta_T_meV = get_Delta_meV(Delta_meV=Delta_meV, T_K=T_K)
@@ -85,13 +85,13 @@ def get_Ic_ab(
         k_T = np.tanh(Delta_T_meV / (2 * kB_meV_K * T_K))
     else:
         k_T = 1.0
-    IC_AB = np.pi / 2 * G_N * Delta_T_meV / Delta_meV * k_T
+    IC_AB = np.pi / 2 * GN_G0 * Delta_T_meV / Delta_meV * k_T
     return IC_AB
 
 
 def get_Ic_ab_nA(
     Delta_meV: float = 0.18,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
     T_K: float = 0.0,
 ) -> float:
     """Ambegaokar--Baratoff critical current in nA.
@@ -100,8 +100,8 @@ def get_Ic_ab_nA(
     ----------
     Delta_meV
         Zero-temperature superconducting gap Δ(0) in meV.
-    G_N
-        Dimensionless normal conductance `g = G/G_0` (so `G = G_N * G_0`).
+    GN_G0
+        Dimensionless normal conductance `g = G/G_0` (so `G = GN_G0 * G_0`).
     T_K
         Temperature in kelvin.
 
@@ -115,7 +115,7 @@ def get_Ic_ab_nA(
     float
         AB critical current in nA.
     """
-    IC_AB = get_Ic_ab(Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
+    IC_AB = get_Ic_ab(Delta_meV=Delta_meV, GN_G0=GN_G0, T_K=T_K)
     IC_AB_nA = IC_AB * G0_muS * Delta_meV
     return IC_AB_nA
 
@@ -123,7 +123,7 @@ def get_Ic_ab_nA(
 def get_cpr_ab(
     phi: NDArray64 = np.linspace(0, 2 * np.pi, 101, dtype=np.float64),
     Delta_meV: float = 0.18,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
     T_K: float = 0.0,
 ) -> NDArray64:
     """Josephson CPR in the tunnel limit (sinusoidal, AB scale).
@@ -134,8 +134,8 @@ def get_cpr_ab(
         Phase difference φ in radians.
     Delta_meV
         Zero-temperature gap Δ(0) in meV.
-    G_N
-        Dimensionless normal conductance `g = G/G_0` (so `G = G_N * G_0`).
+    GN_G0
+        Dimensionless normal conductance `g = G/G_0` (so `G = GN_G0 * G_0`).
     T_K
         Temperature in kelvin.
 
@@ -144,14 +144,14 @@ def get_cpr_ab(
     NDArray64
         Dimensionless CPR values `I(φ)/(G_0*Δ(0))`.
     """
-    I_C = get_Ic_ab(Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
+    I_C = get_Ic_ab(Delta_meV=Delta_meV, GN_G0=GN_G0, T_K=T_K)
     return I_C * np.sin(phi)
 
 
 def get_cpr_ab_nA(
     phi: NDArray64 = np.linspace(0, 2 * np.pi, 101, dtype=np.float64),
     Delta_meV: float = 0.18,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
     T_K: float = 0.0,
 ) -> NDArray64:
     """Tunnel-junction CPR in nA (sinusoidal, AB scale).
@@ -162,8 +162,8 @@ def get_cpr_ab_nA(
         Phase difference φ in radians.
     Delta_meV
         Zero-temperature gap Δ(0) in meV.
-    G_N
-        Dimensionless normal conductance `g = G/G_0` (so `G = G_N * G_0`).
+    GN_G0
+        Dimensionless normal conductance `g = G/G_0` (so `G = GN_G0 * G_0`).
     T_K
         Temperature in kelvin.
 
@@ -172,7 +172,7 @@ def get_cpr_ab_nA(
     NDArray64
         CPR values in nA.
     """
-    I_C_nA = get_Ic_ab_nA(Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
+    I_C_nA = get_Ic_ab_nA(Delta_meV=Delta_meV, GN_G0=GN_G0, T_K=T_K)
     return I_C_nA * np.sin(phi)
 
 
@@ -320,42 +320,42 @@ def get_cpr_abs_nA(
 
 def get_rho(
     tau: NDArray64 = np.arange(1e-5, 1, 1e-5, dtype=np.float64),
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
     eps: float = 1e-8,
 ) -> NDArray64:
     """Dorokhov/DMPK transmission density for a short diffusive contact.
 
     The implemented density is
 
-        ρ(τ) = G_N / (2 τ √(1-τ)),
+        ρ(τ) = GN_G0 / (2 τ √(1-τ)),
 
     normalized such that
 
-        ∫_0^1 dτ ρ(τ) τ = G_N = G/G_0.
+        ∫_0^1 dτ ρ(τ) τ = GN_G0 = G/G_0.
 
     Parameters
     ----------
     tau
         Transmission grid τ ∈ (0, 1).
-    G_N
-        Dimensionless normal conductance `g = G/G_0` (so `G = G_N * G_0`).
+    GN_G0
+        Dimensionless normal conductance `g = G/G_0` (so `G = GN_G0 * G_0`).
     eps
         Small cutoff to avoid divergences at τ=0 and τ=1.
 
     Returns
     -------
     NDArray64
-        Density ρ(τ) such that ∫_0^1 dτ ρ(τ) τ = G_N = G/G_0.
+        Density ρ(τ) such that ∫_0^1 dτ ρ(τ) τ = GN_G0 = G/G_0.
     """
     tau = np.clip(tau, eps, 1 - eps)
-    rho = G_N / (2 * tau * np.sqrt(1 - tau))
+    rho = GN_G0 / (2 * tau * np.sqrt(1 - tau))
     return rho
 
 
 def get_cpr_ko1(
     phi: NDArray64 = np.linspace(0, 2 * np.pi, 101, dtype=np.float64),
     Delta_meV: float = 0.18,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
     T_K: float = 0.0,
     dtau: float = 1e-5,
 ) -> NDArray64:
@@ -371,8 +371,8 @@ def get_cpr_ko1(
         Phase difference φ in radians.
     Delta_meV
         Zero-temperature gap Δ(0) in meV.
-    G_N
-        Dimensionless normal conductance `g = G/G_0` (so `G = G_N * G_0`).
+    GN_G0
+        Dimensionless normal conductance `g = G/G_0` (so `G = GN_G0 * G_0`).
     T_K
         Temperature in kelvin.
     dtau
@@ -389,7 +389,7 @@ def get_cpr_ko1(
     """
 
     tau = np.arange(dtau, 1, dtau, dtype=np.float64)
-    rho = get_rho(tau=tau, G_N=G_N)
+    rho = get_rho(tau=tau, GN_G0=GN_G0)
 
     # evaluate I(phi, tau) and integrate over tau
     I_tau_phi = np.empty((tau.size, phi.size), dtype=np.float64)
@@ -409,7 +409,7 @@ def get_cpr_ko1(
 def get_cpr_ko1_nA(
     phi: NDArray64 = np.linspace(0, 2 * np.pi, 101, dtype=np.float64),
     Delta_meV: float = 0.18,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
     T_K: float = 0.0,
     dtau: float = 1e-5,
 ) -> NDArray64:
@@ -421,8 +421,8 @@ def get_cpr_ko1_nA(
         Phase difference φ in radians.
     Delta_meV
         Zero-temperature gap Δ(0) in meV.
-    G_N
-        Dimensionless normal conductance `g = G/G_0` (so `G = G_N * G_0`).
+    GN_G0
+        Dimensionless normal conductance `g = G/G_0` (so `G = GN_G0 * G_0`).
     T_K
         Temperature in kelvin.
     dtau
@@ -436,7 +436,7 @@ def get_cpr_ko1_nA(
     CPR_KO1 = get_cpr_ko1(
         phi=phi,
         Delta_meV=Delta_meV,
-        G_N=G_N,
+        GN_G0=GN_G0,
         T_K=T_K,
         dtau=dtau,
     )
@@ -447,13 +447,13 @@ def get_cpr_ko1_nA(
 def get_cpr_ko2(
     phi: NDArray64 = np.linspace(0, 2 * np.pi, 101, dtype=np.float64),
     Delta_meV: float = 0.18,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
     T_K: float = 0.0,
 ) -> NDArray64:
     """Kulik--Omelyanchuk (KO-2) CPR for a short ballistic contact.
 
     KO-2 corresponds to a *ballistic* short contact with effectively perfect
-    transmissions and scales linearly with `G_N`.
+    transmissions and scales linearly with `GN_G0`.
 
     Parameters
     ----------
@@ -461,8 +461,8 @@ def get_cpr_ko2(
         Phase difference φ in radians.
     Delta_meV
         Zero-temperature gap Δ(0) in meV.
-    G_N
-        Dimensionless normal conductance `g = G/G_0` (so `G = G_N * G_0`).
+    GN_G0
+        Dimensionless normal conductance `g = G/G_0` (so `G = GN_G0 * G_0`).
     T_K
         Temperature in kelvin.
 
@@ -478,14 +478,14 @@ def get_cpr_ko2(
             tau=1.0,
             T_K=T_K,
         )
-        * G_N
+        * GN_G0
     )
 
 
 def get_cpr_ko2_nA(
     phi: NDArray64 = np.linspace(0, 2 * np.pi, 101, dtype=np.float64),
     Delta_meV: float = 0.18,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
     T_K: float = 0.0,
 ) -> NDArray64:
     """KO-2 CPR in nA.
@@ -496,8 +496,8 @@ def get_cpr_ko2_nA(
         Phase difference φ in radians.
     Delta_meV
         Zero-temperature gap Δ(0) in meV.
-    G_N
-        Dimensionless normal conductance `g = G/G_0` (so `G = G_N * G_0`).
+    GN_G0
+        Dimensionless normal conductance `g = G/G_0` (so `G = GN_G0 * G_0`).
     T_K
         Temperature in kelvin.
 
@@ -506,7 +506,7 @@ def get_cpr_ko2_nA(
     NDArray64
         KO-2 supercurrent in nA.
     """
-    CPR_KO2 = get_cpr_ko2(phi=phi, Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
+    CPR_KO2 = get_cpr_ko2(phi=phi, Delta_meV=Delta_meV, GN_G0=GN_G0, T_K=T_K)
     CPR_KO2_nA = CPR_KO2 * G0_muS * Delta_meV
     return CPR_KO2_nA
 
@@ -581,7 +581,7 @@ def get_Ic_abs_nA(
 
 def get_Ic_ko1(
     Delta_meV: float = 0.18,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
     T_K: float = 0.0,
     dtau: float = 1e-4,
     n_phi: int = 501,
@@ -592,8 +592,8 @@ def get_Ic_ko1(
     ----------
     Delta_meV
         Zero-temperature gap Δ(0) in meV.
-    G_N
-        Dimensionless normal conductance `g = G/G_0` (so `G = G_N * G_0`).
+    GN_G0
+        Dimensionless normal conductance `g = G/G_0` (so `G = GN_G0 * G_0`).
     T_K
         Temperature in kelvin.
     dtau
@@ -610,7 +610,7 @@ def get_Ic_ko1(
     CPR = get_cpr_ko1(
         phi=phi,
         Delta_meV=Delta_meV,
-        G_N=G_N,
+        GN_G0=GN_G0,
         T_K=T_K,
         dtau=dtau,
     )
@@ -620,7 +620,7 @@ def get_Ic_ko1(
 
 def get_Ic_ko1_nA(
     Delta_meV: float = 0.18,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
     T_K: float = 0.0,
     dtau: float = 1e-4,
     n_phi: int = 501,
@@ -631,8 +631,8 @@ def get_Ic_ko1_nA(
     ----------
     Delta_meV
         Zero-temperature gap Δ(0) in meV.
-    G_N
-        Dimensionless normal conductance `g = G/G_0` (so `G = G_N * G_0`).
+    GN_G0
+        Dimensionless normal conductance `g = G/G_0` (so `G = GN_G0 * G_0`).
     T_K
         Temperature in kelvin.
     dtau
@@ -647,7 +647,7 @@ def get_Ic_ko1_nA(
     """
     IC_KO1 = get_Ic_ko1(
         Delta_meV=Delta_meV,
-        G_N=G_N,
+        GN_G0=GN_G0,
         T_K=T_K,
         dtau=dtau,
         n_phi=n_phi,
@@ -658,7 +658,7 @@ def get_Ic_ko1_nA(
 
 def get_Ic_ko2(
     Delta_meV: float = 0.18,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
     T_K: float = 0.0,
     n_phi: int = 501,
 ) -> float:
@@ -668,8 +668,8 @@ def get_Ic_ko2(
     ----------
     Delta_meV
         Zero-temperature gap Δ(0) in meV.
-    G_N
-        Dimensionless normal conductance `g = G/G_0` (so `G = G_N * G_0`).
+    GN_G0
+        Dimensionless normal conductance `g = G/G_0` (so `G = GN_G0 * G_0`).
     T_K
         Temperature in kelvin.
     n_phi
@@ -681,14 +681,14 @@ def get_Ic_ko2(
         Dimensionless KO-2 critical current `I_c/(G_0*Δ(0))`.
     """
     phi = np.linspace(0, 2 * np.pi, n_phi)
-    CPR = get_cpr_ko2(phi=phi, Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
+    CPR = get_cpr_ko2(phi=phi, Delta_meV=Delta_meV, GN_G0=GN_G0, T_K=T_K)
     I_C = np.max(CPR)
     return I_C
 
 
 def get_Ic_ko2_nA(
     Delta_meV: float = 0.18,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
     T_K: float = 0.0,
     n_phi: int = 501,
 ) -> float:
@@ -698,8 +698,8 @@ def get_Ic_ko2_nA(
     ----------
     Delta_meV
         Zero-temperature gap Δ(0) in meV.
-    G_N
-        Dimensionless normal conductance `g = G/G_0` (so `G = G_N * G_0`).
+    GN_G0
+        Dimensionless normal conductance `g = G/G_0` (so `G = GN_G0 * G_0`).
     T_K
         Temperature in kelvin.
     n_phi
@@ -712,7 +712,7 @@ def get_Ic_ko2_nA(
     """
     IC_KO2 = get_Ic_ko2(
         Delta_meV=Delta_meV,
-        G_N=G_N,
+        GN_G0=GN_G0,
         T_K=T_K,
         n_phi=n_phi,
     )
@@ -723,7 +723,7 @@ def get_Ic_ko2_nA(
 def get_IcT_ab(
     T_K: NDArray64,
     Delta_meV: float = 0.18,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
 ) -> NDArray64:
     """Temperature dependence of AB critical current (dimensionless).
 
@@ -733,8 +733,8 @@ def get_IcT_ab(
         Temperatures in kelvin.
     Delta_meV
         Zero-temperature gap Δ(0) in meV.
-    G_N
-        Dimensionless normal conductance `g = G/G_0` (so `G = G_N * G_0`).
+    GN_G0
+        Dimensionless normal conductance `g = G/G_0` (so `G = GN_G0 * G_0`).
 
     Returns
     -------
@@ -745,7 +745,7 @@ def get_IcT_ab(
     for i, t_K in enumerate(T_K):
         ICT_AB[i] = get_Ic_ab(
             Delta_meV=Delta_meV,
-            G_N=G_N,
+            GN_G0=GN_G0,
             T_K=t_K,
         )
     return ICT_AB
@@ -754,7 +754,7 @@ def get_IcT_ab(
 def get_IcT_ab_nA(
     T_K: NDArray64,
     Delta_meV: float = 0.18,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
 ) -> NDArray64:
     """Temperature dependence of AB critical current (nA).
 
@@ -764,8 +764,8 @@ def get_IcT_ab_nA(
         Temperatures in kelvin.
     Delta_meV
         Zero-temperature gap Δ(0) in meV.
-    G_N
-        Dimensionless normal conductance `g = G/G_0` (so `G = G_N * G_0`).
+    GN_G0
+        Dimensionless normal conductance `g = G/G_0` (so `G = GN_G0 * G_0`).
 
     Returns
     -------
@@ -775,7 +775,7 @@ def get_IcT_ab_nA(
     ICT_AB = get_IcT_ab(
         T_K=T_K,
         Delta_meV=Delta_meV,
-        G_N=G_N,
+        GN_G0=GN_G0,
     )
     ICT_AB_nA = ICT_AB * G0_muS * Delta_meV
     return ICT_AB_nA
@@ -838,7 +838,7 @@ def get_IcT_abs_nA(
 def get_IcT_ko1(
     T_K: NDArray64,
     Delta_meV: float = 0.18,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
     dtau: float = 1e-4,
     n_phi: int = 501,
 ) -> NDArray64:
@@ -847,7 +847,7 @@ def get_IcT_ko1(
     for i, t_K in enumerate(tqdm(T_K)):
         ICT_KO1[i] = get_Ic_ko1(
             Delta_meV=Delta_meV,
-            G_N=G_N,
+            GN_G0=GN_G0,
             T_K=t_K,
             dtau=dtau,
             n_phi=n_phi,
@@ -858,7 +858,7 @@ def get_IcT_ko1(
 def get_IcT_ko1_nA(
     T_K: NDArray64,
     Delta_meV: float = 0.18,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
     dtau: float = 1e-4,
     n_phi: int = 501,
 ) -> NDArray64:
@@ -866,7 +866,7 @@ def get_IcT_ko1_nA(
     ICT_KO1 = get_IcT_ko1(
         T_K=T_K,
         Delta_meV=Delta_meV,
-        G_N=G_N,
+        GN_G0=GN_G0,
         dtau=dtau,
         n_phi=n_phi,
     )
@@ -877,7 +877,7 @@ def get_IcT_ko1_nA(
 def get_IcT_ko2(
     T_K: NDArray64,
     Delta_meV: float = 0.18,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
     n_phi: int = 501,
 ) -> NDArray64:
     """Temperature dependence of the KO-2 critical current (dimensionless)."""
@@ -885,7 +885,7 @@ def get_IcT_ko2(
     for i, t_K in enumerate(T_K):
         ICT_KO2[i] = get_Ic_ko2(
             Delta_meV=Delta_meV,
-            G_N=G_N,
+            GN_G0=GN_G0,
             T_K=t_K,
             n_phi=n_phi,
         )
@@ -895,14 +895,14 @@ def get_IcT_ko2(
 def get_IcT_ko2_nA(
     T_K: NDArray64,
     Delta_meV: float = 0.18,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
     n_phi: int = 501,
 ) -> NDArray64:
     """Temperature dependence of the KO-2 critical current (nA)."""
     ICT_KO2 = get_IcT_ko2(
         T_K=T_K,
         Delta_meV=Delta_meV,
-        G_N=G_N,
+        GN_G0=GN_G0,
         n_phi=n_phi,
     )
     ICT_KO2_nA = ICT_KO2 * G0_muS * Delta_meV

@@ -12,7 +12,7 @@ from ..utilities.types import NDArray64
 FMap = Callable[[Array], Array]
 
 
-def handle_G_N_exp(
+def handle_GN_G0_exp(
     V_exp_mV: NDArray64,
     I_exp_nA: NDArray64,
     Delta_exp_meV: float = 0.18,
@@ -20,14 +20,14 @@ def handle_G_N_exp(
 ) -> tuple[float, NDArray[np.bool]]:
     V_threshold_mV = V_threshhold_Delta * Delta_exp_meV
     logic: NDArray[np.bool] = V_exp_mV >= V_threshold_mV
-    G_N_0: float = np.nanmean(
+    GN_G0_0: float = np.nanmean(
         np.gradient(
             I_exp_nA[logic] / G0_muS,
             V_exp_mV[logic],
         ),
         dtype=np.float64,
     )
-    return G_N_0, logic
+    return GN_G0_0, logic
 
 
 def centers_to_edges_center_clipped(x_centers: np.ndarray) -> np.ndarray:
@@ -181,7 +181,7 @@ def generate_constrained_pincodes(
     ----------
     ch_max :
         Number of channels in the pincode.
-    G_N, T_tol :
+    GN_G0, T_tol :
         Inclusive bounds for sum(tau_i) over the pincode.
 
     Returns

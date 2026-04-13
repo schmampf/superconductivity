@@ -128,8 +128,8 @@ def fit_atomic_contact(
     :type n_worker: int
     :param tau_tol: Tolerance in total transmission for sum of channels
     :type tau_tol: float
-    :param G_N_0: Initial guess for normal conductance (G_0). May be None.
-    :type G_N_0: Optional[float]
+    :param GN_G0_0: Initial guess for normal conductance (G_0). May be None.
+    :type GN_G0_0: Optional[float]
     :param V_theo_mV: Parameter space of voltage (def. Al, mV).
     :type V_theo_mV: Optional[NDArray64]
     :param tau_theo: Parameter space of transmission [0, 1] (def. Al).

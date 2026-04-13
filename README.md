@@ -40,7 +40,7 @@ import numpy as np
 import superconductivity.api as sc
 
 V_mV = np.linspace(-1.0, 1.0, 2001)
-I_nA = sc.get_I_bcs_nA(V_mV, G_N=1.0, T_K=0.05, Delta_meV=(0.18, 0.18), gamma_meV=(1e-3, 1e-3))
+I_nA = sc.get_I_bcs_nA(V_mV, GN_G0=1.0, T_K=0.05, Delta_meV=(0.18, 0.18), gamma_meV=(1e-3, 1e-3))
 ```
 
 Photon-assisted tunneling (Tien-Gordon style, discrete sidebands):
@@ -67,7 +67,7 @@ I_map_nA = sc.get_I_rsj_nA(
     V_bias=V_bias,
     I_bias=I_bias,
     A_bias=A_bias,
-    G_N=1.0,
+    GN_G0=1.0,
     I_SW=1.0,
     Delta_meV=0.18,
     T_K=0.0,

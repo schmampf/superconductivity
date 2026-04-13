@@ -10,8 +10,8 @@ Units and conventions
 ---------------------
 - Voltages are expressed in mV and energies in meV.
 - Frequencies are expressed in GHz unless stated otherwise.
-- `G_N` denotes the dimensionless normal conductance `g = G/G_0`.
-  The corresponding physical conductance is `G = G_N * G_0`.
+- `GN_G0` denotes the dimensionless normal conductance `g = G/G_0`.
+  The corresponding physical conductance is `G = GN_G0 * G_0`.
 - `nu_mV = (h\nu/e)` is the voltage quantum in mV; for a junction with
   Cooper-pair charge `2e` the Shapiro voltages occur at `V_n = n (h\nu)/(2e)`.
 
@@ -202,7 +202,7 @@ def get_I_ss(
     V_mV: NDArray64,
     A_mV: NDArray64,
     Delta_meV: float = 0.18,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
     T_K: float = 0.0,
     nu_GHz: float = 10.0,
     n_max: int = 1000,
@@ -231,7 +231,7 @@ def get_I_ss(
         The amplitude is in the same normalization as `get_IC_AB`, i.e.
         `I/(G_0*Δ(0))`.
     """
-    I_C = get_Ic_ab(Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
+    I_C = get_Ic_ab(Delta_meV=Delta_meV, GN_G0=GN_G0, T_K=T_K)
     I_SS = do_I_fss(
         V_mV=V_mV,
         A_mV=A_mV,
@@ -245,7 +245,7 @@ def get_I_ss(
 def get_I_ss_nA(
     V_mV: NDArray64,
     A_mV: NDArray64,
-    G_N: float = 1.0,
+    GN_G0: float = 1.0,
     Delta_meV: float = 0.18,
     T_K: float = 0.0,
     nu_GHz: float = 10.0,
@@ -259,8 +259,8 @@ def get_I_ss_nA(
         Voltage grid in mV.
     A_mV
         Drive amplitudes V_ac in mV.
-    G_N
-        Dimensionless normal conductance `g = G/G_0` (so `G = G_N * G_0`).
+    GN_G0
+        Dimensionless normal conductance `g = G/G_0` (so `G = GN_G0 * G_0`).
     Delta_meV
         Zero-temperature gap Δ(0) in meV.
     T_K
@@ -275,7 +275,7 @@ def get_I_ss_nA(
     NDArray64
         Peak amplitudes in nA placed on the voltage grid.
     """
-    I_C_nA = get_Ic_ab_nA(Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
+    I_C_nA = get_Ic_ab_nA(Delta_meV=Delta_meV, GN_G0=GN_G0, T_K=T_K)
     I_SS_nA = do_I_fss(
         V_mV=V_mV, A_mV=A_mV, I=np.array([I_C_nA]), nu_GHz=nu_GHz, n_max=n_max
     )
