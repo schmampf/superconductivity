@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 
 pytest.importorskip("panel")
+pytest.importorskip("jax")
 
 from superconductivity.evaluation.traces import (
     FileSpec,
@@ -371,12 +372,13 @@ def test_gui_app_builds_without_server() -> None:
     assert panel._filespec_table.value.shape == (3, 3)
     assert panel._keysspec_table.value.shape == (8, 3)
     assert panel._tracespec_table.value.shape == (7, 3)
-    assert panel._fit_config_table.value.shape == (5, 3)
+    assert panel._fit_config_table.value.shape == (4, 3)
     assert fit_config_rows.at["jax", "value"] is True
     assert fit_config_rows.at["conv", "value"] is True
     assert fit_config_rows.at["pat_enabled", "value"] is False
-    assert fit_config_rows.at["gap_distribution_enabled", "value"] is False
     assert fit_config_rows.at["noise_enabled", "value"] is False
+    assert "gap_distribution" not in model_rows.index
+    assert "gap_distribution_order" not in model_rows.index
     assert list(fit_parameter_rows.index) == [
         "GN_G0",
         "T_K",
@@ -2534,16 +2536,24 @@ def test_fit_model_table_controls_active_model_and_parameters() -> None:
     assert _fit_parameter_rows(panel).at["A_mV", "guess"] == pytest.approx(0.25)
 
     panel._on_fit_config_edit(SimpleNamespace(row=3, column="value", value=True))
-    assert panel.model_key == "bcs_conv_jax_pat_gapdist"
-    assert list(_fit_parameter_rows(panel).index[-1:]) == ["sigma_Delta_meV"]
-    assert _model_rows(panel).at["gap_distribution_order", "value"] == "41"
+    assert panel.model_key == "bcs_conv_jax_pat_noise"
+    assert list(_fit_parameter_rows(panel).index[-1:]) == ["sigma_V_mV"]
+    assert "gap_distribution_order" not in _model_rows(panel).index
 
-    panel._on_fit_config_edit(SimpleNamespace(row=4, column="value", value=True))
-    assert panel.model_key == "bcs_conv_jax_pat_gapdist_noise"
-    assert list(_fit_parameter_rows(panel).index[-2:]) == [
-        "sigma_Delta_meV",
-        "sigma_V_mV",
+    panel._on_fit_config_edit(SimpleNamespace(row=3, column="value", value=False))
+    assert panel.model_key == "bcs_conv_jax_pat"
+    assert list(_fit_parameter_rows(panel).index) == [
+        "GN_G0",
+        "T_K",
+        "Delta_meV",
+        "gamma_meV",
+        "A_mV",
+        "nu_GHz",
     ]
+
+    panel._on_fit_config_edit(SimpleNamespace(row=3, column="value", value=True))
+    assert panel.model_key == "bcs_conv_jax_pat_noise"
+    assert list(_fit_parameter_rows(panel).index[-1:]) == ["sigma_V_mV"]
     assert _model_rows(panel).at["noise_oversample", "value"] == "64"
     assert _optimizer_rows(panel).at["solver", "value"] == "scipy.optimize.curve_fit"
 

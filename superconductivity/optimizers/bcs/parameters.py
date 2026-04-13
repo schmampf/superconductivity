@@ -16,6 +16,7 @@ class ParameterSpec:
     error: Optional[float] = None
 
 
+
 def make_bcs_parameters() -> tuple[ParameterSpec, ...]:
     return (
         ParameterSpec(
@@ -49,8 +50,10 @@ def make_bcs_parameters() -> tuple[ParameterSpec, ...]:
     )
 
 
+
 def make_pat_parameters() -> tuple[ParameterSpec, ...]:
     return make_bcs_parameters() + make_pat_addon_parameters()
+
 
 
 def make_pat_addon_parameters() -> tuple[ParameterSpec, ...]:
@@ -73,6 +76,7 @@ def make_pat_addon_parameters() -> tuple[ParameterSpec, ...]:
     )
 
 
+
 def make_noise_parameters() -> tuple[ParameterSpec, ...]:
     return (
         ParameterSpec(
@@ -81,17 +85,5 @@ def make_noise_parameters() -> tuple[ParameterSpec, ...]:
             lower=0.0,
             upper=1.0,
             guess=0.0,
-        ),
-    )
-
-
-def make_gap_distribution_parameters() -> tuple[ParameterSpec, ...]:
-    return (
-        ParameterSpec(
-            name="sigma_Delta_meV",
-            label="<i>&sigma;</i><sub>&Delta;</sub> (meV)",
-            lower=0.0,
-            upper=0.05,
-            guess=0.002,
         ),
     )

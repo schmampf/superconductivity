@@ -1,3 +1,5 @@
+"""Voltage-noise helpers shared by BCS model composition."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -23,12 +25,12 @@ def make_bias_support_grid(
 
     Parameters
     ----------
-    V_mV : NDArray64
+    V_mV
         Target voltage grid in mV. Must be 1D, finite, and strictly
         increasing.
-    sigma_V_mV : float
+    sigma_V_mV
         Standard deviation of the voltage noise in mV.
-    padding_sigma : float, optional
+    padding_sigma
         Number of voltage-noise widths used as padding on both sides.
 
     Returns
@@ -62,18 +64,18 @@ def apply_voltage_noise(
 
     Parameters
     ----------
-    V_support_mV : NDArray64
+    V_support_mV
         Voltage support points of the theory curve in mV. Must be strictly
         increasing.
-    I_support_nA : NDArray64
+    I_support_nA
         Theory current on ``V_support_mV`` in nA.
-    sigma_V_mV : float
+    sigma_V_mV
         Standard deviation of the voltage fluctuations in mV.
-    order : int
+    order
         Kernel resolution hint. The current implementation performs a
-        deterministic Gaussian-kernel average on the internal support
-        grid and requires ``order >= 2``.
-    V_out_mV : NDArray64 | None, optional
+        deterministic Gaussian-kernel average on the internal support grid and
+        requires ``order >= 2``.
+    V_out_mV
         Output voltage grid. Defaults to ``V_support_mV``.
 
     Returns
@@ -124,15 +126,11 @@ def _apply_voltage_noise_general(
     edges = np.empty(V_support_mV.size + 1, dtype=np.float64)
     edges[1:-1] = 0.5 * (V_support_mV[:-1] + V_support_mV[1:])
     edges[0] = V_support_mV[0] - 0.5 * (V_support_mV[1] - V_support_mV[0])
-    edges[-1] = (
-        V_support_mV[-1]
-        + 0.5 * (V_support_mV[-1] - V_support_mV[-2])
-    )
+    edges[-1] = V_support_mV[-1] + 0.5 * (V_support_mV[-1] - V_support_mV[-2])
     widths = np.diff(edges)
     delta = (V_out_mV[:, None] - V_support_mV[None, :]) / sigma_V_mV
     weights = np.exp(-0.5 * delta**2) * widths[None, :]
-    weights_sum = np.sum(weights, axis=1, keepdims=True)
-    weights /= weights_sum
+    weights /= np.sum(weights, axis=1, keepdims=True)
     return np.asarray(weights @ I_support_nA, dtype=np.float64)
 
 

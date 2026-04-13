@@ -8,7 +8,7 @@ from scipy.special import jv
 from ...utilities.constants import h_e_pVs
 from ...utilities.functions_jax import get_dydx, jnp_interp_y_of_x
 from ...utilities.types import JInterpolator, JNDArray, NDArray64
-from ..bcs.pat import get_I_pat_nA
+from ..bcs import get_I_pat_nA
 
 
 def get_I_pamar_nA(

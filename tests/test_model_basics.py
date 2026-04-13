@@ -38,10 +38,10 @@ def test_get_dos_is_even_in_energy() -> None:
 def test_basics_jnp_matches_numpy_helpers() -> None:
     import jax.numpy as jnp
 
-    from superconductivity.models.basics_jnp import get_Delta_jnp_meV
-    from superconductivity.models.basics_jnp import get_T_c_jnp_K
-    from superconductivity.models.basics_jnp import get_dos_jnp
-    from superconductivity.models.basics_jnp import get_f_jnp
+    from superconductivity.models.basics.jnp import get_Delta_jnp_meV
+    from superconductivity.models.basics.jnp import get_T_c_jnp_K
+    from superconductivity.models.basics.jnp import get_dos_jnp
+    from superconductivity.models.basics.jnp import get_f_jnp
 
     Delta_meV = 0.18
     T_K = 0.9

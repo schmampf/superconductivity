@@ -4,7 +4,7 @@ This module re-exports the functions/constants you most frequently use, so that
 users can do either:
 
     import superconductivity.api as sc
-    sc.get_I_bcs_nA(...)
+    sc.get_Ibcs_nA(...)
 
 or:
 
@@ -15,22 +15,16 @@ implemented in `superconductivity/__init__.py` and forwards missing attributes
 to this module.
 """
 
-from .evaluation.traces import FileSpec, list_measurement_keys, list_specific_keys
-from .evaluation.traces import Keys, KeysSpec, get_keys
-from .evaluation.traces import TraceMeta
-from .evaluation.traces import (
-    get_measurement_keys,
-    get_measurement_series,
-    get_status_keys,
-    get_status_series,
-)
 from .evaluation.analysis import (
     OffsetSpec,
     OffsetTrace,
     OffsetTraces,
+    PSDSpec,
+    PSDTrace,
+    PSDTraces,
     offset_analysis,
+    psd_analysis,
 )
-from .evaluation.analysis import PSDSpec, PSDTrace, PSDTraces, psd_analysis
 from .evaluation.sampling import (
     Sample,
     Samples,
@@ -44,10 +38,35 @@ from .evaluation.sampling import (
     smooth,
     upsampling,
 )
-from .evaluation.traces import TraceSpec, Trace, Traces, get_traces
+from .evaluation.traces import (
+    FileSpec,
+    Keys,
+    KeysSpec,
+    Trace,
+    TraceMeta,
+    Traces,
+    TraceSpec,
+    get_keys,
+    get_measurement_keys,
+    get_measurement_series,
+    get_status_keys,
+    get_status_series,
+    get_traces,
+    list_measurement_keys,
+    list_specific_keys,
+)
+
+# imports from BCS basics / tunneling
+from .models.basics import get_Delta_meV, get_dos, get_f, get_T_c_K
+from .models.bcs import get_I_pat_nA, get_Ibcs_nA
+
+# imports from btk
+from .models.mar import get_AB_btk, get_I_btk_nA, get_I_fcs_nA, get_I_ha_asym_nA
+from .models.mar import get_I_ha_sym_nA as get_I_ha_nA
+from .models.mar import get_Imar_nA, get_Z_btk
 
 # import from abs
-from .models.abs import (
+from .models.rcsj.josephson.abs import (
     get_cpr_ab,
     get_cpr_ab_nA,
     get_cpr_abs,
@@ -77,26 +96,15 @@ from .models.abs import (
     get_rho,
 )
 
-# imports from BCS basics / tunneling
-from .models.basics import get_Delta_meV, get_dos, get_f, get_T_c_K
-from .models.bcs_np import get_I_bcs_nA
-
-# imports from btk
-from .models.mar import (
-    get_AB_btk,
-    get_Imar_nA,
-    get_I_btk_nA,
-    get_I_fcs_nA,
-    get_I_ha_asym_nA,
-    get_I_ha_sym_nA as get_I_ha_nA,
-    get_Z_btk,
-)
-
-# import from pat
-from .models.pat import get_I_pat_nA
-
 # import from ss
-from .models.ss import get_I_p_abs_nA
+try:
+    from .models.rcsj.josephson.sp import get_I_p_abs_nA
+except ModuleNotFoundError as exc:
+    if exc.name != "scipy":
+        raise
+
+    def get_I_p_abs_nA(*args, **kwargs):
+        raise ImportError("get_I_p_abs_nA requires scipy in the active environment.")
 
 # import colors
 from .style.cpd4 import cmap as get_cmap

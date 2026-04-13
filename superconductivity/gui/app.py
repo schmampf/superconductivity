@@ -35,7 +35,6 @@ from ..optimizers.bcs import (
     get_model_key,
     get_model_spec,
     make_bcs_parameters,
-    make_gap_distribution_parameters,
     make_noise_parameters,
     make_pat_addon_parameters,
 )
@@ -137,9 +136,6 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
         ]
         self._pat_parameters = [
             replace(parameter) for parameter in make_pat_addon_parameters()
-        ]
-        self._gap_distribution_parameters = [
-            replace(parameter) for parameter in make_gap_distribution_parameters()
         ]
         self._noise_parameters = [
             replace(parameter) for parameter in make_noise_parameters()
@@ -535,8 +531,6 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
         parameters = list(self._bcs_parameters)
         if self._fit_model_config.pat_enabled:
             parameters.extend(self._pat_parameters)
-        if self._fit_model_config.gap_distribution_enabled:
-            parameters.extend(self._gap_distribution_parameters)
         if self._fit_model_config.noise_enabled:
             parameters.extend(self._noise_parameters)
         self._parameters = parameters

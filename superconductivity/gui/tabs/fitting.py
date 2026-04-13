@@ -16,7 +16,6 @@ _FIT_CONFIG_LABELS = OrderedDict(
         ("jax", "JAX"),
         ("conv", "Conv"),
         ("pat_enabled", "PAT"),
-        ("gap_distribution_enabled", "Gap dist."),
         ("noise_enabled", "Noise"),
     ]
 )
@@ -235,11 +234,6 @@ class GUIFitTabMixin:
                     "value": bool(self._fit_model_config.pat_enabled),
                 },
                 {
-                    "key": "gap_distribution_enabled",
-                    "parameter": _FIT_CONFIG_LABELS["gap_distribution_enabled"],
-                    "value": bool(self._fit_model_config.gap_distribution_enabled),
-                },
-                {
                     "key": "noise_enabled",
                     "parameter": _FIT_CONFIG_LABELS["noise_enabled"],
                     "value": bool(self._fit_model_config.noise_enabled),
@@ -381,9 +375,6 @@ class GUIFitTabMixin:
         if key == "pat_enabled":
             self._update_fit_model_config(pat_enabled=value)
             return
-        if key == "gap_distribution_enabled":
-            self._update_fit_model_config(gap_distribution_enabled=value)
-            return
         if key == "noise_enabled":
             self._update_fit_model_config(noise_enabled=value)
 
@@ -393,7 +384,6 @@ class GUIFitTabMixin:
         kernel: str | None = None,
         backend: str | None = None,
         pat_enabled: bool | None = None,
-        gap_distribution_enabled: bool | None = None,
         noise_enabled: bool | None = None,
     ) -> None:
         if self._fit_running:
@@ -407,17 +397,11 @@ class GUIFitTabMixin:
                 if pat_enabled is None
                 else pat_enabled
             ),
-            gap_distribution_enabled=(
-                self._fit_model_config.gap_distribution_enabled
-                if gap_distribution_enabled is None
-                else gap_distribution_enabled
-            ),
             noise_enabled=(
                 self._fit_model_config.noise_enabled
                 if noise_enabled is None
                 else noise_enabled
             ),
-            gap_distribution_order=self._fit_model_config.gap_distribution_order,
             noise_oversample=self._fit_model_config.noise_oversample,
         )
         self._sync_active_fit_model()

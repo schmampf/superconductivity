@@ -1,9 +1,17 @@
 from dataclasses import replace
+import importlib.util
 
 import numpy as np
+import pytest
 
 from superconductivity.optimizers import fit_model
 from superconductivity.optimizers.bcs import BCSModelConfig, get_model_spec
+
+pytestmark = pytest.mark.skipif(
+    importlib.util.find_spec("scipy") is None,
+    reason="scipy is unavailable",
+)
+
 
 
 def test_fit_model_returns_compact_solution() -> None:
@@ -41,13 +49,13 @@ def test_fit_model_returns_compact_solution() -> None:
     assert solution["params"][1].value == guess[1]
 
 
+
 def test_fit_model_supports_composed_bcs_config() -> None:
     V_mV = np.linspace(-1.0, 1.0, 41)
     model = BCSModelConfig(
         "conv",
         "np",
         pat_enabled=True,
-        gap_distribution_enabled=True,
         noise_enabled=True,
     )
     spec = get_model_spec(model)
@@ -61,5 +69,5 @@ def test_fit_model_supports_composed_bcs_config() -> None:
         maxfev=20,
     )
 
-    assert len(solution["params"]) == 8
+    assert len(solution["params"]) == 7
     assert np.max(np.abs(solution["I_fit_nA"] - I_nA)) < 1e-6

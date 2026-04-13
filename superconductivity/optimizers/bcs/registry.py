@@ -4,33 +4,30 @@ from collections import OrderedDict
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Callable, Literal
+from typing import Callable
 
 import numpy as np
 
+from ...models.basics.noise import apply_voltage_noise, make_bias_support_grid
+from ...models.bcs.backend import (
+    DEFAULT_E_MV,
+    PAT_N_MAX,
+    Backend,
+    Kernel,
+)
 from ...utilities.types import NDArray64
-from .bcs_jax import convolution_jax, integral_jax
-from .bcs_np import convolution_np, integral_np
-from .gap_distribution import apply_gap_distribution
-from .noise import apply_voltage_noise, make_bias_support_grid
 from .parameters import (
     ParameterSpec,
     make_bcs_parameters,
-    make_gap_distribution_parameters,
     make_noise_parameters,
     make_pat_addon_parameters,
 )
-from .pat import get_I_pat_nA
 
-Kernel = Literal["int", "conv"]
-Backend = Literal["np", "jax"]
 ModelFunction = Callable[..., NDArray64]
 BaseModelFunction = Callable[
-    [NDArray64, NDArray64, float, float, float, float], NDArray64
+    [NDArray64, NDArray64, float, float, float, float],
+    NDArray64,
 ]
-
-DEFAULT_E_MV = np.linspace(-4.0, 4.0, 4001, dtype=np.float64)
-PAT_N_MAX = 50
 
 BCS_INT_HTML = r"""
 I(V)=G_\mathrm{N}\int_{-\infty}^{\infty}
@@ -51,11 +48,6 @@ J_n^2\!\left(\frac{eA}{h\nu}\right)
 I_\mathrm{BCS}\!\left(V-n\frac{h\nu}{e}\right)
 """
 
-GAP_DIST_SUFFIX_HTML = r"""
-\Delta \sim \mathcal{N}(\Delta_0,\sigma_\Delta^2),\qquad
-I_\mathrm{gap}(V)=\left\langle I_0(V;\Delta)\right\rangle
-"""
-
 NOISE_SUFFIX_HTML = r"""
 \delta V \sim \mathcal{N}(0,\sigma_V^2),\qquad
 I_\mathrm{noise}(V)=\left\langle I_0(V+\delta V)\right\rangle
@@ -67,20 +59,10 @@ class BCSModelConfig:
     kernel: Kernel = "conv"
     backend: Backend = "jax"
     pat_enabled: bool = False
-    gap_distribution_enabled: bool = False
     noise_enabled: bool = False
-    gap_distribution_order: int = 41
     noise_oversample: int = 64
 
     def __post_init__(self) -> None:
-        gap_distribution_order = int(self.gap_distribution_order)
-        if gap_distribution_order < 2:
-            raise ValueError("gap_distribution_order must be >= 2.")
-        object.__setattr__(
-            self,
-            "gap_distribution_order",
-            gap_distribution_order,
-        )
         noise_oversample = int(self.noise_oversample)
         if noise_oversample < 2:
             raise ValueError("noise_oversample must be >= 2.")
@@ -101,29 +83,24 @@ class ModelSpec:
 class _BaseModelSpec:
     label: str
     html: str
-    function: BaseModelFunction
 
 
 _BASE_MODEL_SPECS: dict[tuple[Kernel, Backend], _BaseModelSpec] = {
     ("int", "np"): _BaseModelSpec(
         label="BCS integral (NumPy)",
         html=BCS_INT_HTML,
-        function=integral_np,
     ),
     ("int", "jax"): _BaseModelSpec(
         label="BCS integral (JAX)",
         html=BCS_INT_HTML,
-        function=integral_jax,
     ),
     ("conv", "np"): _BaseModelSpec(
         label="BCS convolution (NumPy)",
         html=BCS_CONV_HTML,
-        function=convolution_np,
     ),
     ("conv", "jax"): _BaseModelSpec(
         label="BCS convolution (JAX)",
         html=BCS_CONV_HTML,
-        function=convolution_jax,
     ),
 }
 
@@ -132,32 +109,22 @@ _MODEL_CONFIGS = OrderedDict(
         ("bcs_int", BCSModelConfig("int", "np")),
         ("bcs_int_jax", BCSModelConfig("int", "jax")),
         ("bcs_conv_jax", BCSModelConfig("conv", "jax")),
-        (
-            "bcs_conv_noise",
-            BCSModelConfig("conv", "jax", noise_enabled=True),
-        ),
-        (
-            "bcs_conv_gapdist",
-            BCSModelConfig("conv", "jax", gap_distribution_enabled=True),
-        ),
+        ("bcs_conv_noise", BCSModelConfig("conv", "jax", noise_enabled=True)),
         ("pat_int_jax", BCSModelConfig("int", "jax", pat_enabled=True)),
-        (
-            "pat_conv_jax",
-            BCSModelConfig("conv", "jax", pat_enabled=True),
-        ),
+        ("pat_conv_jax", BCSModelConfig("conv", "jax", pat_enabled=True)),
     ]
 )
+
 
 
 def get_model_key(config: BCSModelConfig) -> str:
     key = f"bcs_{config.kernel}_{config.backend}"
     if config.pat_enabled:
         key += "_pat"
-    if config.gap_distribution_enabled:
-        key += "_gapdist"
     if config.noise_enabled:
         key += "_noise"
     return key
+
 
 
 def _parse_canonical_model(model: str) -> BCSModelConfig:
@@ -171,16 +138,16 @@ def _parse_canonical_model(model: str) -> BCSModelConfig:
     if backend not in {"np", "jax"}:
         raise KeyError(model)
     suffixes = parts[3:]
-    allowed_suffixes = {"pat", "gapdist", "noise"}
+    allowed_suffixes = {"pat", "noise"}
     if any(suffix not in allowed_suffixes for suffix in suffixes):
         raise KeyError(model)
     return BCSModelConfig(
         kernel=kernel,
         backend=backend,
         pat_enabled="pat" in suffixes,
-        gap_distribution_enabled="gapdist" in suffixes,
         noise_enabled="noise" in suffixes,
     )
+
 
 
 def get_model_config(model: str | BCSModelConfig) -> BCSModelConfig:
@@ -192,6 +159,7 @@ def get_model_config(model: str | BCSModelConfig) -> BCSModelConfig:
         return _parse_canonical_model(model)
     except KeyError as exc:
         raise KeyError(f"Unknown optimizer model '{model}'.") from exc
+
 
 
 def _clone_parameters(
@@ -212,15 +180,15 @@ def _clone_parameters(
     )
 
 
+
 def _compose_parameters(config: BCSModelConfig) -> tuple[ParameterSpec, ...]:
     parameters = list(_clone_parameters(make_bcs_parameters()))
     if config.pat_enabled:
         parameters.extend(_clone_parameters(make_pat_addon_parameters()))
-    if config.gap_distribution_enabled:
-        parameters.extend(_clone_parameters(make_gap_distribution_parameters()))
     if config.noise_enabled:
         parameters.extend(_clone_parameters(make_noise_parameters()))
     return tuple(parameters)
+
 
 
 def _compose_label(config: BCSModelConfig) -> str:
@@ -228,8 +196,6 @@ def _compose_label(config: BCSModelConfig) -> str:
     suffixes: list[str] = []
     if config.pat_enabled:
         suffixes.append("PAT")
-    if config.gap_distribution_enabled:
-        suffixes.append("gap dist.")
     if config.noise_enabled:
         suffixes.append("noise")
     if not suffixes:
@@ -237,10 +203,13 @@ def _compose_label(config: BCSModelConfig) -> str:
     return base_label + " + " + " + ".join(suffixes)
 
 
+
 def _energy_grid_summary(E_mV: NDArray64) -> str:
     return (
-        f"{float(E_mV[0]):.1f}..{float(E_mV[-1]):.1f} meV, " f"{int(E_mV.size)} points"
+        f"{float(E_mV[0]):.1f}..{float(E_mV[-1]):.1f} meV, "
+        f"{int(E_mV.size)} points"
     )
+
 
 
 def _compose_info(config: BCSModelConfig) -> OrderedDict[str, str]:
@@ -248,8 +217,6 @@ def _compose_info(config: BCSModelConfig) -> OrderedDict[str, str]:
     info["kernel"] = "integral" if config.kernel == "int" else "convolution"
     info["backend"] = "NumPy" if config.backend == "np" else "JAX"
     info["PAT"] = "yes" if config.pat_enabled else "no"
-    info["gap_distribution"] = "yes" if config.gap_distribution_enabled else "no"
-    info["gap_distribution_order"] = str(config.gap_distribution_order)
     info["noise"] = "yes" if config.noise_enabled else "no"
     info["noise_oversample"] = str(config.noise_oversample)
     info["energy_grid"] = _energy_grid_summary(DEFAULT_E_MV)
@@ -258,23 +225,25 @@ def _compose_info(config: BCSModelConfig) -> OrderedDict[str, str]:
     return info
 
 
+
 def _compose_html(config: BCSModelConfig) -> str:
     equations = [_BASE_MODEL_SPECS[(config.kernel, config.backend)].html.strip()]
     if config.pat_enabled:
         equations.append(PAT_SUFFIX_HTML.strip())
-    if config.gap_distribution_enabled:
-        equations.append(GAP_DIST_SUFFIX_HTML.strip())
     if config.noise_enabled:
         equations.append(NOISE_SUFFIX_HTML.strip())
     return (
         "\\[\n"
-        "\\begin{gathered}\n" + "\\\\[0.4em]\n".join(equations) + "\n\\end{gathered}\n"
+        "\\begin{gathered}\n"
+        + "\\\\[0.4em]\n".join(equations)
+        + "\n\\end{gathered}\n"
         "\\]"
     )
 
 
+
 def _compose_function(config: BCSModelConfig) -> ModelFunction:
-    base_function = _BASE_MODEL_SPECS[(config.kernel, config.backend)].function
+    base_function = _resolve_base_function(config.kernel, config.backend)
 
     def function(
         V_mV: NDArray64,
@@ -282,10 +251,10 @@ def _compose_function(config: BCSModelConfig) -> ModelFunction:
     ) -> NDArray64:
         V_requested = np.asarray(V_mV, dtype=np.float64)
         values = np.asarray(parameters, dtype=np.float64)
-        if values.size != len(_compose_parameters(config)):
+        expected = len(_compose_parameters(config))
+        if values.size != expected:
             raise ValueError(
-                f"Model '{get_model_key(config)}' expects "
-                f"{len(_compose_parameters(config))} parameters, "
+                f"Model '{get_model_key(config)}' expects {expected} parameters, "
                 f"got {values.size}."
             )
 
@@ -297,50 +266,38 @@ def _compose_function(config: BCSModelConfig) -> ModelFunction:
             A_mV = float(values[index])
             nu_GHz = float(values[index + 1])
             index += 2
-        sigma_Delta_meV = (
-            float(values[index]) if config.gap_distribution_enabled else 0.0
-        )
-        if config.gap_distribution_enabled:
-            index += 1
         sigma_V_mV = float(values[index]) if config.noise_enabled else 0.0
+
         V_evaluate = (
             make_bias_support_grid(V_requested, sigma_V_mV)
             if config.noise_enabled and sigma_V_mV > 0.0
             else V_requested
         )
-
-        def base_curve(delta_value_meV: float) -> NDArray64:
-            return np.asarray(
-                base_function(
-                    V_evaluate,
-                    DEFAULT_E_MV,
-                    float(GN_G0),
-                    float(T_K),
-                    float(delta_value_meV),
-                    float(gamma_meV),
-                ),
-                dtype=np.float64,
-            )
-
-        if config.gap_distribution_enabled and sigma_Delta_meV > 0.0:
-            current = apply_gap_distribution(
-                base_curve,
+        current = np.asarray(
+            base_function(
+                V_evaluate,
+                DEFAULT_E_MV,
+                float(GN_G0),
+                float(T_K),
                 float(Delta_meV),
-                sigma_Delta_meV,
-                config.gap_distribution_order,
-            )
-        else:
-            current = base_curve(float(Delta_meV))
+                float(gamma_meV),
+            ),
+            dtype=np.float64,
+        )
 
-        if config.pat_enabled:
-            if A_mV != 0.0:
-                current = get_I_pat_nA(
+        if config.pat_enabled and A_mV != 0.0:
+            from ...models.bcs import get_I_pat_nA
+
+            current = np.asarray(
+                get_I_pat_nA(
                     V_evaluate,
                     current,
                     A_mV,
                     nu_GHz=nu_GHz,
                     n_max=PAT_N_MAX,
-                )
+                ),
+                dtype=np.float64,
+            )
 
         if config.noise_enabled:
             current = apply_voltage_noise(
@@ -356,6 +313,21 @@ def _compose_function(config: BCSModelConfig) -> ModelFunction:
     return function
 
 
+def _resolve_base_function(
+    kernel: Kernel,
+    backend: Backend,
+) -> BaseModelFunction:
+    if backend == "np":
+        from ...models.bcs.backend.np import convolution_np, integral_np
+
+        return integral_np if kernel == "int" else convolution_np
+    if backend == "jax":
+        from ...models.bcs.backend.jax import convolution_jax, integral_jax
+
+        return integral_jax if kernel == "int" else convolution_jax
+    raise ValueError("Unknown backend/kernel combination.")
+
+
 @lru_cache(maxsize=None)
 def _cached_model_spec(config: BCSModelConfig) -> ModelSpec:
     return ModelSpec(
@@ -368,6 +340,7 @@ def _cached_model_spec(config: BCSModelConfig) -> ModelSpec:
     )
 
 
+
 def get_model_spec(model: str | BCSModelConfig) -> ModelSpec:
     return _cached_model_spec(get_model_config(model))
 
@@ -376,7 +349,6 @@ _MODEL_OPTIONS_ENTRIES = (
     ("BCS integral", "bcs_int"),
     ("BCS integral (JAX)", "bcs_int_jax"),
     ("BCS convolution (JAX)", "bcs_conv_jax"),
-    ("BCS convolution + gap dist.", "bcs_conv_gapdist"),
     ("BCS convolution + noise", "bcs_conv_noise"),
     ("PAT integral (JAX)", "pat_int_jax"),
     ("PAT convolution (JAX)", "pat_conv_jax"),
@@ -405,6 +377,7 @@ __all__ = [
     "MODEL_OPTIONS",
     "MODEL_REGISTRY",
     "ModelSpec",
+    "PAT_N_MAX",
     "get_model_config",
     "get_model_key",
     "get_model_spec",

@@ -13,7 +13,7 @@ from optimizers.fit_pincode_helper import (
     normalize_V,
 )
 
-from superconductivity.models.bcs.bcs_jnp import bin_y_over_x as bin_y_over_x_jax
+from superconductivity.utilities.functions_jax import jbin_y_over_x as bin_y_over_x_jax
 
 from ..utilities.constants import G_0_muS
 from ..utilities.functions import NDArray64, bin_y_over_x

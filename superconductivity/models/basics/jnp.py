@@ -1,12 +1,12 @@
-"""JAX versions of the shared BCS thermal and spectral helpers."""
+"""JAX BCS thermal and spectral helpers."""
 
 from __future__ import annotations
 
 import jax
 import jax.numpy as jnp
 
-from ..utilities.constants import k_B_meV
-from ..utilities.types import JNDArray
+from ...utilities.constants import k_B_meV
+from ...utilities.types import JNDArray
 
 jax.config.update("jax_enable_x64", True)
 
@@ -112,11 +112,12 @@ def get_dos_jnp(
     JNDArray
         Dimensionless density of states normalized to the normal state.
     """
-    E_complex_meV = E_meV + 1j * gamma_meV
-    dos = E_complex_meV / jnp.sqrt(E_complex_meV**2 - Delta_meV**2)
+    E_complex = E_meV + 1j * gamma_meV
+    dos = E_complex / jnp.sqrt(E_complex**2 - Delta_meV**2)
     dos = jnp.abs(jnp.real(dos))
     dos = jnp.nan_to_num(dos, nan=0.0, posinf=100.0, neginf=0.0)
-    return jnp.clip(dos, 0.0, 100.0)
+    clipped = jnp.clip(dos, 0.0, 100.0)
+    return jnp.where(Delta_meV == 0.0, jnp.ones_like(E_meV), clipped)
 
 
 __all__ = [

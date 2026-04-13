@@ -1,16 +1,11 @@
-"""Shared BCS-style thermal and spectral helper functions.
-
-These helpers live outside the transport model modules so they can be reused
-across tunnel, MAR, and bound-state code without pulling in a full current
-model implementation.
-"""
+"""NumPy BCS thermal and spectral helpers."""
 
 from __future__ import annotations
 
 import numpy as np
 
-from ..utilities.constants import k_B_meV
-from ..utilities.types import NDArray64
+from ...utilities.constants import k_B_meV
+from ...utilities.types import NDArray64
 
 
 def get_T_c_K(Delta_meV: float = 0.18) -> float:
@@ -26,7 +21,7 @@ def get_T_c_K(Delta_meV: float = 0.18) -> float:
     float
         Critical temperature in kelvin.
     """
-    return Delta_meV / (1.764 * k_B_meV)
+    return float(Delta_meV) / (1.764 * float(k_B_meV))
 
 
 def get_Delta_meV(Delta_meV: float, T_K: float) -> float:
@@ -44,14 +39,19 @@ def get_Delta_meV(Delta_meV: float, T_K: float) -> float:
     float
         Thermal gap ``Delta(T)`` in meV.
     """
-    T_c_K = get_T_c_K(Delta_meV)
-    if T_K < 0:
-        raise ValueError("Temperature (K) must be non-negative.")
-    if T_K >= T_c_K:
+    delta_0 = float(Delta_meV)
+    temperature = float(T_K)
+    if delta_0 < 0.0:
+        raise ValueError("Delta_meV must be non-negative.")
+    if temperature < 0.0:
+        raise ValueError("T_K must be non-negative.")
+    if temperature == 0.0:
+        return delta_0
+
+    T_c_K = get_T_c_K(delta_0)
+    if temperature >= T_c_K:
         return 0.0
-    if T_K == 0:
-        return Delta_meV
-    return Delta_meV * np.tanh(1.74 * np.sqrt(T_c_K / T_K - 1.0))
+    return delta_0 * np.tanh(1.74 * np.sqrt(T_c_K / temperature - 1.0))
 
 
 def get_f(E_meV: NDArray64, T_K: float) -> NDArray64:
@@ -69,12 +69,15 @@ def get_f(E_meV: NDArray64, T_K: float) -> NDArray64:
     NDArray64
         Occupation values ``f(E)``.
     """
-    if T_K < 0:
-        raise ValueError("Temperature (K) must be non-negative.")
-    E_meV = np.asarray(E_meV, dtype=np.float64)
-    if T_K == 0:
-        return np.where(E_meV < 0.0, 1.0, 0.0)
-    exponent = np.clip(E_meV / (k_B_meV * T_K), -100.0, 100.0)
+    temperature = float(T_K)
+    if temperature < 0.0:
+        raise ValueError("T_K must be non-negative.")
+
+    energy = np.asarray(E_meV, dtype=np.float64)
+    if temperature == 0.0:
+        return np.where(energy < 0.0, 1.0, 0.0)
+
+    exponent = np.clip(energy / (float(k_B_meV) * temperature), -100.0, 100.0)
     return 1.0 / (np.exp(exponent) + 1.0)
 
 
@@ -95,14 +98,18 @@ def get_dos(E_meV: NDArray64, Delta_meV: float, gamma_meV: float) -> NDArray64:
     NDArray64
         Dimensionless density of states normalized to the normal state.
     """
-    if Delta_meV < 0:
-        raise ValueError("Energy gap (meV) must be non-negative.")
-    if gamma_meV < 0:
-        raise ValueError("Dynes parameter (meV) must be non-negative.")
+    delta = float(Delta_meV)
+    gamma = float(gamma_meV)
+    if delta < 0.0:
+        raise ValueError("Delta_meV must be non-negative.")
+    if gamma < 0.0:
+        raise ValueError("gamma_meV must be non-negative.")
+    if delta == 0.0:
+        return np.ones_like(E_meV, dtype=np.float64)
 
-    E_complex_meV = np.asarray(E_meV, dtype=np.complex128) + 1j * gamma_meV
-    denom = np.sqrt(E_complex_meV * E_complex_meV - Delta_meV * Delta_meV)
-    dos = np.real(E_complex_meV / denom)
+    E_complex_meV = np.asarray(E_meV, dtype=np.complex128) + 1j * gamma
+    denominator = np.sqrt(E_complex_meV * E_complex_meV - delta * delta)
+    dos = np.real(E_complex_meV / denominator)
     dos = np.abs(dos, dtype=np.float64)
     dos[np.isnan(dos)] = 0.0
     return np.clip(dos, 0.0, 100.0)
