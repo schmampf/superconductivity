@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ....utilities.constants import G_0_muS
+from ....utilities.constants import G0_muS
 from ....utilities.functions import bin_y_over_x
 from ....utilities.types import NDArray64
 from ...basics import get_Delta_meV, get_f
@@ -57,7 +57,7 @@ def get_I_btk_nA(
     gamma_meV_min: float = 1e-4,
 ) -> NDArray64:
     """Return total, one-electron, and two-electron BTK current."""
-    G_N_muS = tau * G_0_muS
+    G_N_muS = tau * G0_muS
     I_NN_nA = V_mV * G_N_muS
 
     Delta_meV_T = get_Delta_meV(Delta_meV=Delta_meV, T_K=T_K)
@@ -91,8 +91,8 @@ def get_I_btk_nA(
         df = f2 - f1
         I_2e_mV[i] = np.trapezoid((2 * A) * df, E_meV)
         I_1e_mV[i] = np.trapezoid((1 - B - A) * df, E_meV)
-    I_2e_nA = np.array(I_2e_mV, dtype="float64") * G_0_muS
-    I_1e_nA = np.array(I_1e_mV, dtype="float64") * G_0_muS
+    I_2e_nA = np.array(I_2e_mV, dtype="float64") * G0_muS
+    I_1e_nA = np.array(I_1e_mV, dtype="float64") * G0_muS
 
     I_2e_nA = np.concatenate((I_2e_nA, -np.flip(I_2e_nA[1:])))
     I_1e_nA = np.concatenate((I_1e_nA, -np.flip(I_1e_nA[1:])))

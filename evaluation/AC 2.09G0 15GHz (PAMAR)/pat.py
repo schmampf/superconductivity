@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 from scipy.special import jv
 
-from superconductivity.utilities.constants import h_e_pVs
+from superconductivity.utilities.constants import h_pVs
 from superconductivity.utilities.functions_jax import get_dydx, jinterp_y_of_x
 from superconductivity.utilities.types import JInterpolator, JNDArray, NDArray64
 
@@ -38,7 +38,7 @@ def get_I_pat_nA(
     scalar_A = A_mV_arr.ndim == 0
     A_mV_1d: NDArray64 = np.atleast_1d(A_mV_arr)  # (Na,)
 
-    nu_mV: float = float(nu_GHz) * float(h_e_pVs)
+    nu_mV: float = float(nu_GHz) * float(h_pVs)
     a_m: NDArray64 = m * A_mV_1d / nu_mV  # (Na,)
 
     # Build up to order n
@@ -131,5 +131,7 @@ def get_I_pamar_nA(
             n_max=n_max,
         )
     I_pamar_nA = np.sum(I_pat_m_nA, axis=0)
+    return I_pamar_nA
+    return I_pamar_nA
     return I_pamar_nA
     return I_pamar_nA

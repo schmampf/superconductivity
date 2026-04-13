@@ -6,7 +6,7 @@ import numpy as np
 from jax import Array, device_put
 from numpy.typing import NDArray
 
-from ..utilities.constants import G_0_muS
+from ..utilities.constants import G0_muS
 from ..utilities.types import NDArray64
 
 FMap = Callable[[Array], Array]
@@ -22,7 +22,7 @@ def handle_G_N_exp(
     logic: NDArray[np.bool] = V_exp_mV >= V_threshold_mV
     G_N_0: float = np.nanmean(
         np.gradient(
-            I_exp_nA[logic] / G_0_muS,
+            I_exp_nA[logic] / G0_muS,
             V_exp_mV[logic],
         ),
         dtype=np.float64,

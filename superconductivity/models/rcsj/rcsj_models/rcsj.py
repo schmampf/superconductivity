@@ -11,11 +11,11 @@ from ...utilities.types import NDArray64
 from .helper import (
     JF32,
     JF32EPS,
-    JH_E_PVSJF32,
     JI32,
     JPI32,
     JTWO_MPI32,
     JTWO_PI32,
+    Jh_pVs32,
     lookup_linear_uniform_clamped,
     prepare_uniform_lookup_table,
     suggest_dt_Nt,
@@ -147,10 +147,10 @@ def simulate_rcsj_with_pat_vac_batch(
     two_mpi = jnp.asarray(JTWO_MPI32, dtype=JF32)
     pi = jnp.asarray(JPI32, dtype=JF32)
     two_pi = jnp.asarray(JTWO_PI32, dtype=JF32)
-    h_e_pVsJF32 = jnp.asarray(JH_E_PVSJF32, dtype=JF32)
+    h_pVs32 = jnp.asarray(Jh_h_pVs, dtype=JF32)
 
     w_THz = nu_GHz * two_mpi
-    a = jnp.asarray(2.0, dtype=JF32) * A_col / (h_e_pVsJF32 * nu_GHz)
+    a = jnp.asarray(2.0, dtype=JF32) * A_col / (h_pVs32 * nu_GHz)
 
     dt_ps = jnp.asarray(dt_ps, dtype=JF32)
     dV_fac = (
@@ -197,7 +197,7 @@ def simulate_rcsj_with_pat_vac_batch(
         V_next_mV = V_mV + dV_fac * I_cap_nA
         V_next_mV = jnp.clip(V_next_mV, v_min, v_max)
 
-        phi_next = phi + V_next_mV * two_mpi * dt_ps / h_e_pVsJF32
+        phi_next = phi + V_next_mV * two_mpi * dt_ps / h_pVs32
         phi_next = jnp.mod(phi_next + pi, two_pi) - pi
 
         keep = (n_i >= burn_index).astype(JF32)

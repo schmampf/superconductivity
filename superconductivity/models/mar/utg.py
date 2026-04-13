@@ -1,10 +1,8 @@
 import numpy as np
 from numpy.typing import NDArray
-
-from scipy.special import jv
 from scipy.interpolate import RegularGridInterpolator
-
-from utilities.constants import h_e_pVs
+from scipy.special import jv
+from utilities.constants import h_pVs
 
 
 def get_I_nA(
@@ -16,7 +14,7 @@ def get_I_nA(
     M: int = 10,
 ) -> NDArray[np.float64]:
 
-    nu_mV = nu_GHz * h_e_pVs
+    nu_mV = nu_GHz * h_pVs
     A___ = A_mV / nu_mV
     _n__ = np.arange(-N, N + 1)
     __m_ = np.arange(1, M + 1)

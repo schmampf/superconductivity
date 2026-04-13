@@ -9,13 +9,14 @@ from typing import Iterator, Sequence, TypedDict, overload
 
 import numpy as np
 
-from ...utilities.constants import G_0_muS
+from ...utilities.constants import G0_muS
 from ...utilities.functions import bin_y_over_x, fill_nans
 from ...utilities.functions import upsample as upsample_xy
-from ...utilities.safety import require_all_finite, require_min_size, to_1d_float64
+from ...utilities.safety import (require_all_finite, require_min_size,
+                                 to_1d_float64)
 from ...utilities.types import NDArray64
-from ..traces import Trace, Traces
 from ..sampling import downsample_trace
+from ..traces import Trace, Traces
 
 
 def _import_tqdm():
@@ -249,7 +250,7 @@ def _compute_offset_errors_numpy(
         x_off=spec.Voff_mV,
     )
     g_uS = np.gradient(i_vs_v, spec.Vbins_mV, axis=0)
-    g_G0 = g_uS / G_0_muS
+    g_G0 = g_uS / G0_muS
     g_sym = np.abs(g_G0 - np.flip(g_G0, axis=0))
     g_err_G0 = np.nanmean(g_sym, axis=0)
     g_err_G0 = fill_nans(g_err_G0, x=spec.Voff_mV, method="linear")
@@ -261,7 +262,7 @@ def _compute_offset_errors_numpy(
         x_off=spec.Ioff_nA,
     )
     r_MOhm = np.gradient(v_vs_i, spec.Ibins_nA, axis=0)
-    r_R0 = r_MOhm * G_0_muS
+    r_R0 = r_MOhm * G0_muS
     r_sym = np.abs(r_R0 - np.flip(r_R0, axis=0))
     r_err_R0 = np.nanmean(r_sym, axis=0)
     r_err_R0 = fill_nans(r_err_R0, x=spec.Ioff_nA, method="linear")
@@ -284,14 +285,14 @@ def _compute_offset_errors_jax(
         y=i_nA,
         x_bins=spec.Vbins_mV,
         x_off=spec.Voff_mV,
-        scale=G_0_muS,
+        scale=G0_muS,
     )
     r_err_R0 = metric_from_offsets(
         x=i_nA,
         y=v_mV,
         x_bins=spec.Ibins_nA,
         x_off=spec.Ioff_nA,
-        scale=1.0 / G_0_muS,
+        scale=1.0 / G0_muS,
     )
     g_err_G0_np = fill_nans(
         np.asarray(jax.device_get(g_err_G0), dtype=np.float64),
@@ -418,4 +419,6 @@ __all__ = [
     "OffsetTrace",
     "OffsetTraces",
     "offset_analysis",
+]
+]
 ]

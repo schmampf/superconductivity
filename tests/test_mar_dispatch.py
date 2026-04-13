@@ -5,7 +5,7 @@ import pytest
 
 from superconductivity.models.mar import get_Imar_nA
 from superconductivity.models.mar import mar as mar_dispatch
-from superconductivity.utilities.constants import G_0_muS
+from superconductivity.utilities.constants import G0_muS
 
 
 def test_get_Imar_nA_dispatches_to_ha_sym(monkeypatch) -> None:
@@ -119,7 +119,7 @@ def test_get_Imar_nA_returns_ohmic_current_when_both_gaps_close() -> None:
         Delta_meV=(0.05, 0.06),
     )
 
-    np.testing.assert_allclose(I_nA, V_mV * 0.5 * G_0_muS)
+    np.testing.assert_allclose(I_nA, V_mV * 0.5 * G0_muS)
 
 
 def test_get_Imar_nA_sums_multiple_tau_values(monkeypatch) -> None:
@@ -464,7 +464,7 @@ def test_get_Imar_nA_charge_resolved_ohmic_has_only_1e_channel() -> None:
         qmax=3,
     )
 
-    np.testing.assert_allclose(I_nA, V_mV * 0.5 * G_0_muS)
+    np.testing.assert_allclose(I_nA, V_mV * 0.5 * G0_muS)
     np.testing.assert_allclose(Iq_nA[:, 0], I_nA)
     np.testing.assert_allclose(Iq_nA[:, 1:], 0.0)
     np.testing.assert_allclose(I_nA, Iq_nA.sum(axis=1))

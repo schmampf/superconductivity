@@ -8,9 +8,9 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from ..evaluation.traces import numeric_yvalue
-from .style import gui_trace_label, gui_trace_style
-from ..utilities.constants import G_0_muS
+from ..utilities.constants import G0_muS
 from ..utilities.types import NDArray64
+from .style import gui_trace_label, gui_trace_style
 
 _LEFT_STAGE_BUTTON_ORDER = (
     "raw",
@@ -140,12 +140,8 @@ class GUILeftMixin:
         self._offset_batch_v_figure = self._build_offset_batch_figure(kind="V")
         self._offset_batch_i_figure = self._build_offset_batch_figure(kind="I")
 
-        self._sampling_offset_v_figure = self._build_sampling_offset_figure(
-            kind="V"
-        )
-        self._sampling_offset_i_figure = self._build_sampling_offset_figure(
-            kind="I"
-        )
+        self._sampling_offset_v_figure = self._build_sampling_offset_figure(kind="V")
+        self._sampling_offset_i_figure = self._build_sampling_offset_figure(kind="I")
 
         self._iv_pane = self._pn.pane.Plotly(
             self._iv_figure,
@@ -296,7 +292,7 @@ class GUILeftMixin:
         stage: str,
     ) -> tuple[NDArray64, NDArray64]:
         V_mV, I_nA = self._left_iv_stage_data(stage)
-        return V_mV, self._gradient(V_mV, I_nA) / G_0_muS
+        return V_mV, self._gradient(V_mV, I_nA) / G0_muS
 
     @staticmethod
     def _sorted_unique_curve(
@@ -328,7 +324,7 @@ class GUILeftMixin:
         stage: str,
     ) -> tuple[NDArray64, NDArray64]:
         V_mV, I_nA = self._left_iv_stage_data(stage)
-        return V_mV, self._safe_divide(I_nA, V_mV) / G_0_muS
+        return V_mV, self._safe_divide(I_nA, V_mV) / G0_muS
 
     def _left_dvdi_vs_v_stage_data(
         self,
@@ -346,14 +342,14 @@ class GUILeftMixin:
         stage: str,
     ) -> tuple[NDArray64, NDArray64]:
         I_nA, V_mV = self._left_vi_stage_data(stage)
-        return I_nA, self._gradient(I_nA, V_mV) * G_0_muS
+        return I_nA, self._gradient(I_nA, V_mV) * G0_muS
 
     def _left_v_over_i_stage_data(
         self,
         stage: str,
     ) -> tuple[NDArray64, NDArray64]:
         I_nA, V_mV = self._left_vi_stage_data(stage)
-        return I_nA, self._safe_divide(V_mV, I_nA) * G_0_muS
+        return I_nA, self._safe_divide(V_mV, I_nA) * G0_muS
 
     def _left_didv_vs_i_stage_data(
         self,
@@ -885,8 +881,10 @@ class GUILeftMixin:
     def _build_sampling_offset_figure(self, *, kind: str) -> go.Figure:
         figure = go.Figure()
         fit_style = gui_trace_style("fit")
-        ylabel = "<i>V</i><sub>off</sub> (mV)" if kind == "V" else (
-            "<i>I</i><sub>off</sub> (nA)"
+        ylabel = (
+            "<i>V</i><sub>off</sub> (mV)"
+            if kind == "V"
+            else ("<i>I</i><sub>off</sub> (nA)")
         )
         figure.add_trace(
             go.Scatter(
@@ -1378,8 +1376,8 @@ class GUILeftMixin:
 
     def _refresh_sampling_views(self) -> None:
         x_v, y_v, indices_v = self._sampling_offset_plot_points(kind="V")
-        active_x_v, active_y_v, active_indices_v = (
-            self._sampling_offset_active_point(kind="V")
+        active_x_v, active_y_v, active_indices_v = self._sampling_offset_active_point(
+            kind="V"
         )
         with self._sampling_offset_v_figure.batch_update():
             self._sampling_offset_v_figure.data[0].x = x_v
@@ -1397,8 +1395,8 @@ class GUILeftMixin:
             )
 
         x_i, y_i, indices_i = self._sampling_offset_plot_points(kind="I")
-        active_x_i, active_y_i, active_indices_i = (
-            self._sampling_offset_active_point(kind="I")
+        active_x_i, active_y_i, active_indices_i = self._sampling_offset_active_point(
+            kind="I"
         )
         with self._sampling_offset_i_figure.batch_update():
             self._sampling_offset_i_figure.data[0].x = x_i

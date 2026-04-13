@@ -7,17 +7,19 @@ from pathlib import Path
 
 import numpy as np
 
-from ....utilities.constants import G_0_muS, k_B_meV
+from ....utilities.constants import G0_muS, kB_meV_K
 from ....utilities.types import NDArray64
 from ...basics import get_Delta_meV
 from ..backend import carlosfcs as fcs
-from ..core import FCSParams
-from ..core import V_TOL_MV
-from ..core import dequantize_voltage_mV
-from ..core import ensure_curve_cached
-from ..core import lookup_currents
-from ..core import reconstruct_odd_current
-from ..core import unique_positive_voltage_q
+from ..core import (
+    V_TOL_MV,
+    FCSParams,
+    dequantize_voltage_mV,
+    ensure_curve_cached,
+    lookup_currents,
+    reconstruct_odd_current,
+    unique_positive_voltage_q,
+)
 from ..core.voltage import quantize_voltage_mV
 
 _MAR_DIR = Path(__file__).resolve().parents[1]
@@ -46,7 +48,7 @@ def _evaluate_positive_curve(
     Delta_1_T_meV = get_Delta_meV(params.Delta_1_meV, params.T_K)
     Delta_2_T_meV = get_Delta_meV(params.Delta_2_meV, params.T_K)
     if Delta_1_T_meV == 0.0 and Delta_2_T_meV == 0.0:
-        I_ohmic_nA = V_positive_mV * G_0_muS * params.tau
+        I_ohmic_nA = V_positive_mV * G0_muS * params.tau
         return np.column_stack(
             (
                 I_ohmic_nA,
@@ -63,7 +65,7 @@ def _evaluate_positive_curve(
     return np.array(
         fcs.fcs_curve(
             params.tau,
-            k_B_meV * params.T_K,
+            kB_meV_K * params.T_K,
             Delta_1_T_meV,
             Delta_2_T_meV,
             params.gamma_1_meV,

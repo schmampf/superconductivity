@@ -5,12 +5,12 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from ...utilities.constants import k_B_meV
+from ...utilities.constants import kB_meV_K
 from ...utilities.types import JNDArray
 
 jax.config.update("jax_enable_x64", True)
 
-_K_B_JAX = jnp.array(k_B_meV, dtype=jnp.float64)
+_K_B_JAX = jnp.array(kB_meV_K, dtype=jnp.float64)
 _CONST_176 = jnp.array(1.764, dtype=jnp.float64)
 _CONST_174 = jnp.array(1.74, dtype=jnp.float64)
 

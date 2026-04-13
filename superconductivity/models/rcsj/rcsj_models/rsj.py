@@ -8,18 +8,10 @@ import numpy as np
 from ...utilities.functions import bin_y_over_x
 from ...utilities.safety import require_all_finite
 from ...utilities.types import NDArray64
-from .helper import (
-    JF32,
-    JH_E_PVSJF32,
-    JI32,
-    JPI32,
-    JTWO_MPI32,
-    JTWO_PI32,
-    lookup_linear_uniform_clamped,
-    upsample_linear_values_np,
-    prepare_uniform_inverse_lookup_table,
-    suggest_dt_Nt,
-)
+from .helper import (JF32, JI32, JPI32, JTWO_MPI32, JTWO_PI32, Jh_pVsJF32,
+                     lookup_linear_uniform_clamped,
+     h_pVs         prepare_uniform_inverse_lookup_table, suggest_dt_Nt,
+                     upsample_linear_values_np)
 
 
 def get_I_rsj_nA(
@@ -153,18 +145,18 @@ def simulate_rsj_with_pat_vac_batch(
     two_mpi = jnp.asarray(JTWO_MPI32, dtype=JF32)
     pi = jnp.asarray(JPI32, dtype=JF32)
     two_pi = jnp.asarray(JTWO_PI32, dtype=JF32)
-    h_e_pVsJF32 = jnp.asarray(JH_E_PVSJF32, dtype=JF32)
+    h_pVsJF32 = jnp.asarray(Jh_pVsJF32, dtype=JF32)
 
     w_THz = nu_GHz * two_mpi
-    a = jnp.asarray(2.0, dtype=JF32) * A_col / (h_e_pVsJF32 * nu_GHz)
+    a = jnp.asarray(2.0, dtype=JF32) * A_col / (h_pVsJF32 * nu_GHz)
 
     n = jnp.arange(Nt, dtype=JF32)
     t_ps = n * dt_ps
     sinwt_all = jnp.sin(w_THz * t_ps)
-    coswt_all = jnp.cos(w_THz * t_ps)
+    h_pVsll = jnp.cos(w_THz *h_pVs
 
     def step(n_i, carry):
-        phi, V_sum_mV = carry
+        phi, V_sum_mV = carryh_pVs
         sinwt = sinwt_all[n_i]
         coswt = coswt_all[n_i]
 
@@ -180,7 +172,7 @@ def simulate_rsj_with_pat_vac_batch(
         )
         V_mV = V_qp_mV - A_col * coswt
 
-        phi_next = phi + V_mV * two_mpi * dt_ps / h_e_pVsJF32
+        phi_next = phi + V_mV * two_mpi * dt_ps / h_pVsJF32
         phi_next = jnp.mod(phi_next + pi, two_pi) - pi
 
         keep = (n_i >= burn_index).astype(JF32)
@@ -188,7 +180,7 @@ def simulate_rsj_with_pat_vac_batch(
         return (phi_next, V_sum_next_mV)
 
     shape_2d = (A_mV.shape[0], I_nA.shape[0])
-    phi0 = jnp.zeros(shape_2d, dtype=JF32)
+    phi0 = jnp.zeros(shape_2d, dtype=JF32)h_pVs
     Vsum0_mV = jnp.zeros(shape_2d, dtype=JF32)
     carry0 = (phi0, Vsum0_mV)
 

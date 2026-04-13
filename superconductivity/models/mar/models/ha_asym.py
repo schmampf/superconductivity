@@ -7,17 +7,19 @@ from pathlib import Path
 
 import numpy as np
 
-from ....utilities.constants import G_0_muS, k_B_meV
+from ....utilities.constants import G0_muS, kB_meV_K
 from ....utilities.types import NDArray64
 from ...basics import get_Delta_meV
 from ..backend import carlosha_asym as ha_asym
-from ..core import AsymmetricHAParams
-from ..core import V_TOL_MV
-from ..core import dequantize_voltage_mV
-from ..core import ensure_curve_cached
-from ..core import lookup_currents
-from ..core import reconstruct_odd_current
-from ..core import unique_positive_voltage_q
+from ..core import (
+    V_TOL_MV,
+    AsymmetricHAParams,
+    dequantize_voltage_mV,
+    ensure_curve_cached,
+    lookup_currents,
+    reconstruct_odd_current,
+    unique_positive_voltage_q,
+)
 from ..core.voltage import quantize_voltage_mV
 
 _MAR_DIR = Path(__file__).resolve().parents[1]
@@ -47,7 +49,7 @@ def _evaluate_positive_curve(
     Delta_1_T_meV = get_Delta_meV(params.Delta_1_meV, params.T_K)
     Delta_2_T_meV = get_Delta_meV(params.Delta_2_meV, params.T_K)
     if Delta_1_T_meV == 0.0 and Delta_2_T_meV == 0.0:
-        return V_positive_mV * G_0_muS * params.tau
+        return V_positive_mV * G0_muS * params.tau
 
     if not callable(getattr(ha_asym, "ha_asym_curve", None)):
         raise ImportError(
@@ -58,7 +60,7 @@ def _evaluate_positive_curve(
     I_ref = np.array(
         ha_asym.ha_asym_curve(
             params.tau,
-            k_B_meV * params.T_K / delta_ref_meV,
+            kB_meV_K * params.T_K / delta_ref_meV,
             Delta_1_T_meV / delta_ref_meV,
             Delta_2_T_meV / delta_ref_meV,
             params.gamma_1_meV / delta_ref_meV,
@@ -67,7 +69,7 @@ def _evaluate_positive_curve(
         ),
         dtype=np.float64,
     )
-    return I_ref * delta_ref_meV * G_0_muS
+    return I_ref * delta_ref_meV * G0_muS
 
 
 def _ensure_positive_curve_cached(

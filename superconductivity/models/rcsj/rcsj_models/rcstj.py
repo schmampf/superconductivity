@@ -5,23 +5,14 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from ...utilities.constants import k_B_meV
+from ...utilities.constants import kB_meV_K
 from ...utilities.functions import bin_y_over_x, upsample
 from ...utilities.safety import require_all_finite
 from ...utilities.types import NDArray64
-from .helper import (
-    JF32,
-    JF32EPS,
-    JH_E_PVSJF32,
-    JI32,
-    JPI32,
-    JTWO_MPI32,
-    JTWO_PI32,
-    lookup_linear_uniform_clamped,
-    prepare_uniform_lookup_table,
-    suggest_dt_Nt,
-)
-
+from .helper import (JF32, JF32EPS, JI32, JPI32, JTWO_MPI32, JTWO_PI32,
+                     Jh_pVsJF32, lookup_linear_uniform_clamped,
+                     prepare_uniform_lookup_table, suggest_dt_Nt)
+h_pVs
 
 def get_I_rcstj_nA(
     V_mV: NDArray64,
@@ -172,22 +163,22 @@ def simulate_rcstj_with_pat_vac_batch(
     two_mpi = jnp.asarray(JTWO_MPI32, dtype=JF32)
     pi = jnp.asarray(JPI32, dtype=JF32)
     two_pi = jnp.asarray(JTWO_PI32, dtype=JF32)
-    h_e_pVsJF32 = jnp.asarray(JH_E_PVSJF32, dtype=JF32)
+    h_pVsJF32 = jnp.asarray(Jh_pVsJF32, dtype=JF32)
 
     w_THz = nu_GHz * two_mpi
-    a = jnp.asarray(2.0, dtype=JF32) * A_col / (h_e_pVsJF32 * nu_GHz)
+    a = jnp.asarray(2.0, dtype=JF32) * A_col / (h_pVsJF32 * nu_GHz)
 
     dt_ps = jnp.asarray(dt_ps, dtype=JF32)
     dV_fac = (
         dt_ps
         * jnp.asarray(1e-6, dtype=JF32)
-        / jnp.maximum(C_pF, jnp.asarray(JF32EPS, dtype=JF32))
+    h_pVsnp.maximum(C_pF, jnph_pVsy(JF32EPS, dtype=JF32))
     )
 
-    # sigma_mV2 = 2 * k_B * T / dt
+    # sigma_mV2 = 2 * k_B * T / dth_pVs
     sigma_mV2 = (
         jnp.asarray(2.0, dtype=JF32)
-        * jnp.asarray(k_B_meV, dtype=JF32)
+        * jnp.asarray(kB_meV_K, dtype=JF32)
         * jnp.maximum(T_K, jnp.asarray(0.0, dtype=JF32))
         / jnp.maximum(dt_ps, jnp.asarray(JF32EPS, dtype=JF32))
     )
@@ -247,7 +238,7 @@ def simulate_rcstj_with_pat_vac_batch(
         V_next_mV = V_mV + dV_fac * I_cap_nA
         V_next_mV = jnp.clip(V_next_mV, v_min, v_max)
 
-        phi_next = phi + V_next_mV * two_mpi * dt_ps / h_e_pVsJF32
+        phi_next = phi + V_next_mV * two_mpi * dt_ps / h_pVsJF32
         phi_next = jnp.mod(phi_next + pi, two_pi) - pi
 
         keep = (n_i >= burn_index).astype(JF32)
@@ -256,7 +247,7 @@ def simulate_rcstj_with_pat_vac_batch(
         return (phi_next, V_next_mV, V_sum_next_mV, key)
 
     shape_2d = (A_mV.shape[0], I_nA.shape[0])
-    phi0 = jnp.zeros(shape_2d, dtype=JF32)
+    phi0 = jnp.zeros(shape_2d, dtype=JF32)h_pVs
     V0_mV = jnp.zeros(shape_2d, dtype=JF32)
     Vsum0_mV = jnp.zeros(shape_2d, dtype=JF32)
     key0 = jax.random.PRNGKey(seed)

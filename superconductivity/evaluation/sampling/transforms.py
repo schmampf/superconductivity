@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Iterator
 
 import numpy as np
 
-from ...utilities.constants import G_0_muS
+from ...utilities.constants import G0_muS
 from ...utilities.functions import bin_y_over_x, fill_nans
 from ...utilities.safety import (
     require_all_finite,
@@ -197,8 +197,8 @@ def _sample_trace(
         x_bins=samplingspec.Vbins_mV,
     )
 
-    dG_G0 = np.gradient(i_sampled_nA, samplingspec.Vbins_mV) / G_0_muS
-    dR_R0 = np.gradient(v_sampled_mV, samplingspec.Ibins_nA) * G_0_muS
+    dG_G0 = np.gradient(i_sampled_nA, samplingspec.Vbins_mV) / G0_muS
+    dR_R0 = np.gradient(v_sampled_mV, samplingspec.Ibins_nA) * G0_muS
 
     return {
         "meta": trace["meta"],
@@ -277,8 +277,8 @@ def _smooth_sample(
     ibin_nA = np.asarray(sample["Ibins_nA"], dtype=np.float64)
     i_smooth_nA = _smooth_supported_segment(sample["I_nA"], spec=spec)
     v_smooth_mV = _smooth_supported_segment(sample["V_mV"], spec=spec)
-    dG_G0 = np.gradient(i_smooth_nA, vbin_mV) / G_0_muS
-    dR_R0 = np.gradient(v_smooth_mV, ibin_nA) * G_0_muS
+    dG_G0 = np.gradient(i_smooth_nA, vbin_mV) / G0_muS
+    dR_R0 = np.gradient(v_smooth_mV, ibin_nA) * G0_muS
 
     return _copy_sample(
         sample,
@@ -451,8 +451,7 @@ def upsampling(
             )
         return Traces(
             traces=[
-                _upsample_trace(trace, factor=samplingspec.N_up)
-                for trace in iterable
+                _upsample_trace(trace, factor=samplingspec.N_up) for trace in iterable
             ],
         )
     return _upsample_trace(traces, factor=samplingspec.N_up)

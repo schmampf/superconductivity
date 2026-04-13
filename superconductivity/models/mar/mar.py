@@ -7,7 +7,7 @@ from typing import Literal, overload
 
 import numpy as np
 
-from ...utilities.constants import G_0_muS
+from ...utilities.constants import G0_muS
 from ...utilities.types import NDArray64
 from ..basics import get_Delta_meV
 from .models.btk import get_I_btk_nA
@@ -243,7 +243,7 @@ def get_Imar_nA(
                 return _charge_resolved_ohmic(I_nA=I_nA, qmax=qmax)
             return I_nA
         if nin:
-            I_nA = V_mV * tau_single * G_0_muS
+            I_nA = V_mV * tau_single * G0_muS
             if charge_resolved:
                 return _charge_resolved_ohmic(I_nA=I_nA, qmax=qmax)
             return I_nA

@@ -15,7 +15,7 @@ from optimizers.fit_pincode_helper import (
 
 from superconductivity.utilities.functions_jax import jbin_y_over_x as bin_y_over_x_jax
 
-from ..utilities.constants import G_0_muS
+from ..utilities.constants import G0_muS
 from ..utilities.functions import NDArray64, bin_y_over_x
 
 # jax.config.update("jax_enable_x64", True)
@@ -46,7 +46,7 @@ def handle_G_N(
         logic: NDArray[np.bool] = V_mV >= V_threshhold * Delta_0_meV
         G_N: float = np.nanmean(
             np.gradient(
-                I_nA[logic] / G_0_muS,
+                I_nA[logic] / G0_muS,
                 V_mV[logic],
             )
         )
@@ -127,7 +127,7 @@ def get_pincode(
             I_fit,
             V_mV / Delta_meV,
         )
-        * G_0_muS
+        * G0_muS
         * Delta_meV
     )
 

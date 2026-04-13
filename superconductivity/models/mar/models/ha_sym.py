@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ....utilities.constants import G_0_muS, k_B_meV
+from ....utilities.constants import G0_muS, kB_meV_K
 from ....utilities.types import NDArray64
 from ...basics import get_Delta_meV
 from ..backend import carlosha_sym as ha_sym
@@ -44,9 +44,9 @@ def _evaluate_positive_curve(
 
     Delta_T_meV = get_Delta_meV(params.Delta_meV, params.T_K)
     if Delta_T_meV == 0.0:
-        return V_positive_mV * G_0_muS * params.tau
+        return V_positive_mV * G0_muS * params.tau
 
-    T_Delta = k_B_meV * params.T_K / Delta_T_meV
+    T_Delta = kB_meV_K * params.T_K / Delta_T_meV
     gamma_Delta = params.gamma_meV / Delta_T_meV
     V_Delta = V_positive_mV / Delta_T_meV
 
@@ -74,7 +74,7 @@ def _evaluate_positive_curve(
         ),
         dtype=np.float64,
     )
-    return I_Delta * Delta_T_meV * G_0_muS
+    return I_Delta * Delta_T_meV * G0_muS
 
 
 def _ensure_positive_curve_cached(

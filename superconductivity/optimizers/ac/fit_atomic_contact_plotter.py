@@ -5,7 +5,7 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from numpy.typing import NDArray
 
 from ..style.cpd4 import cmap, colors
-from ..utilities.constants import G_0_muS
+from ..utilities.constants import G0_muS
 from ..utilities.types import NDArray64
 from .fit_atomic_contact import SolutionDict, gaussian
 
@@ -121,8 +121,8 @@ def plot_atomic_contact(
     # endregion
 
     # region calcs
-    dIdV_exp: NDArray64 = np.gradient(I_exp_nA, V_exp_mV) / G_0_muS
-    dIdV_fit: NDArray64 = np.gradient(I_fit_nA, V_exp_mV) / G_0_muS
+    dIdV_exp: NDArray64 = np.gradient(I_exp_nA, V_exp_mV) / G0_muS
+    dIdV_fit: NDArray64 = np.gradient(I_fit_nA, V_exp_mV) / G0_muS
 
     G_N_min: NDArray64 = np.ones_like(V_exp_mV) * Tau_min
     G_N_max: NDArray64 = np.ones_like(V_exp_mV) * Tau_max

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ...utilities.constants import k_B_meV
+from ...utilities.constants import kB_meV_K
 from ...utilities.types import NDArray64
 
 
@@ -21,7 +21,7 @@ def get_T_c_K(Delta_meV: float = 0.18) -> float:
     float
         Critical temperature in kelvin.
     """
-    return float(Delta_meV) / (1.764 * float(k_B_meV))
+    return float(Delta_meV) / (1.764 * float(kB_meV_K))
 
 
 def get_Delta_meV(Delta_meV: float, T_K: float) -> float:
@@ -77,7 +77,7 @@ def get_f(E_meV: NDArray64, T_K: float) -> NDArray64:
     if temperature == 0.0:
         return np.where(energy < 0.0, 1.0, 0.0)
 
-    exponent = np.clip(energy / (float(k_B_meV) * temperature), -100.0, 100.0)
+    exponent = np.clip(energy / (float(kB_meV_K) * temperature), -100.0, 100.0)
     return 1.0 / (np.exp(exponent) + 1.0)
 
 

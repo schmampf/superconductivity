@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 from scipy.special import jv
 
-from ...utilities.constants import h_e_pVs
+from ...utilities.constants import h_pVs
 from ...utilities.functions_jax import get_dydx, jnp_interp_y_of_x
 from ...utilities.types import JInterpolator, JNDArray, NDArray64
 from ..bcs import get_I_pat_nA

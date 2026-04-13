@@ -3,14 +3,11 @@ from typing import Sequence
 import numpy as np
 from scipy.constants import Boltzmann, e, hbar
 
-from ...utilities.constants import G_0_muS
+from ...utilities.constants import G0_muS
 from ...utilities.functions import bin_y_over_x, fill_nans
 from ...utilities.safety import require_same_shape
 from ...utilities.types import NDArray64
-from .helper import (
-    prepare_uniform_inverse_lookup_table,
-    upsample_linear_values_np,
-)
+from .helper import prepare_uniform_inverse_lookup_table, upsample_linear_values_np
 
 
 def _estimate_I_c_nA(I_sw_nA: Sequence[float] | np.ndarray) -> float:
@@ -214,7 +211,7 @@ def get_I_rstj_slow_nA(
     I_qp_arr_nA = np.asarray(I_qp_nA, dtype=np.float64).reshape(-1)
     require_same_shape(V_arr_mV, I_qp_arr_nA, "V_mV", "I_qp_nA")
 
-    G_uS = float(GN_G0) * float(G_0_muS)
+    G_uS = float(GN_G0) * float(G0_muS)
     I_eff_nA = I_qp_arr_nA + G_uS * V_arr_mV
     if not include_shunt:
         I_eff_nA = I_qp_arr_nA

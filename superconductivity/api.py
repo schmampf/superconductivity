@@ -106,6 +106,7 @@ except ModuleNotFoundError as exc:
     def get_I_p_abs_nA(*args, **kwargs):
         raise ImportError("get_I_p_abs_nA requires scipy in the active environment.")
 
+
 # import colors
 from .style.cpd4 import cmap as get_cmap
 from .style.cpd5 import (
@@ -130,7 +131,7 @@ from .style.cpd5 import (
 from .style.thesislayout import get_ext, get_figure, map_layout, theory_layout
 
 # import utilities
-from .utilities.constants import G_0_muS, h_e_pVs, k_B_meV
+from .utilities.constants import G0_muS, h_pVs, kB_meV_K
 from .utilities.functions import bin_y_over_x, ragged_to_array, upsample
 from .utilities.functions_jax import jinterp_y_of_x
 from .utilities.types import NDArray64

@@ -7,7 +7,7 @@ import numpy as np
 from jax import Array, device_put, jit, vmap
 from numpy.typing import NDArray
 
-from ..utilities.constants import G_0_muS
+from ..utilities.constants import G0_muS
 from ..utilities.types import NDArray64
 
 FMap = Callable[[Array], Array]
@@ -33,7 +33,7 @@ def normalize_I(
     Delta_meV: Array,
 ) -> Array:
     return jnp.array(
-        I_nA / (Delta_meV * G_0_muS),
+        I_nA / (Delta_meV * G0_muS),
         dtype=jnp.float64,
     )
 

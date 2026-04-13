@@ -9,10 +9,9 @@ import jax.numpy as jnp
 import numpy as np
 from scipy.special import jv
 
-from ....utilities.constants import h_e_pVs
+from ....utilities.constants import h_pVs
 from ....utilities.functions_jax import get_dydx, jinterp_y_of_x
 from ....utilities.types import JInterpolator, JNDArray, NDArray64
-
 
 
 def get_I_pat_nA(
@@ -56,7 +55,7 @@ def get_I_pat_nA(
     scalar_A = A_mV_arr.ndim == 0
     A_mV_1d: NDArray64 = np.atleast_1d(A_mV_arr)
 
-    nu_mV = float(nu_GHz) * float(h_e_pVs)
+    nu_mV = float(nu_GHz) * float(h_pVs)
     a_m: NDArray64 = m * A_mV_1d / nu_mV
     n = np.arange(-n_max, n_max + 1, dtype=np.int32)
 

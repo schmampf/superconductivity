@@ -5,7 +5,7 @@ from typing import Optional, TypedDict
 import h5py
 import numpy as np
 
-from .constants import G_0_muS
+from .constants import G0_muS
 from .functions import bin_y_over_x
 from .types import NDArray64
 

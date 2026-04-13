@@ -6,14 +6,14 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from ....utilities.constants import G_0_muS
+from ....utilities.constants import G0_muS
 from ....utilities.types import NDArray64
 from ...basics.jnp import get_Delta_jnp_meV, get_dos_jnp, get_f_jnp
 from .np import interpolate_convolution_trace_np
 
 jax.config.update("jax_enable_x64", True)
 
-_G0 = float(G_0_muS)
+_G0 = float(G0_muS)
 _G0_JAX = jnp.array(_G0, dtype=jnp.float64)
 
 
@@ -109,7 +109,9 @@ def convolution_jax(
     gamma_meV: float,
 ) -> NDArray64:
     """Evaluate the symmetric SIS convolution model."""
-    delta_meV = float(np.asarray(get_Delta_jnp_meV(jnp.asarray(Delta_meV), jnp.asarray(T_K))))
+    delta_meV = float(
+        np.asarray(get_Delta_jnp_meV(jnp.asarray(Delta_meV), jnp.asarray(T_K)))
+    )
     if delta_meV == 0.0:
         return np.asarray(V_mV, dtype=np.float64) * (float(GN_G0) * _G0)
 

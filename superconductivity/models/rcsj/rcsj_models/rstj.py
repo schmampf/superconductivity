@@ -5,23 +5,14 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from ...utilities.constants import G_0_muS, k_B_meV
+from ...utilities.constants import G0_muS, kB_meV_K
 from ...utilities.functions import bin_y_over_x
 from ...utilities.safety import require_all_finite
 from ...utilities.types import NDArray64
-from .helper import (
-    JF32,
-    JF32EPS,
-    JH_E_PVSJF32,
-    JI32,
-    JPI32,
-    JTWO_MPI32,
-    JTWO_PI32,
-    lookup_linear_uniform_clamped,
-    prepare_uniform_inverse_lookup_table,
-    suggest_dt_Nt,
-    upsample_linear_values_np,
-)
+from .helper import (JF32, JF32EPS, JI32, JPI32, JTWO_MPI32, JTWO_PI32,
+                     Jh_pVsJF32, lookup_linear_uniform_clamped,
+                     prepare_uniform_inverse_lookup_table, suggest_dt_Nt,
+     h_pVs         upsample_linear_values_np)
 
 
 def get_I_rstj_nA(
@@ -98,7 +89,7 @@ def get_I_rstj_nA(
         raise ValueError("I_sw_nA must not be empty.")
     require_all_finite(I_sw_arr, name="I_sw_nA")
 
-    G_uS = float(GN_G0) * float(G_0_muS)
+    G_uS = float(GN_G0) * float(G0_muS)
     R_noise_MOhm = np.float32(1.0 / max(G_uS, float(JF32EPS)))
     V_arr_mV = np.asarray(V_mV, dtype=np.float32)
     I_qp_arr_nA = np.asarray(I_qp_nA, dtype=np.float32)
@@ -221,19 +212,19 @@ def simulate_rstj_with_pat_vac_batch(
     two_mpi = jnp.asarray(JTWO_MPI32, dtype=JF32)
     pi = jnp.asarray(JPI32, dtype=JF32)
     two_pi = jnp.asarray(JTWO_PI32, dtype=JF32)
-    h_e_pVsJF32 = jnp.asarray(JH_E_PVSJF32, dtype=JF32)
+    h_pVsJF32 = jnp.asarray(Jh_pVsJF32, dtype=JF32)
 
     w_THz = nu_GHz * two_mpi
-    a = jnp.asarray(2.0, dtype=JF32) * A_col / (h_e_pVsJF32 * nu_GHz)
+    a = jnp.asarray(2.0, dtype=JF32) * A_col / (h_pVsJF32 * nu_GHz)
 
     sigma_mV2 = (
         jnp.asarray(2.0, dtype=JF32)
-        * jnp.asarray(k_B_meV, dtype=JF32)
+        * jnp.asarray(kB_meV_K, dtype=JF32)
         * jnp.maximum(T_K, jnp.asarray(0.0, dtype=JF32))
-        / jnp.maximum(dt_ps, jnp.asarray(JF32EPS, dtype=JF32))
+    h_pVsnp.maximum(dt_ps, jnh_pVsay(JF32EPS, dtype=JF32))
     )
     dVdI_const_MOhm = jnp.maximum(
-        R_noise_MOhm,
+        R_noise_MOhm,h_pVs
         jnp.asarray(JF32EPS, dtype=JF32),
     )
 
@@ -268,7 +259,7 @@ def simulate_rstj_with_pat_vac_batch(
         )
         V_mV = V_qp_mV - A_col * coswt
 
-        phi_next = phi + V_mV * two_mpi * dt_ps / h_e_pVsJF32
+        phi_next = phi + V_mV * two_mpi * dt_ps / h_pVsJF32
         phi_next = jnp.mod(phi_next + pi, two_pi) - pi
 
         keep = (n_i >= burn_index).astype(JF32)
@@ -277,7 +268,7 @@ def simulate_rstj_with_pat_vac_batch(
 
     shape_3d = (n_realizations, A_mV.shape[0], I_nA.shape[0])
     phi0 = jnp.zeros(shape_3d, dtype=JF32)
-    Vsum0_mV = jnp.zeros(shape_3d, dtype=JF32)
+    Vsum0_mV = jnp.zeros(shape_3d, dtype=JF32)h_pVs
     key0 = jax.random.PRNGKey(seed)
     carry0 = (phi0, Vsum0_mV, key0)
 

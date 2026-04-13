@@ -38,7 +38,7 @@ explicit and makes it easy to compare against analytic limits.
 import numpy as np
 from tqdm import tqdm
 
-from ....utilities.constants import G_0_muS, k_B_meV
+from ....utilities.constants import G0_muS, kB_meV_K
 from ....utilities.types import NDArray64
 from ...basics import get_Delta_meV
 
@@ -82,7 +82,7 @@ def get_Ic_ab(
     """
     Delta_T_meV = get_Delta_meV(Delta_meV=Delta_meV, T_K=T_K)
     if T_K > 0.0:
-        k_T = np.tanh(Delta_T_meV / (2 * k_B_meV * T_K))
+        k_T = np.tanh(Delta_T_meV / (2 * kB_meV_K * T_K))
     else:
         k_T = 1.0
     IC_AB = np.pi / 2 * G_N * Delta_T_meV / Delta_meV * k_T
@@ -116,7 +116,7 @@ def get_Ic_ab_nA(
         AB critical current in nA.
     """
     IC_AB = get_Ic_ab(Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
-    IC_AB_nA = IC_AB * G_0_muS * Delta_meV
+    IC_AB_nA = IC_AB * G0_muS * Delta_meV
     return IC_AB_nA
 
 
@@ -285,7 +285,7 @@ def get_cpr_abs(
     I_abs = -2 * np.pi * np.gradient(E_abs, phi)
 
     if T_K > 0.0:
-        I_abs *= np.tanh(E_abs * Delta_meV / (2 * k_B_meV * T_K))
+        I_abs *= np.tanh(E_abs * Delta_meV / (2 * kB_meV_K * T_K))
     return I_abs
 
 
@@ -314,7 +314,7 @@ def get_cpr_abs_nA(
         Supercurrent in nA.
     """
     CPR = get_cpr_abs(phi=phi, Delta_meV=Delta_meV, tau=tau, T_K=T_K)
-    CPR_nA = CPR * G_0_muS * Delta_meV
+    CPR_nA = CPR * G0_muS * Delta_meV
     return CPR_nA
 
 
@@ -440,7 +440,7 @@ def get_cpr_ko1_nA(
         T_K=T_K,
         dtau=dtau,
     )
-    CPR_KO1_nA = CPR_KO1 * G_0_muS * Delta_meV
+    CPR_KO1_nA = CPR_KO1 * G0_muS * Delta_meV
     return CPR_KO1_nA
 
 
@@ -507,7 +507,7 @@ def get_cpr_ko2_nA(
         KO-2 supercurrent in nA.
     """
     CPR_KO2 = get_cpr_ko2(phi=phi, Delta_meV=Delta_meV, G_N=G_N, T_K=T_K)
-    CPR_KO2_nA = CPR_KO2 * G_0_muS * Delta_meV
+    CPR_KO2_nA = CPR_KO2 * G0_muS * Delta_meV
     return CPR_KO2_nA
 
 
@@ -575,7 +575,7 @@ def get_Ic_abs_nA(
         T_K=T_K,
         n_phi=n_phi,
     )
-    IC_ABS_nA = IC_ABS * G_0_muS * Delta_meV
+    IC_ABS_nA = IC_ABS * G0_muS * Delta_meV
     return IC_ABS_nA
 
 
@@ -652,7 +652,7 @@ def get_Ic_ko1_nA(
         dtau=dtau,
         n_phi=n_phi,
     )
-    IC_KO1_nA = IC_KO1 * G_0_muS * Delta_meV
+    IC_KO1_nA = IC_KO1 * G0_muS * Delta_meV
     return IC_KO1_nA
 
 
@@ -716,7 +716,7 @@ def get_Ic_ko2_nA(
         T_K=T_K,
         n_phi=n_phi,
     )
-    IC_KO2_nA = IC_KO2 * G_0_muS * Delta_meV
+    IC_KO2_nA = IC_KO2 * G0_muS * Delta_meV
     return IC_KO2_nA
 
 
@@ -777,7 +777,7 @@ def get_IcT_ab_nA(
         Delta_meV=Delta_meV,
         G_N=G_N,
     )
-    ICT_AB_nA = ICT_AB * G_0_muS * Delta_meV
+    ICT_AB_nA = ICT_AB * G0_muS * Delta_meV
     return ICT_AB_nA
 
 
@@ -831,7 +831,7 @@ def get_IcT_abs_nA(
         tau=tau,
         n_phi=n_phi,
     )
-    ICT_ABS_nA = ICT_ABS * G_0_muS * Delta_meV
+    ICT_ABS_nA = ICT_ABS * G0_muS * Delta_meV
     return ICT_ABS_nA
 
 
@@ -870,7 +870,7 @@ def get_IcT_ko1_nA(
         dtau=dtau,
         n_phi=n_phi,
     )
-    ICT_KO1_nA = ICT_KO1 * G_0_muS * Delta_meV
+    ICT_KO1_nA = ICT_KO1 * G0_muS * Delta_meV
     return ICT_KO1_nA
 
 
@@ -905,5 +905,5 @@ def get_IcT_ko2_nA(
         G_N=G_N,
         n_phi=n_phi,
     )
-    ICT_KO2_nA = ICT_KO2 * G_0_muS * Delta_meV
+    ICT_KO2_nA = ICT_KO2 * G0_muS * Delta_meV
     return ICT_KO2_nA

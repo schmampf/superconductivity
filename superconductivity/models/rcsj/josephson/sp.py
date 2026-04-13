@@ -20,7 +20,7 @@ Units and conventions
 import numpy as np
 from scipy.special import jv
 
-from ....utilities.constants import G_0_muS, h_e_pVs
+from ....utilities.constants import G0_muS, h_pVs
 from ....utilities.types import NDArray64
 from .abs import get_cpr_abs, get_Ic_ab, get_Ic_ab_nA
 
@@ -126,7 +126,7 @@ def get_I_p_abs_nA(
         T_K=T_K,
         p_max=p_max,
     )
-    I_p_ABS_nA = I_p_ABS * G_0_muS * Delta_meV
+    I_p_ABS_nA = I_p_ABS * G0_muS * Delta_meV
     return I_p_ABS_nA
 
 
@@ -175,8 +175,8 @@ def do_I_fss(
 
     m = 2
     # Voltage quantum (h\nu/e) expressed in mV.
-    # Here `h_e_pVs = (h/e)` in pV·s, so multiplying by ν in GHz yields mV.
-    nu_mV = nu_GHz * h_e_pVs
+    # Here `h_pVs = (h/e)` in pV·s, so multiplying by ν in GHz yields mV.
+    nu_mV = nu_GHz * h_pVs
     I_fSS = np.zeros((A_mV.shape[0], V_mV.shape[0]))
 
     a = np.arange(0, A_mV.shape[0], 1, dtype=np.float64)
@@ -385,5 +385,5 @@ def get_I_fss_nA(
         n_max=n_max,
         p_max=p_max,
     )
-    I_fSS_nA = I_fSS * G_0_muS * Delta_meV
+    I_fSS_nA = I_fSS * G0_muS * Delta_meV
     return I_fSS_nA

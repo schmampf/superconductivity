@@ -17,7 +17,7 @@ from scipy.optimize import curve_fit
 from tqdm.auto import tqdm
 
 from ...models.mar import get_I_ha_sym_nA as get_I_nA
-from ..utilities.constants import G_0_muS
+from ..utilities.constants import G0_muS
 from ..utilities.types import NDArray64
 from .fit_atomic_contacts_helper import (
     chi2_for_all,
@@ -280,7 +280,7 @@ def fit_atomic_contact(
                 p_para.n = n_para
                 p_para.refresh()
 
-    G_theo = np.where(V_theo_mV != 0, I_theo_nA / V_theo_mV / G_0_muS, np.nan)
+    G_theo = np.where(V_theo_mV != 0, I_theo_nA / V_theo_mV / G0_muS, np.nan)
     generation_time = time() - time0
     # endregion
 
@@ -298,7 +298,7 @@ def fit_atomic_contact(
         w_theo: NDArray64 = np.full_like(V_theo_mV, 1.0)
         w_exp: NDArray64 = np.full_like(V_exp_mV, np.nan)
 
-    G_exp = np.where(V_exp_mV != 0, I_exp_nA / V_exp_mV / G_0_muS, np.nan)
+    G_exp = np.where(V_exp_mV != 0, I_exp_nA / V_exp_mV / G0_muS, np.nan)
 
     I_exp_nuni_nA: NDArray64 = remap_to_nonuniform_centers(
         x=V_exp_mV,
@@ -306,7 +306,7 @@ def fit_atomic_contact(
         x_centers=V_theo_mV,
         statistic="mean",
     )
-    G_exp_nuni = np.where(V_theo_mV != 0, I_exp_nuni_nA / V_theo_mV / G_0_muS, np.nan)
+    G_exp_nuni = np.where(V_theo_mV != 0, I_exp_nuni_nA / V_theo_mV / G0_muS, np.nan)
 
     mask: NDArray[np.bool] = np.logical_and(
         np.logical_not(np.isnan(G_exp_nuni)),
@@ -358,7 +358,7 @@ def fit_atomic_contact(
                     :,
                 ]  # / Delta_meV_i
 
-                G_temp_exp = G_exp_masked  # / (Delta_meV_i * G_0_muS)
+                G_temp_exp = G_exp_masked  # / (Delta_meV_i * G0_muS)
 
                 G_temp_theo_jax: Array = device_put(G_temp_theo)
                 G_temp_exp_jax: Array = device_put(G_temp_exp)
@@ -490,7 +490,7 @@ def fit_atomic_contact(
         )
     G_fit: NDArray64 = np.where(
         V_exp_mV != 0,
-        I_fit_nA / V_exp_mV / G_0_muS,
+        I_fit_nA / V_exp_mV / G0_muS,
         np.nan,
     )
 
@@ -506,7 +506,7 @@ def fit_atomic_contact(
     )
     G_fit_masked: NDArray64 = np.where(
         V_masked_mV != 0,
-        I_fit_masked_nA / V_masked_mV / G_0_muS,
+        I_fit_masked_nA / V_masked_mV / G0_muS,
         np.nan,
     )
 

@@ -3,10 +3,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from superconductivity.models.mar import ha_asym as mar_ha_asym
-from superconductivity.models.mar import get_I_ha_sym_nA
 from superconductivity.models.basics import get_Delta_meV
-from superconductivity.utilities.constants import G_0_muS, k_B_meV
+from superconductivity.models.mar import get_I_ha_sym_nA
+from superconductivity.models.mar import ha_asym as mar_ha_asym
+from superconductivity.utilities.constants import G0_muS, kB_meV_K
 
 
 def test_ha_asym_direct_path_works_without_cache(monkeypatch) -> None:
@@ -55,7 +55,7 @@ def test_ha_asym_direct_path_works_without_cache(monkeypatch) -> None:
     )
 
     assert captured["tau"] == pytest.approx(0.4)
-    assert captured["temp_reduced"] == pytest.approx(k_B_meV * T_K / Delta_1_meV)
+    assert captured["temp_reduced"] == pytest.approx(kB_meV_K * T_K / Delta_1_meV)
     assert captured["Delta_1_reduced"] == pytest.approx(
         get_Delta_meV(Delta_1_meV, T_K) / Delta_1_meV
     )
@@ -71,7 +71,7 @@ def test_ha_asym_direct_path_works_without_cache(monkeypatch) -> None:
     np.testing.assert_allclose(I_nA, -I_nA[::-1])
     np.testing.assert_allclose(
         I_nA[-2:],
-        0.4 * np.array([0.1, 0.2], dtype=np.float64) * G_0_muS,
+        0.4 * np.array([0.1, 0.2], dtype=np.float64) * G0_muS,
     )
 
 

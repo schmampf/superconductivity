@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from ....utilities.constants import G_0_muS
+from ....utilities.constants import G0_muS
 from ....utilities.types import NDArray64
 from ...basics import get_Delta_meV, get_dos, get_f
 
-_G0 = float(G_0_muS)
+_G0 = float(G0_muS)
 
 
 def integral_current_np(
@@ -63,7 +63,9 @@ def convolution_spectrum_np(
     occupied_2 = dos_2 * f
     empty_1 = dos_1 * (1.0 - f)
     empty_2 = dos_2 * (1.0 - f)
-    dE = float(np.asarray(E_mV, dtype=np.float64)[1] - np.asarray(E_mV, dtype=np.float64)[0])
+    dE = float(
+        np.asarray(E_mV, dtype=np.float64)[1] - np.asarray(E_mV, dtype=np.float64)[0]
+    )
     forward = np.correlate(empty_2, occupied_1, mode="full") * dE
     backward = np.correlate(occupied_2, empty_1, mode="full") * dE
     return (forward - backward) * (float(GN_G0) * _G0)
@@ -77,12 +79,17 @@ def interpolate_convolution_trace_np(
     GN_G0: float,
 ) -> NDArray64:
     """Interpolate the convolution spectrum back onto the requested bias grid."""
-    step = float(np.asarray(E_mV, dtype=np.float64)[1] - np.asarray(E_mV, dtype=np.float64)[0])
-    current_axis = np.arange(
-        -(np.asarray(E_mV, dtype=np.float64).size - 1),
-        np.asarray(E_mV, dtype=np.float64).size,
-        dtype=np.float64,
-    ) * step
+    step = float(
+        np.asarray(E_mV, dtype=np.float64)[1] - np.asarray(E_mV, dtype=np.float64)[0]
+    )
+    current_axis = (
+        np.arange(
+            -(np.asarray(E_mV, dtype=np.float64).size - 1),
+            np.asarray(E_mV, dtype=np.float64).size,
+            dtype=np.float64,
+        )
+        * step
+    )
     ohmic = np.asarray(V_mV, dtype=np.float64) * (float(GN_G0) * _G0)
     result = np.interp(
         np.asarray(V_mV, dtype=np.float64),

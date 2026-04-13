@@ -12,7 +12,7 @@ import superconductivity.evaluation as evaluation_module
 import superconductivity.evaluation.sampling as sampling
 from superconductivity.evaluation.analysis.offset import OffsetTraces
 from superconductivity.evaluation.traces import Trace, TraceMeta, Traces
-from superconductivity.utilities.constants import G_0_muS
+from superconductivity.utilities.constants import G0_muS
 from superconductivity.utilities.functions import bin_y_over_x
 from superconductivity.utilities.functions import upsample as upsample_xy
 
@@ -87,8 +87,8 @@ def _manual_binning(
     i_trace_nA = np.asarray(trace["I_nA"], dtype=np.float64)
     v_sampled_mV = bin_y_over_x(i_trace_nA, v_trace_mV, spec.Ibins_nA)
     i_sampled_nA = bin_y_over_x(v_trace_mV, i_trace_nA, spec.Vbins_mV)
-    dG_G0 = np.gradient(i_sampled_nA, spec.Vbins_mV) / G_0_muS
-    dR_R0 = np.gradient(v_sampled_mV, spec.Ibins_nA) * G_0_muS
+    dG_G0 = np.gradient(i_sampled_nA, spec.Vbins_mV) / G0_muS
+    dR_R0 = np.gradient(v_sampled_mV, spec.Ibins_nA) * G0_muS
     return i_sampled_nA, v_sampled_mV, dG_G0, dR_R0
 
 
@@ -104,8 +104,8 @@ def _legacy_hidden_upsample_binning(
     )
     v_sampled_mV = bin_y_over_x(i_over_nA, v_over_mV, spec.Ibins_nA)
     i_sampled_nA = bin_y_over_x(v_over_mV, i_over_nA, spec.Vbins_mV)
-    dG_G0 = np.gradient(i_sampled_nA, spec.Vbins_mV) / G_0_muS
-    dR_R0 = np.gradient(v_sampled_mV, spec.Ibins_nA) * G_0_muS
+    dG_G0 = np.gradient(i_sampled_nA, spec.Vbins_mV) / G0_muS
+    dR_R0 = np.gradient(v_sampled_mV, spec.Ibins_nA) * G0_muS
     return i_sampled_nA, v_sampled_mV, dG_G0, dR_R0
 
 

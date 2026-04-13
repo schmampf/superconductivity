@@ -3,7 +3,7 @@ from typing import Sequence
 import jax.numpy as jnp
 import numpy as np
 
-from ...utilities.constants import h_e_pVs, k_B_meV
+from ...utilities.constants import h_pVskB_meV_K
 from ...utilities.types import NDArray64
 
 JF32 = jnp.float32
@@ -14,7 +14,7 @@ JF32EPS: JF32 = np.float32(1e-9)
 JPI32 = np.float32(np.pi)
 JTWO_PI32 = np.float32(2.0 * np.pi)
 JTWO_MPI32 = np.float32(2e-3 * np.pi)
-JH_E_PVSJF32 = np.float32(h_e_pVs)
+Jh_pVs32 = np.float32(h_h_pVs
 
 
 def stack_scalar_model_over_A(
@@ -90,7 +90,7 @@ def suggest_dt_Nt(
 
     if T_K is not None and T_K > 0:
         # Resolve thermal phase-fluctuation scale via thermal voltage V_th = k_B T / e.
-        V_th_mV = float(k_B_meV) * float(T_K)
+        V_th_mV = float(kB_meV_K) * float(T_K)
         f_th_GHz = 483.5979 * V_th_mV
         if np.isfinite(f_th_GHz) and f_th_GHz > 0:
             T_th_ps = 1000.0 / f_th_GHz

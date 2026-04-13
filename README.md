@@ -106,7 +106,7 @@ Plotting / style helpers:
 - figure helpers: `get_figure`, `theory_layout`, `map_layout`
 
 Utilities/constants:
-- `G_0_muS`, `k_B_meV`, `h_e_pVs`
+- `G0_muS`, `kB_meV_K`, `h_pVs`
 - helper functions: `upsample`, `bin_y_over_x`, JAX interpolation `jnp_interp_y_of_x`
 
 ---
