@@ -35,6 +35,7 @@ sonst/
 models/old/
 models/old_HA/
 old/
+source/
 .venv
 .venv/
 .vscode/
