@@ -13,21 +13,17 @@ import pytest
 pytest.importorskip("panel")
 pytest.importorskip("jax")
 
+from superconductivity.evaluation.analysis.offset import OffsetSpec, offset_analysis
+from superconductivity.evaluation.analysis.psd import PSDSpec, PSDTraces, psd_analysis
+from superconductivity.evaluation.sampling import Samples, SamplingSpec, sample
 from superconductivity.evaluation.traces import (
     FileSpec,
     Keys,
     KeysSpec,
     Trace,
     TraceMeta,
-    TraceSpec,
     Traces,
-)
-from superconductivity.evaluation.analysis.offset import OffsetSpec, offset_analysis
-from superconductivity.evaluation.analysis.psd import PSDTraces, PSDSpec, psd_analysis
-from superconductivity.evaluation.sampling import (
-    SamplingSpec,
-    Samples,
-    sample,
+    TraceSpec,
 )
 from superconductivity.gui import GUIPanel, gui, gui_app
 
@@ -2537,7 +2533,7 @@ def test_fit_model_table_controls_active_model_and_parameters() -> None:
 
     panel._on_fit_config_edit(SimpleNamespace(row=3, column="value", value=True))
     assert panel.model_key == "bcs_conv_jax_pat_noise"
-    assert list(_fit_parameter_rows(panel).index[-1:]) == ["sigma_V_mV"]
+    assert list(_fit_parameter_rows(panel).index[-1:]) == ["sigmaV_mV"]
     assert "gap_distribution_order" not in _model_rows(panel).index
 
     panel._on_fit_config_edit(SimpleNamespace(row=3, column="value", value=False))
@@ -2553,7 +2549,7 @@ def test_fit_model_table_controls_active_model_and_parameters() -> None:
 
     panel._on_fit_config_edit(SimpleNamespace(row=3, column="value", value=True))
     assert panel.model_key == "bcs_conv_jax_pat_noise"
-    assert list(_fit_parameter_rows(panel).index[-1:]) == ["sigma_V_mV"]
+    assert list(_fit_parameter_rows(panel).index[-1:]) == ["sigmaV_mV"]
     assert _model_rows(panel).at["noise_oversample", "value"] == "64"
     assert _optimizer_rows(panel).at["solver", "value"] == "scipy.optimize.curve_fit"
 

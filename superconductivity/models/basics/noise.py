@@ -17,7 +17,7 @@ _PADDING_SIGMA = 6.0
 
 def make_bias_support_grid(
     V_mV: NDArray64,
-    sigma_V_mV: float,
+    sigmaV_mV: float,
     *,
     padding_sigma: float = _PADDING_SIGMA,
 ) -> NDArray64:
@@ -28,7 +28,7 @@ def make_bias_support_grid(
     V_mV
         Target voltage grid in mV. Must be 1D, finite, and strictly
         increasing.
-    sigma_V_mV
+    sigmaV_mV
         Standard deviation of the voltage noise in mV.
     padding_sigma
         Number of voltage-noise widths used as padding on both sides.
@@ -39,7 +39,7 @@ def make_bias_support_grid(
         Extended voltage grid with the same step as ``V_mV``.
     """
     V = _validate_curve_inputs(V_mV, np.zeros_like(V_mV, dtype=np.float64))[0]
-    sigma_V = _validate_sigma(sigma_V_mV, "sigma_V_mV")
+    sigma_V = _validate_sigma(sigmaV_mV, "sigmaV_mV")
     if sigma_V == 0.0:
         return V.copy()
 
@@ -55,7 +55,7 @@ def make_bias_support_grid(
 def apply_voltage_noise(
     V_support_mV: NDArray64,
     I_support_nA: NDArray64,
-    sigma_V_mV: float,
+    sigmaV_mV: float,
     order: int,
     *,
     V_out_mV: NDArray64 | None = None,
@@ -69,7 +69,7 @@ def apply_voltage_noise(
         increasing.
     I_support_nA
         Theory current on ``V_support_mV`` in nA.
-    sigma_V_mV
+    sigmaV_mV
         Standard deviation of the voltage fluctuations in mV.
     order
         Kernel resolution hint. The current implementation performs a
@@ -84,7 +84,7 @@ def apply_voltage_noise(
         Mean current on ``V_out_mV`` after voltage-noise averaging.
     """
     V_support, I_support = _validate_curve_inputs(V_support_mV, I_support_nA)
-    sigma_V = _validate_sigma(sigma_V_mV, "sigma_V_mV")
+    sigma_V = _validate_sigma(sigmaV_mV, "sigmaV_mV")
     V_out = V_support if V_out_mV is None else to_1d_float64(V_out_mV, "V_out_mV")
     require_all_finite(V_out, "V_out_mV")
     require_min_size(V_out, 2, "V_out_mV")
@@ -119,7 +119,7 @@ def apply_voltage_noise(
 def _apply_voltage_noise_general(
     V_support_mV: NDArray64,
     I_support_nA: NDArray64,
-    sigma_V_mV: float,
+    sigmaV_mV: float,
     V_out_mV: NDArray64,
 ) -> NDArray64:
     """Fallback Gaussian average for nonuniform support grids."""
@@ -128,7 +128,7 @@ def _apply_voltage_noise_general(
     edges[0] = V_support_mV[0] - 0.5 * (V_support_mV[1] - V_support_mV[0])
     edges[-1] = V_support_mV[-1] + 0.5 * (V_support_mV[-1] - V_support_mV[-2])
     widths = np.diff(edges)
-    delta = (V_out_mV[:, None] - V_support_mV[None, :]) / sigma_V_mV
+    delta = (V_out_mV[:, None] - V_support_mV[None, :]) / sigmaV_mV
     weights = np.exp(-0.5 * delta**2) * widths[None, :]
     weights /= np.sum(weights, axis=1, keepdims=True)
     return np.asarray(weights @ I_support_nA, dtype=np.float64)

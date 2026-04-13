@@ -9,12 +9,7 @@ from typing import Callable
 import numpy as np
 
 from ...models.basics.noise import apply_voltage_noise, make_bias_support_grid
-from ...models.bcs.backend import (
-    DEFAULT_E_MV,
-    PAT_N_MAX,
-    Backend,
-    Kernel,
-)
+from ...models.bcs.backend import DEFAULT_E_MV, PAT_N_MAX, Backend, Kernel
 from ...utilities.types import NDArray64
 from .parameters import (
     ParameterSpec,
@@ -116,7 +111,6 @@ _MODEL_CONFIGS = OrderedDict(
 )
 
 
-
 def get_model_key(config: BCSModelConfig) -> str:
     key = f"bcs_{config.kernel}_{config.backend}"
     if config.pat_enabled:
@@ -124,7 +118,6 @@ def get_model_key(config: BCSModelConfig) -> str:
     if config.noise_enabled:
         key += "_noise"
     return key
-
 
 
 def _parse_canonical_model(model: str) -> BCSModelConfig:
@@ -149,7 +142,6 @@ def _parse_canonical_model(model: str) -> BCSModelConfig:
     )
 
 
-
 def get_model_config(model: str | BCSModelConfig) -> BCSModelConfig:
     if isinstance(model, BCSModelConfig):
         return model
@@ -159,7 +151,6 @@ def get_model_config(model: str | BCSModelConfig) -> BCSModelConfig:
         return _parse_canonical_model(model)
     except KeyError as exc:
         raise KeyError(f"Unknown optimizer model '{model}'.") from exc
-
 
 
 def _clone_parameters(
@@ -180,7 +171,6 @@ def _clone_parameters(
     )
 
 
-
 def _compose_parameters(config: BCSModelConfig) -> tuple[ParameterSpec, ...]:
     parameters = list(_clone_parameters(make_bcs_parameters()))
     if config.pat_enabled:
@@ -188,7 +178,6 @@ def _compose_parameters(config: BCSModelConfig) -> tuple[ParameterSpec, ...]:
     if config.noise_enabled:
         parameters.extend(_clone_parameters(make_noise_parameters()))
     return tuple(parameters)
-
 
 
 def _compose_label(config: BCSModelConfig) -> str:
@@ -203,13 +192,10 @@ def _compose_label(config: BCSModelConfig) -> str:
     return base_label + " + " + " + ".join(suffixes)
 
 
-
 def _energy_grid_summary(E_mV: NDArray64) -> str:
     return (
-        f"{float(E_mV[0]):.1f}..{float(E_mV[-1]):.1f} meV, "
-        f"{int(E_mV.size)} points"
+        f"{float(E_mV[0]):.1f}..{float(E_mV[-1]):.1f} meV, " f"{int(E_mV.size)} points"
     )
-
 
 
 def _compose_info(config: BCSModelConfig) -> OrderedDict[str, str]:
@@ -225,7 +211,6 @@ def _compose_info(config: BCSModelConfig) -> OrderedDict[str, str]:
     return info
 
 
-
 def _compose_html(config: BCSModelConfig) -> str:
     equations = [_BASE_MODEL_SPECS[(config.kernel, config.backend)].html.strip()]
     if config.pat_enabled:
@@ -234,12 +219,9 @@ def _compose_html(config: BCSModelConfig) -> str:
         equations.append(NOISE_SUFFIX_HTML.strip())
     return (
         "\\[\n"
-        "\\begin{gathered}\n"
-        + "\\\\[0.4em]\n".join(equations)
-        + "\n\\end{gathered}\n"
+        "\\begin{gathered}\n" + "\\\\[0.4em]\n".join(equations) + "\n\\end{gathered}\n"
         "\\]"
     )
-
 
 
 def _compose_function(config: BCSModelConfig) -> ModelFunction:
@@ -266,11 +248,11 @@ def _compose_function(config: BCSModelConfig) -> ModelFunction:
             A_mV = float(values[index])
             nu_GHz = float(values[index + 1])
             index += 2
-        sigma_V_mV = float(values[index]) if config.noise_enabled else 0.0
+        sigmaV_mV = float(values[index]) if config.noise_enabled else 0.0
 
         V_evaluate = (
-            make_bias_support_grid(V_requested, sigma_V_mV)
-            if config.noise_enabled and sigma_V_mV > 0.0
+            make_bias_support_grid(V_requested, sigmaV_mV)
+            if config.noise_enabled and sigmaV_mV > 0.0
             else V_requested
         )
         current = np.asarray(
@@ -303,7 +285,7 @@ def _compose_function(config: BCSModelConfig) -> ModelFunction:
             current = apply_voltage_noise(
                 V_evaluate,
                 current,
-                sigma_V_mV,
+                sigmaV_mV,
                 config.noise_oversample,
                 V_out_mV=V_requested,
             )
@@ -338,7 +320,6 @@ def _cached_model_spec(config: BCSModelConfig) -> ModelSpec:
         info=_compose_info(config),
         html=_compose_html(config),
     )
-
 
 
 def get_model_spec(model: str | BCSModelConfig) -> ModelSpec:

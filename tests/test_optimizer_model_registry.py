@@ -1,5 +1,6 @@
-import numpy as np
 import importlib.util
+
+import numpy as np
 import pytest
 
 from superconductivity.models.basics.noise import (
@@ -8,8 +9,8 @@ from superconductivity.models.basics.noise import (
 )
 from superconductivity.models.bcs import get_I_pat_nA
 from superconductivity.optimizers.bcs import (
-    BCSModelConfig,
     MODEL_OPTIONS,
+    BCSModelConfig,
     get_model_key,
     get_model_spec,
 )
@@ -40,7 +41,6 @@ def test_registry_resolves_full_base_matrix() -> None:
         assert len(spec.parameters) == 4
         assert curve.shape == V_mV.shape
         assert np.all(np.isfinite(curve))
-
 
 
 def test_registry_composes_parameter_sets_deterministically() -> None:
@@ -75,7 +75,7 @@ def test_registry_composes_parameter_sets_deterministically() -> None:
         "T_K",
         "Delta_meV",
         "gamma_meV",
-        "sigma_V_mV",
+        "sigmaV_mV",
     ]
     assert [parameter.name for parameter in pat_noise.parameters] == [
         "GN_G0",
@@ -84,10 +84,9 @@ def test_registry_composes_parameter_sets_deterministically() -> None:
         "gamma_meV",
         "A_mV",
         "nu_GHz",
-        "sigma_V_mV",
+        "sigmaV_mV",
     ]
     assert noise.info["noise_oversample"] == "64"
-
 
 
 @pytest.mark.skipif(not _SCIPY_AVAILABLE, reason="scipy is unavailable")
@@ -128,7 +127,6 @@ def test_registry_stacks_noise_after_pat() -> None:
     )
 
     assert np.allclose(composed, pat_noise)
-
 
 
 def test_legacy_aliases_still_resolve() -> None:

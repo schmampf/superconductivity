@@ -13,12 +13,11 @@ def test_voltage_noise_zero_limit_is_identity() -> None:
     out = apply_voltage_noise(
         V_mV,
         I_nA,
-        sigma_V_mV=0.0,
+        sigmaV_mV=0.0,
         order=32,
     )
 
     assert np.allclose(out, I_nA)
-
 
 
 def test_voltage_noise_is_deterministic() -> None:
@@ -28,18 +27,17 @@ def test_voltage_noise_is_deterministic() -> None:
     out_1 = apply_voltage_noise(
         V_mV,
         I_nA,
-        sigma_V_mV=0.04,
+        sigmaV_mV=0.04,
         order=32,
     )
     out_2 = apply_voltage_noise(
         V_mV,
         I_nA,
-        sigma_V_mV=0.04,
+        sigmaV_mV=0.04,
         order=32,
     )
 
     assert np.allclose(out_1, out_2)
-
 
 
 def test_voltage_noise_stays_finite_for_nonzero_sigma() -> None:
@@ -49,13 +47,12 @@ def test_voltage_noise_stays_finite_for_nonzero_sigma() -> None:
     out = apply_voltage_noise(
         V_mV,
         I_nA,
-        sigma_V_mV=0.08,
+        sigmaV_mV=0.08,
         order=64,
     )
 
     assert out.shape == V_mV.shape
     assert np.all(np.isfinite(out))
-
 
 
 def test_voltage_noise_smooths_sharp_features() -> None:
@@ -65,12 +62,11 @@ def test_voltage_noise_smooths_sharp_features() -> None:
     out = apply_voltage_noise(
         V_mV,
         I_nA,
-        sigma_V_mV=0.08,
+        sigmaV_mV=0.08,
         order=64,
     )
 
     assert np.max(np.abs(np.diff(out))) < np.max(np.abs(np.diff(I_nA)))
-
 
 
 def test_bias_support_grid_extends_voltage_range() -> None:
@@ -78,7 +74,7 @@ def test_bias_support_grid_extends_voltage_range() -> None:
 
     out = make_bias_support_grid(
         V_mV,
-        sigma_V_mV=0.1,
+        sigmaV_mV=0.1,
     )
 
     assert out[0] < V_mV[0]
