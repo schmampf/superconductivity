@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from ...utilities.constants import G0_muS, kB_meV_K
-from ...utilities.functions import bin_y_over_x
+from ...utilities.functions.binning import bin as bin_y_over_x
 from ...utilities.safety import require_all_finite
 from ...utilities.types import NDArray64
 from .helper import (JF32, JF32EPS, JI32, JPI32, JTWO_MPI32, JTWO_PI32,

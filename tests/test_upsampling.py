@@ -3,7 +3,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from superconductivity.utilities.upsampling import upsample
+from superconductivity.utilities.functions.upsampling import upsample
+from superconductivity.utilities.meta.axis import axis
+from superconductivity.utilities.meta.dataset import Dataset, dataset
 
 
 def test_upsample_1d_linear_matches_expected_grid() -> None:
@@ -141,3 +143,18 @@ def test_upsample_pair_rejects_mismatched_1d_x() -> None:
 
     with pytest.raises(ValueError, match="1D x"):
         upsample((x, z), N_up=2, axis=1)
+
+
+def test_upsample_dataset_returns_dataset() -> None:
+    z = dataset(
+        "trace",
+        [10.0, 20.0, 30.0],
+        axes=axis("V_mV", values=[0.0, 1.0, 2.0]),
+    )
+
+    out = upsample(z, N_up=2)
+
+    assert isinstance(out, type(z))
+    np.testing.assert_allclose(out.values, [10.0, 14.0, 18.0, 22.0, 26.0, 30.0])
+    np.testing.assert_allclose(out.axes[0].values, [0.0, 0.4, 0.8, 1.2, 1.6, 2.0])
+    assert out.axes[0].order == z.axes[0].order

@@ -6,7 +6,12 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from .safety import (
+from ..meta.axis import AxisSpec
+from ..meta.dataset import Dataset
+from ..meta.utils import infer_axis, unwrap_dataset_value
+from ..safety import (
+    is_ragged_sequence,
+    normalize_axis,
     require_all_finite,
     require_min_size,
     require_same_shape,
@@ -15,38 +20,38 @@ from .safety import (
 
 
 def bin(
-    z: np.ndarray | Sequence[np.ndarray],
-    x: np.ndarray | Sequence[np.ndarray],
-    xbins: np.ndarray,
-    axis: int = -1,
-) -> np.ndarray | list[np.ndarray]:
-    """Bin ``z`` over ``x`` onto the 1D grid ``xbins``.
+    z: np.ndarray | Sequence[np.ndarray] | Dataset,
+    x: np.ndarray | Sequence[np.ndarray] | AxisSpec,
+    xbins: np.ndarray | AxisSpec,
+    axis: int | None = None,
+) -> np.ndarray | list[np.ndarray] | Dataset:
+    """Bin ``z`` over ``x`` onto the 1D grid ``xbins``."""
+    z_arr = unwrap_dataset_value(z)
+    x_arr = unwrap_dataset_value(x)
+    xbins_arr = _validate_xbins(unwrap_dataset_value(xbins))
+    axis_inferred = infer_axis(axis, x)
 
-    Parameters
-    ----------
-    z
-        Values to bin. Can be a dense NumPy array or a list/tuple of arrays.
-    x
-        Coordinate values associated with ``z``. Must either match ``z`` in
-        shape, be 1D along the selected axis, or be a list/tuple matching a
-        ragged ``z`` input.
-    xbins
-        1D bin centers defining the output grid.
-    axis
-        Axis used for binning, similar to NumPy axis arguments.
-
-    Returns
-    -------
-    np.ndarray | list[np.ndarray]
-        Mean values in each bin. Empty bins are returned as ``NaN``.
-    """
-    xbins_arr = _validate_xbins(xbins)
-
-    if _is_ragged_sequence(z):
-        return _bin_ragged(z, x, xbins_arr, axis)
-    if _is_ragged_sequence(x):
-        raise ValueError("x may only be a sequence when z is also a sequence.")
-    return _bin_dense(np.asarray(z), np.asarray(x), xbins_arr, axis)
+    if is_ragged_sequence(z_arr):
+        result = _bin_ragged(z_arr, x_arr, xbins_arr, axis_inferred)
+    else:
+        if is_ragged_sequence(x_arr):
+            raise ValueError(
+                "x may only be a sequence when z is also a sequence.",
+            )
+        result = _bin_dense(
+            np.asarray(z_arr), np.asarray(x_arr), xbins_arr, axis_inferred
+        )
+    if isinstance(z, Dataset):
+        axes = (xbins,) if isinstance(xbins, AxisSpec) else ()
+        return Dataset(
+            label=z.label,
+            html_label=z.html_label,
+            latex_label=z.latex_label,
+            values=result,
+            axes=axes,
+            params=z.params,
+        )
+    return result
 
 
 def _bin_ragged(
@@ -58,7 +63,7 @@ def _bin_ragged(
     if len(z_seq) == 0:
         raise ValueError("z must not be empty.")
 
-    if _is_ragged_sequence(x):
+    if is_ragged_sequence(x):
         x_seq = list(x)
         if len(x_seq) != len(z_seq):
             raise ValueError("x and z must contain the same number of items.")
@@ -75,7 +80,10 @@ def _bin_ragged(
             out.append(_bin_dense(z_arr, x_arr, xbins, axis))
         except ValueError as exc:
             raise ValueError(
-                "Shared x must match the selected axis length of every ragged z item."
+                (
+                    "Shared x must match the selected axis"
+                    "length of every ragged z item."
+                )
             ) from exc
     return out
 
@@ -97,7 +105,7 @@ def _bin_dense(
     if x_arr.ndim == 0:
         raise ValueError("x must have at least one dimension.")
 
-    axis_norm = _normalize_axis(axis, max(z_arr.ndim, x_arr.ndim))
+    axis_norm = normalize_axis(axis, max(z_arr.ndim, x_arr.ndim))
     x_work, z_work = _prepare_dense_pair(z_arr, x_arr, axis_norm)
     z_work = np.moveaxis(z_work, axis_norm, -1)
     x_work = np.moveaxis(x_work, axis_norm, -1)
@@ -127,7 +135,7 @@ def _prepare_dense_pair(
 
     if x.ndim == 1:
         x_arr = to_1d_float64(x, "x")
-        axis_z = _normalize_axis(axis, z.ndim)
+        axis_z = normalize_axis(axis, z.ndim)
         if x_arr.size != z.shape[axis_z]:
             raise ValueError("1D x must match z along the selected axis.")
         reshape = [1] * z.ndim
@@ -138,9 +146,11 @@ def _prepare_dense_pair(
     if z.ndim == 1:
         x_arr = np.asarray(x, dtype=np.float64)
         require_all_finite(x_arr, "x")
-        axis_x = _normalize_axis(axis, x_arr.ndim)
+        axis_x = normalize_axis(axis, x_arr.ndim)
         if x_arr.shape[axis_x] != z.size:
-            raise ValueError("ND x must match the length of 1D z along the selected axis.")
+            raise ValueError(
+                "ND x must match the length of 1D z along the selected axis."
+            )
         reshape = [1] * x_arr.ndim
         reshape[axis_x] = z.size
         z_broadcast = np.broadcast_to(z.reshape(reshape), x_arr.shape)
@@ -175,23 +185,14 @@ def _bin_edges_from_centers(xbins: np.ndarray) -> np.ndarray:
 
 
 def _validate_xbins(xbins: np.ndarray) -> np.ndarray:
-    xbins_arr = to_1d_float64(xbins, "xbins")
+    xbins_arr = np.asarray(xbins, dtype=np.float64)
+    if xbins_arr.ndim != 1:
+        raise ValueError("xbins must be 1D.")
     require_min_size(xbins_arr, 2, "xbins")
     require_all_finite(xbins_arr, "xbins")
     if np.any(np.diff(xbins_arr) <= 0.0):
         raise ValueError("xbins must be strictly increasing.")
     return xbins_arr
-
-
-def _normalize_axis(axis: int, ndim: int) -> int:
-    axis_int = int(axis)
-    if axis_int < -ndim or axis_int >= ndim:
-        raise ValueError(f"axis {axis_int} is out of bounds for array of ndim {ndim}.")
-    return axis_int % ndim
-
-
-def _is_ragged_sequence(value: object) -> bool:
-    return isinstance(value, (list, tuple))
 
 
 __all__ = ["bin"]

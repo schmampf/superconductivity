@@ -10,8 +10,9 @@ from typing import Iterator, Sequence, TypedDict, overload
 import numpy as np
 
 from ...utilities.constants import G0_muS
-from ...utilities.functions import bin_y_over_x, fill_nans
-from ...utilities.functions import upsample as upsample_xy
+from ...utilities.functions.binning import bin as bin_y_over_x
+from ...utilities.legacy.functions import fill_nans
+from ...utilities.legacy.functions import upsample as upsample_xy
 from ...utilities.safety import require_all_finite, require_min_size, to_1d_float64
 from ...utilities.types import NDArray64
 from ..sampling import downsample_trace
@@ -42,7 +43,7 @@ def _import_jax_offset_kernels():
             "'pip install jax jaxlib'.",
         ) from exc
 
-    from ...utilities.functions_jax import jbin_y_over_x
+    from ...utilities.legacy.functions_jax import jbin_y_over_x
 
     @jax.jit
     def _bin_offsets(

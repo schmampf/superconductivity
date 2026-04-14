@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING, Iterator
 import numpy as np
 
 from ...utilities.constants import G0_muS
-from ...utilities.functions import bin_y_over_x, fill_nans
+from ...utilities.functions.binning import bin as bin_y_over_x
+from ...utilities.legacy.functions import fill_nans
 from ...utilities.safety import (
     require_all_finite,
     require_min_size,

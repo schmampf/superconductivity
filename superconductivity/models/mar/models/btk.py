@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from ....utilities.constants import G0_muS
-from ....utilities.functions import bin_y_over_x
+from ....utilities.functions.binning import bin as bin_y_over_x
 from ....utilities.types import NDArray64
 from ...basics import get_Delta_meV, get_f
 

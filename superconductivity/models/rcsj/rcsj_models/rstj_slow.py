@@ -4,7 +4,8 @@ import numpy as np
 from scipy.constants import Boltzmann, e, hbar
 
 from ...utilities.constants import G0_muS
-from ...utilities.functions import bin_y_over_x, fill_nans
+from ...utilities.functions.binning import bin as bin_y_over_x
+from ...utilities.legacy.functions import fill_nans
 from ...utilities.safety import require_same_shape
 from ...utilities.types import NDArray64
 from .helper import prepare_uniform_inverse_lookup_table, upsample_linear_values_np

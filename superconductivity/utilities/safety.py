@@ -99,3 +99,28 @@ def require_all_finite(
     """
     if not np.all(np.isfinite(np.asarray(arr))):
         raise ValueError(f"{name} must contain only finite values.")
+
+
+
+def is_ragged_sequence(value: object) -> bool:
+    """Return True for Python list/tuple ragged inputs."""
+    return isinstance(value, (list, tuple))
+
+
+def normalize_axis(axis: int, ndim: int) -> int:
+    """Validate and normalize a possibly-negative axis index."""
+    axis_int = int(axis)
+    if axis_int < -ndim or axis_int >= ndim:
+        raise ValueError(
+            f"axis {axis_int} is out of bounds for array of ndim {ndim}."
+        )
+    return axis_int % ndim
+
+
+def is_pair_input(value: object) -> bool:
+    """Return True for a 2-tuple of non-ragged pair inputs."""
+    return (
+        isinstance(value, tuple)
+        and len(value) == 2
+        and not any(isinstance(item, (list, tuple)) for item in value)
+    )

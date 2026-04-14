@@ -41,7 +41,7 @@ from .traces import (
     list_measurement_keys,
     list_specific_keys,
 )
-from ..utilities.axis import AxisSpec
+from ..utilities.meta.axis import AxisSpec
 
 __all__ = [
     "FileSpec",

@@ -7,7 +7,7 @@ from typing import Callable, Literal, Sequence
 
 import numpy as np
 
-from ..utilities.axis import AxisSpec
+from ..utilities.meta.axis import AxisSpec
 from ..utilities.safety import require_all_finite, require_min_size
 from ..utilities.types import NDArray64
 from .sampling.containers import Sample, Samples

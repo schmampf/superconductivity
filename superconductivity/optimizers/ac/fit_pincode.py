@@ -13,10 +13,11 @@ from optimizers.fit_pincode_helper import (
     normalize_V,
 )
 
-from superconductivity.utilities.functions_jax import jbin_y_over_x as bin_y_over_x_jax
+from superconductivity.utilities.legacy.functions_jax import jbin_y_over_x as bin_y_over_x_jax
 
 from ..utilities.constants import G0_muS
-from ..utilities.functions import NDArray64, bin_y_over_x
+from ..utilities.functions.binning import bin as bin_y_over_x
+from ..utilities.types import NDArray64
 
 # jax.config.update("jax_enable_x64", True)
 

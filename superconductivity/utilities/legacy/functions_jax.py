@@ -19,7 +19,7 @@ import jax.numpy as jnp
 import numpy as np
 from jax import config as _jax_config
 
-from .types import JInterpolator, JNDArray, NDArray64
+from ..types import JInterpolator, JNDArray, NDArray64
 
 _jax_config.update("jax_enable_x64", True)
 

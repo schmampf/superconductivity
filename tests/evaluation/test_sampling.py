@@ -13,8 +13,8 @@ import superconductivity.evaluation.sampling as sampling
 from superconductivity.evaluation.analysis.offset import OffsetTraces
 from superconductivity.evaluation.traces import Trace, TraceMeta, Traces
 from superconductivity.utilities.constants import G0_muS
-from superconductivity.utilities.functions import bin_y_over_x
-from superconductivity.utilities.functions import upsample as upsample_xy
+from superconductivity.utilities.functions.binning import bin as bin_y_over_x
+from superconductivity.utilities.legacy.functions import upsample as upsample_xy
 
 pipeline_mod = importlib.import_module(
     "superconductivity.evaluation.sampling.pipeline",

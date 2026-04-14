@@ -2,8 +2,8 @@ from typing import Sequence
 
 import numpy as np
 
-from .safety import require_min_size, require_same_shape, to_1d_float64
-from .types import NDArray64
+from ..safety import require_min_size, require_same_shape, to_1d_float64
+from ..types import NDArray64
 
 
 # performance binning
