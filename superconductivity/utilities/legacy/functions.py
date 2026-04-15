@@ -156,9 +156,7 @@ def fill_nans(
     """
     y_arr = to_1d_float64(y, "y")
     x_arr = (
-        np.arange(y_arr.size, dtype=np.float64)
-        if x is None
-        else to_1d_float64(x, "x")
+        np.arange(y_arr.size, dtype=np.float64) if x is None else to_1d_float64(x, "x")
     )
     require_same_shape(x_arr, y_arr, name_a="x", name_b="y")
 

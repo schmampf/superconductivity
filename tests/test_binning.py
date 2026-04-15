@@ -14,8 +14,8 @@ def test_bin_1d_matches_legacy_helper() -> None:
     z = np.array([1.0, 2.0, 3.0, 4.0, 5.0], dtype=np.float64)
     xbins = np.linspace(-1.0, 1.0, 5, dtype=np.float64)
 
-    out = bin(z, x, xbins)
-    ref = bin_y_over_x(x, z, xbins)
+    out = bin(z=z, x=x, xbins=xbins)
+    ref = bin_y_over_x(x=x, y=z, x_bins=xbins)
 
     np.testing.assert_allclose(out, ref, equal_nan=True)
 
@@ -28,7 +28,7 @@ def test_bin_2d_axis_minus1_with_shared_1d_x() -> None:
     x = np.array([-0.75, -0.25, 0.25, 0.75], dtype=np.float64)
     xbins = np.array([-0.5, 0.5], dtype=np.float64)
 
-    out = bin(z, x, xbins, axis=-1)
+    out = bin(z=z, x=x, xbins=xbins, axis=-1)
 
     expected = np.array([[1.5, 3.5], [15.0, 35.0]], dtype=np.float64)
     np.testing.assert_allclose(out, expected)
@@ -42,7 +42,7 @@ def test_bin_2d_axis0_with_shared_1d_x() -> None:
     x = np.array([-0.75, -0.25, 0.25, 0.75], dtype=np.float64)
     xbins = np.array([-0.5, 0.5], dtype=np.float64)
 
-    out = bin(z, x, xbins, axis=0)
+    out = bin(z=z, x=x, xbins=xbins, axis=0)
 
     expected = np.array([[1.5, 15.0], [3.5, 35.0]], dtype=np.float64)
     np.testing.assert_allclose(out, expected)
@@ -53,7 +53,7 @@ def test_bin_same_shape_x_works_elementwise() -> None:
     x = np.array([[-0.8, -0.1, 0.9], [-0.2, 0.2, 0.8]], dtype=np.float64)
     xbins = np.array([-0.5, 0.5], dtype=np.float64)
 
-    out = bin(z, x, xbins, axis=1)
+    out = bin(z=z, x=x, xbins=xbins, axis=1)
 
     expected = np.array([[1.5, 3.0], [10.0, 25.0]], dtype=np.float64)
     np.testing.assert_allclose(out, expected, equal_nan=True)
@@ -64,7 +64,7 @@ def test_bin_3d_negative_axis_replaces_selected_axis() -> None:
     x = np.array([-0.75, -0.25, 0.25, 0.75], dtype=np.float64)
     xbins = np.array([-0.5, 0.5], dtype=np.float64)
 
-    out = bin(z, x, xbins, axis=-1)
+    out = bin(z=z, x=x, xbins=xbins, axis=-1)
 
     assert out.shape == (2, 3, 2)
     np.testing.assert_allclose(out[..., 0], 0.5 * (z[..., 0] + z[..., 1]))
@@ -82,7 +82,7 @@ def test_bin_ragged_returns_list_of_arrays() -> None:
     ]
     xbins = np.array([-0.5, 0.5], dtype=np.float64)
 
-    out = bin(z, x, xbins)
+    out = bin(z=z, x=x, xbins=xbins)
 
     assert isinstance(out, list)
     assert len(out) == 2
@@ -98,7 +98,7 @@ def test_bin_ragged_accepts_shared_1d_x_when_lengths_match() -> None:
     x = np.array([-0.8, 0.0, 0.8], dtype=np.float64)
     xbins = np.array([-0.5, 0.5], dtype=np.float64)
 
-    out = bin(z, x, xbins, axis=1)
+    out = bin(z=z, x=x, xbins=xbins, axis=1)
 
     assert isinstance(out, list)
     np.testing.assert_allclose(out[0], np.array([[1.0, 2.5], [10.0, 25.0]]))
@@ -117,7 +117,7 @@ def test_bin_1d_z_with_2d_x_rebins_per_column() -> None:
     )
     xbins = np.array([-0.5, 0.5], dtype=np.float64)
 
-    out = bin(z, x, xbins, axis=0)
+    out = bin(z=z, x=x, xbins=xbins, axis=0)
 
     expected = np.array([[1.0, 1.0], [2.5, 2.5]], dtype=np.float64)
     np.testing.assert_allclose(out, expected, equal_nan=True)
@@ -134,7 +134,7 @@ def test_bin_1d_z_with_nd_x_uses_selected_axis() -> None:
     )
     xbins = np.array([-0.5, 0.5], dtype=np.float64)
 
-    out = bin(z, x, xbins, axis=-1)
+    out = bin(z=z, x=x, xbins=xbins, axis=-1)
 
     expected = np.array(
         [
@@ -157,7 +157,7 @@ def test_bin_ragged_1d_z_with_nd_x_returns_list() -> None:
     ]
     xbins = np.array([-0.5, 0.5], dtype=np.float64)
 
-    out = bin(z, x, xbins, axis=-1)
+    out = bin(z=z, x=x, xbins=xbins, axis=-1)
 
     assert isinstance(out, list)
     np.testing.assert_allclose(out[0], np.array([[1.0, 2.5]]), equal_nan=True)
@@ -169,7 +169,7 @@ def test_bin_empty_bins_are_nan() -> None:
     x = np.array([-0.5, 0.5], dtype=np.float64)
     xbins = np.array([-0.5, 0.0, 0.5], dtype=np.float64)
 
-    out = bin(z, x, xbins)
+    out = bin(z=z, x=x, xbins=xbins)
 
     assert np.isnan(out[1])
     np.testing.assert_allclose(out[[0, 2]], np.array([1.0, 2.0]))
@@ -190,7 +190,7 @@ def test_bin_rejects_dense_shape_mismatch() -> None:
     xbins = np.array([0.0, 1.0], dtype=np.float64)
 
     with pytest.raises(ValueError, match="same shape"):
-        bin(z, x, xbins, axis=1)
+        bin(z=z, x=x, xbins=xbins, axis=1)
 
 
 def test_bin_rejects_non_1d_xbins() -> None:
@@ -199,7 +199,7 @@ def test_bin_rejects_non_1d_xbins() -> None:
     xbins = np.ones((2, 2), dtype=np.float64)
 
     with pytest.raises(ValueError):
-        bin(z, x, xbins)
+        bin(z=z, x=x, xbins=xbins)
 
 
 def test_bin_accepts_axis_metadata_without_explicit_axis() -> None:
@@ -207,7 +207,7 @@ def test_bin_accepts_axis_metadata_without_explicit_axis() -> None:
     x = axis("V_mV", values=[-0.75, -0.25, 0.25, 0.75], order=0)
     xbins = axis("V_mV", values=[-0.5, 0.5], order=0)
 
-    out = bin(z, x, xbins)
+    out = bin(z=z, x=x, xbins=xbins)
 
     expected = np.array([1.5, 3.5], dtype=np.float64)
     np.testing.assert_allclose(out.values, expected)
@@ -223,7 +223,7 @@ def test_bin_accepts_dataset_z_and_axis_inputs() -> None:
     x = axis("V_mV", values=[-0.75, -0.25, 0.25, 0.75], order=0)
     xbins = axis("V_mV", values=[-0.5, 0.5], order=0)
 
-    out = bin(z, x, xbins)
+    out = bin(z=z, x=x, xbins=xbins)
 
     expected = np.array([1.5, 3.5], dtype=np.float64)
     np.testing.assert_allclose(out.values, expected)
@@ -237,7 +237,7 @@ def test_bin_rejects_incompatible_ragged_x() -> None:
     xbins = np.array([0.0, 1.0], dtype=np.float64)
 
     with pytest.raises(ValueError, match="Shared x"):
-        bin(z, x, xbins)
+        bin(z=z, x=x, xbins=xbins)
 
 
 def test_bin_rejects_nd_x_that_does_not_match_1d_z_length() -> None:
@@ -246,4 +246,4 @@ def test_bin_rejects_nd_x_that_does_not_match_1d_z_length() -> None:
     xbins = np.array([0.0, 1.0], dtype=np.float64)
 
     with pytest.raises(ValueError, match="1D z"):
-        bin(z, x, xbins, axis=1)
+        bin(z=z, x=x, xbins=xbins, axis=1)

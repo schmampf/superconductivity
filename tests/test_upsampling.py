@@ -79,39 +79,47 @@ def test_upsample_ragged_returns_list() -> None:
     )
 
 
-def test_upsample_pair_with_1d_x_and_1d_z() -> None:
+def test_upsample_tuple_input_becomes_ragged_sequence() -> None:
     x = np.array([0.0, 1.0, 2.0], dtype=np.float64)
     z = np.array([10.0, 20.0, 30.0], dtype=np.float64)
 
-    x_up, z_up = upsample((x, z), N_up=2)
+    out = upsample((x, z), N_up=2)
 
-    np.testing.assert_allclose(x_up, np.array([0.0, 0.4, 0.8, 1.2, 1.6, 2.0]))
-    np.testing.assert_allclose(z_up, np.array([10.0, 14.0, 18.0, 22.0, 26.0, 30.0]))
-
-
-def test_upsample_pair_with_1d_x_and_2d_z_along_axis() -> None:
-    x = np.array([0.0, 1.0, 2.0], dtype=np.float64)
-    z = np.array([[10.0, 20.0, 30.0], [40.0, 50.0, 60.0]], dtype=np.float64)
-
-    x_up, z_up = upsample((x, z), N_up=2, axis=1)
-
-    assert x_up.shape == (6,)
-    assert z_up.shape == (2, 6)
-    np.testing.assert_allclose(x_up[[0, -1]], np.array([0.0, 2.0]))
-    np.testing.assert_allclose(z_up[:, 0], z[:, 0])
-    np.testing.assert_allclose(z_up[:, -1], z[:, -1])
+    assert isinstance(out, list)
+    np.testing.assert_allclose(
+        out[0],
+        np.array([0.0, 0.4, 0.8, 1.2, 1.6, 2.0], dtype=np.float64),
+    )
+    np.testing.assert_allclose(
+        out[1],
+        np.array([10.0, 14.0, 18.0, 22.0, 26.0, 30.0], dtype=np.float64),
+    )
 
 
-def test_upsample_pair_with_same_shape_x_and_z() -> None:
+def test_upsample_tuple_input_with_2d_items_is_ragged() -> None:
     x = np.array([[0.0, 1.0], [2.0, 3.0]], dtype=np.float64)
     z = np.array([[10.0, 20.0], [30.0, 40.0]], dtype=np.float64)
 
-    x_up, z_up = upsample((x, z), N_up=2, axis=1)
+    out = upsample((x, z), N_up=2, axis=1)
 
-    assert x_up.shape == (2, 4)
-    assert z_up.shape == (2, 4)
-    np.testing.assert_allclose(x_up[:, 0], x[:, 0])
-    np.testing.assert_allclose(z_up[:, -1], z[:, -1])
+    assert isinstance(out, list)
+    assert out[0].shape == (2, 4)
+    assert out[1].shape == (2, 4)
+    np.testing.assert_allclose(out[0][:, 0], x[:, 0])
+    np.testing.assert_allclose(out[1][:, -1], z[:, -1])
+
+
+def test_upsample_tuple_input_with_same_shape_items_is_ragged() -> None:
+    x = np.array([[0.0, 1.0], [2.0, 3.0]], dtype=np.float64)
+    z = np.array([[10.0, 20.0], [30.0, 40.0]], dtype=np.float64)
+
+    out = upsample((x, z), N_up=2, axis=1)
+
+    assert isinstance(out, list)
+    assert out[0].shape == (2, 4)
+    assert out[1].shape == (2, 4)
+    np.testing.assert_allclose(out[0][:, 0], x[:, 0])
+    np.testing.assert_allclose(out[1][:, -1], z[:, -1])
 
 
 def test_upsample_factor_one_returns_input_shape() -> None:
@@ -135,14 +143,6 @@ def test_upsample_invalid_method_raises() -> None:
 
     with pytest.raises(ValueError, match="Unsupported method"):
         upsample(z, N_up=2, method="cubic")
-
-
-def test_upsample_pair_rejects_mismatched_1d_x() -> None:
-    x = np.array([0.0, 1.0], dtype=np.float64)
-    z = np.ones((2, 3), dtype=np.float64)
-
-    with pytest.raises(ValueError, match="1D x"):
-        upsample((x, z), N_up=2, axis=1)
 
 
 def test_upsample_dataset_returns_dataset() -> None:

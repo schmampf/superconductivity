@@ -13,8 +13,8 @@ import superconductivity.evaluation.sampling as sampling
 from superconductivity.evaluation.analysis.offset import OffsetTraces
 from superconductivity.evaluation.traces import Trace, TraceMeta, Traces
 from superconductivity.utilities.constants import G0_muS
-from superconductivity.utilities.functions.binning import bin as bin_y_over_x
-from superconductivity.utilities.legacy.functions import upsample as upsample_xy
+from superconductivity.utilities.functions.binning import bin
+from superconductivity.utilities.functions.upsampling import upsample as upsample_xy
 
 pipeline_mod = importlib.import_module(
     "superconductivity.evaluation.sampling.pipeline",
@@ -85,8 +85,8 @@ def _manual_binning(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     v_trace_mV = np.asarray(trace["V_mV"], dtype=np.float64)
     i_trace_nA = np.asarray(trace["I_nA"], dtype=np.float64)
-    v_sampled_mV = bin_y_over_x(i_trace_nA, v_trace_mV, spec.Ibins_nA)
-    i_sampled_nA = bin_y_over_x(v_trace_mV, i_trace_nA, spec.Vbins_mV)
+    v_sampled_mV = bin(z=v_trace_mV, x=i_trace_nA, xbins=spec.Ibins_nA)
+    i_sampled_nA = bin(z=i_trace_nA, x=v_trace_mV, xbins=spec.Vbins_mV)
     dG_G0 = np.gradient(i_sampled_nA, spec.Vbins_mV) / G0_muS
     dR_R0 = np.gradient(v_sampled_mV, spec.Ibins_nA) * G0_muS
     return i_sampled_nA, v_sampled_mV, dG_G0, dR_R0
@@ -96,14 +96,20 @@ def _legacy_hidden_upsample_binning(
     trace: Trace,
     spec: sampling.SamplingSpec,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    i_over_nA, v_over_mV = upsample_xy(
+    i_over_nA = upsample_xy(
         np.asarray(trace["I_nA"], dtype=np.float64),
-        np.asarray(trace["V_mV"], dtype=np.float64),
-        factor=spec.N_up,
+        N_up=spec.N_up,
+        axis=0,
         method="linear",
     )
-    v_sampled_mV = bin_y_over_x(i_over_nA, v_over_mV, spec.Ibins_nA)
-    i_sampled_nA = bin_y_over_x(v_over_mV, i_over_nA, spec.Vbins_mV)
+    v_over_mV = upsample_xy(
+        np.asarray(trace["V_mV"], dtype=np.float64),
+        N_up=spec.N_up,
+        axis=0,
+        method="linear",
+    )
+    v_sampled_mV = bin(z=v_over_mV, x=i_over_nA, xbins=spec.Ibins_nA)
+    i_sampled_nA = bin(z=i_over_nA, x=v_over_mV, xbins=spec.Vbins_mV)
     dG_G0 = np.gradient(i_sampled_nA, spec.Vbins_mV) / G0_muS
     dR_R0 = np.gradient(v_sampled_mV, spec.Ibins_nA) * G0_muS
     return i_sampled_nA, v_sampled_mV, dG_G0, dR_R0
