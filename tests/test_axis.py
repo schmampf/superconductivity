@@ -15,7 +15,7 @@ def test_label_meta_construction() -> None:
     meta = label("V_mV")
     assert isinstance(meta, LabelSpec)
     assert meta.code_label == "V_mV"
-    assert meta.print_label == "V_mV"
+    assert meta.print_label == "V (mV)"
     assert meta.html_label == "<i>V</i> (mV)"
     assert meta.latex_label == r"$V$ (mV)"
 
@@ -43,7 +43,7 @@ def test_axis_spec_inherits_label_meta() -> None:
     spec = axis("V_mV", -1.0, 1.0, 5, order=2)
     assert isinstance(spec, LabelSpec)
     assert spec.code_label == "V_mV"
-    assert spec.print_label == "V_mV"
+    assert spec.print_label == "V (mV)"
     assert spec.order == 2
 
 
@@ -155,6 +155,7 @@ def test_axis_spec_validates_non_monotonic_input() -> None:
         AxisSpec(
             values=[0.0, 1.0, 1.0],
             code_label="A_mV",
+            print_label="A (mV)",
             html_label="<i>A</i> (mV)",
             latex_label=r"$A$ (mV)",
             order=1,

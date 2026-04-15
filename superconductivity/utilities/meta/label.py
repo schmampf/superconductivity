@@ -26,7 +26,7 @@ class LabelSpec:
 LABELS: dict[str, LabelSpec] = {
     name: LabelSpec(
         code_label=name,
-        print_label=name,
+        print_label=str(row["print_label"]),
         html_label=str(row["html_label"]),
         latex_label=str(row["latex_label"]),
     )

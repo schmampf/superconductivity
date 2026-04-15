@@ -95,7 +95,12 @@ def param(
     try:
         meta = label(name)
     except KeyError:
-        meta = LabelSpec(code_label=name, html_label=name, latex_label=name)
+        meta = LabelSpec(
+            code_label=name,
+            print_label=name,
+            html_label=name,
+            latex_label=name,
+        )
     return ParamSpec(
         code_label=meta.code_label,
         print_label=meta.print_label,
