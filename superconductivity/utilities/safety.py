@@ -116,11 +116,3 @@ def normalize_axis(axis: int, ndim: int) -> int:
         )
     return axis_int % ndim
 
-
-def is_pair_input(value: object) -> bool:
-    """Return True for a 2-tuple of non-ragged pair inputs."""
-    return (
-        isinstance(value, tuple)
-        and len(value) == 2
-        and not any(isinstance(item, (list, tuple)) for item in value)
-    )
