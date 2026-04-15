@@ -44,7 +44,8 @@ def bin(
     if isinstance(z, Dataset):
         axes = (xbins,) if isinstance(xbins, AxisSpec) else ()
         return Dataset(
-            label=z.label,
+            code_label=z.code_label,
+            print_label=z.print_label,
             html_label=z.html_label,
             latex_label=z.latex_label,
             values=result,

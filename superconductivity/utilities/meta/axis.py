@@ -57,7 +57,8 @@ def axis(
     return AxisSpec(
         values=axis_values,
         order=order,
-        label=meta.label,
+        code_label=meta.code_label,
+        print_label=meta.print_label,
         html_label=meta.html_label,
         latex_label=meta.latex_label,
     )

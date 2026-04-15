@@ -24,7 +24,8 @@ def unwrap_dataset_value(value: np.ndarray | Dataset | AxisSpec) -> np.ndarray:
 def wrap_dataset_value(template: np.ndarray | Dataset, values: np.ndarray) -> np.ndarray | Dataset:
     if isinstance(template, Dataset):
         return Dataset(
-            label=template.label,
+            code_label=template.code_label,
+            print_label=template.print_label,
             html_label=template.html_label,
             latex_label=template.latex_label,
             values=values,

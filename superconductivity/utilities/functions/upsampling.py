@@ -78,7 +78,7 @@ def _upsample_dataset(
     if axes:
         axis_spec = axes[idx]
         axes[idx] = make_axis(
-            axis_spec.label,
+            axis_spec.code_label,
             values=_upsample_dense(
                 axis_spec.values,
                 N_up=N_up,
@@ -88,7 +88,8 @@ def _upsample_dataset(
             order=axis_spec.order,
         )
     return Dataset(
-        label=dataset.label,
+        code_label=dataset.code_label,
+        print_label=dataset.print_label,
         html_label=dataset.html_label,
         latex_label=dataset.latex_label,
         values=data_up,

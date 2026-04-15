@@ -39,7 +39,7 @@ def _make_keysspec() -> KeysSpec:
 def test_axis_spec_validates_axis_and_kind() -> None:
     axis_spec = axis("A_mV", values=np.asarray([0.0, 1.0, 2.0], dtype=np.float64), order=7)
     np.testing.assert_allclose(axis_spec.axis, [0.0, 1.0, 2.0])
-    assert axis_spec.label == "A_mV"
+    assert axis_spec.code_label == "A_mV"
     assert axis_spec.order == 7
 
 
@@ -64,7 +64,8 @@ def test_function_calibration_updates_trace_metadata() -> None:
     np.testing.assert_allclose(result.mapped_axis, [0.0, 2.0, 4.0])
     np.testing.assert_allclose(result.calibrated_axis, [0.0, 2.0, 4.0])
     np.testing.assert_allclose(result.samples.yvalues, [0.0, 2.0, 4.0])
-    assert result.axisspec.label == "A_mV"
+    assert result.axisspec.code_label == "A_mV"
+    assert result.axisspec.print_label == "A (mV)"
 
 
 def test_function_calibration_accepts_scalar_and_tuple_params() -> None:
@@ -159,7 +160,8 @@ def test_invalid_axis_spec_kind_is_rejected() -> None:
     with pytest.raises(ValueError, match="order must be"):
         AxisSpec(
             values=np.asarray([0.0, 1.0], dtype=np.float64),
-            label="A_mV",
+            code_label="A_mV",
+            print_label="A (mV)",
             html_label="<i>A</i> (mV)",
             latex_label=r"$A$ (mV)",
             order=-1,

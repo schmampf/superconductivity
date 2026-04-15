@@ -14,7 +14,8 @@ from superconductivity.utilities.constants import G0_muS, h_Vs, kB_meV_K
 def test_label_meta_construction() -> None:
     meta = label("V_mV")
     assert isinstance(meta, LabelSpec)
-    assert meta.label == "V_mV"
+    assert meta.code_label == "V_mV"
+    assert meta.print_label == "V_mV"
     assert meta.html_label == "<i>V</i> (mV)"
     assert meta.latex_label == r"$V$ (mV)"
 
@@ -32,7 +33,8 @@ def test_label_lookup_rejects_unknown_name() -> None:
 def test_label_meta_reuse() -> None:
     meta = label("dIdV")
     spec = axis("dIdV", values=[0.0, 0.5, 1.0])
-    assert spec.label == meta.label
+    assert spec.code_label == meta.code_label
+    assert spec.print_label == meta.print_label
     assert spec.html_label == meta.html_label
     assert spec.latex_label == meta.latex_label
 
@@ -40,14 +42,16 @@ def test_label_meta_reuse() -> None:
 def test_axis_spec_inherits_label_meta() -> None:
     spec = axis("V_mV", -1.0, 1.0, 5, order=2)
     assert isinstance(spec, LabelSpec)
-    assert spec.label == "V_mV"
+    assert spec.code_label == "V_mV"
+    assert spec.print_label == "V_mV"
     assert spec.order == 2
 
 
 def test_param_spec_inherits_label_meta() -> None:
     spec = param("tau", value=0.1, lower=0.0, upper=1.0)
     assert isinstance(spec, LabelSpec)
-    assert spec.label == "tau"
+    assert spec.code_label == "tau"
+    assert spec.print_label == "tau"
     assert spec.value == 0.1
     assert spec.lower == 0.0
     assert spec.upper == 1.0
@@ -75,7 +79,8 @@ def test_dataset_collects_axes_and_params() -> None:
     spec = dataset("measurement", [1.0, 2.0, 3.0], axes=x_axis, params=temperature)
 
     assert isinstance(spec, Dataset)
-    assert spec.label == "measurement"
+    assert spec.code_label == "measurement"
+    assert spec.print_label == "measurement"
     np.testing.assert_allclose(spec.values, [1.0, 2.0, 3.0])
     assert spec.axes == (x_axis,)
     assert spec.params == (temperature,)
@@ -89,7 +94,7 @@ def test_construct_axis_uses_values_over_linspace() -> None:
 def test_axis_V_mV_uses_linspace_semantics() -> None:
     spec = axis("V_mV", -1.0, 1.0, 5, order=2)
     np.testing.assert_allclose(spec.axis, np.linspace(-1.0, 1.0, 5))
-    assert spec.label == "V_mV"
+    assert spec.code_label == "V_mV"
     assert spec.latex_label == r"$V$ (mV)"
 
 
@@ -102,32 +107,32 @@ def test_axis_I_nA_accepts_values_override() -> None:
 def test_axis_A_mV_uses_linspace_semantics() -> None:
     spec = axis("A_mV", -1.0, 1.0, 5)
     np.testing.assert_allclose(spec.axis, np.linspace(-1.0, 1.0, 5))
-    assert spec.label == "A_mV"
+    assert spec.code_label == "A_mV"
     assert spec.latex_label == r"$A$ (mV)"
 
 
 def test_axis_nu_GHz_accepts_values_override() -> None:
     spec = axis("nu_GHz", values=[0.0, 0.5, 1.0])
     np.testing.assert_allclose(spec.axis, [0.0, 0.5, 1.0])
-    assert spec.label == "nu_GHz"
+    assert spec.code_label == "nu_GHz"
 
 
 def test_axis_T_K_uses_linspace_semantics() -> None:
     spec = axis("T_K", 0.0, 3.0, 4)
     np.testing.assert_allclose(spec.axis, np.linspace(0.0, 3.0, 4))
-    assert spec.label == "T_K"
+    assert spec.code_label == "T_K"
 
 
 def test_axis_V_Delta_uses_linspace_semantics() -> None:
     spec = axis("V", -1.0, 1.0, 5, order=3)
     np.testing.assert_allclose(spec.axis, np.linspace(-1.0, 1.0, 5))
-    assert spec.label == "V"
+    assert spec.code_label == "V"
 
 
 def test_axis_I_GNDelta_accepts_values_override() -> None:
     spec = axis("I", values=[0.0, 0.5, 1.0], order=4)
     np.testing.assert_allclose(spec.axis, [0.0, 0.5, 1.0])
-    assert spec.label == "I"
+    assert spec.code_label == "I"
 
 
 def test_axis_A_hnu_accepts_values_override() -> None:
@@ -149,7 +154,7 @@ def test_axis_spec_validates_non_monotonic_input() -> None:
     with pytest.raises(ValueError, match="strictly increasing"):
         AxisSpec(
             values=[0.0, 1.0, 1.0],
-            label="A_mV",
+            code_label="A_mV",
             html_label="<i>A</i> (mV)",
             latex_label=r"$A$ (mV)",
             order=1,
@@ -158,7 +163,8 @@ def test_axis_spec_validates_non_monotonic_input() -> None:
 
 def test_param_lookup_falls_back_to_name() -> None:
     spec = param("tau", value=0.2)
-    assert spec.label == "tau"
+    assert spec.code_label == "tau"
+    assert spec.print_label == "tau"
     assert spec.html_label == "tau"
     assert spec.latex_label == "tau"
 
@@ -178,6 +184,7 @@ def test_data_spec_inherits_label_meta() -> None:
 
 def test_data_lookup_falls_back_to_name() -> None:
     spec = dataset("custom", [1.0, 2.0])
-    assert spec.label == "custom"
+    assert spec.code_label == "custom"
+    assert spec.print_label == "custom"
     assert spec.html_label == "custom"
     assert spec.latex_label == "custom"
