@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from ...utilities.functions.binning import bin as bin_y_over_x
+from ...utilities.functions.binning import bin
 from ...utilities.safety import require_all_finite
 from ...utilities.types import NDArray64
 from .helper import (JF32, JI32, JPI32, JTWO_MPI32, JTWO_PI32, Jh_pVsJF32,
@@ -88,10 +88,10 @@ def get_I_rsj_nA(
     I_bias_nA_over = upsample_linear_values_np(I_bias_nA)
     for i in range(A_arr_mV.size):
         V_rsj_mV_over = upsample_linear_values_np(V_rsj_mV[i])
-        I_rsj_all_nA[i] = bin_y_over_x(
+        I_rsj_all_nA[i] = bin(
+            z=I_bias_nA_over,
             x=V_rsj_mV_over,
-            y=I_bias_nA_over,
-            x_bins=V_bins_mV,
+            xbins=V_bins_mV,
         )
 
     if A_is_scalar:

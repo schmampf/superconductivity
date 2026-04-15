@@ -4,7 +4,7 @@ import numpy as np
 from scipy.constants import Boltzmann, e, hbar
 
 from ...utilities.constants import G0_muS
-from ...utilities.functions.binning import bin as bin_y_over_x
+from ...utilities.functions.binning import bin
 from ...utilities.legacy.functions import fill_nans
 from ...utilities.safety import require_same_shape
 from ...utilities.types import NDArray64
@@ -273,11 +273,7 @@ def get_I_rstj_slow_nA(
 
     I_over_nA = upsample_linear_values_np(I_bias_nA, upsample=upsample)
     V_over_mV = upsample_linear_values_np(V_avg_mV, upsample=upsample)
-    I_out_nA = bin_y_over_x(
-        x=V_over_mV,
-        y=I_over_nA,
-        x_bins=V_arr_mV,
-    )
+    I_out_nA = bin(z=I_over_nA, x=V_over_mV, xbins=V_arr_mV)
     if fill_nan:
         I_out_nA = fill_nans(
             y=I_out_nA,

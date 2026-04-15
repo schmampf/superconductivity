@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Iterator
 import numpy as np
 
 from ...utilities.constants import G0_muS
-from ...utilities.functions.binning import bin as bin_y_over_x
-from ...utilities.legacy.functions import fill_nans
+from ...utilities.functions.binning import bin
+from ...utilities.functions.fill_nans import fill as fill_nans
 from ...utilities.safety import (
     require_all_finite,
     require_min_size,
@@ -91,8 +91,8 @@ def _downsample_trace_arrays(
     if t_bins_s.size < 2:
         t_bins_s = np.linspace(t_min, t_max, 2, dtype=np.float64)
 
-    v_down_mV = bin_y_over_x(x=t_raw, y=v_raw_mV, x_bins=t_bins_s)
-    i_down_nA = bin_y_over_x(x=t_raw, y=i_raw_nA, x_bins=t_bins_s)
+    v_down_mV = bin(z=v_raw_mV, x=t_raw, xbins=t_bins_s)
+    i_down_nA = bin(z=i_raw_nA, x=t_raw, xbins=t_bins_s)
     finite = np.isfinite(t_bins_s) & np.isfinite(v_down_mV) & np.isfinite(i_down_nA)
     t_down_s = t_bins_s[finite]
     v_down_mV = v_down_mV[finite]
@@ -187,15 +187,15 @@ def _sample_trace(
     """Sample one prepared IV trace onto fixed V/I grids."""
     v_trace_mV, i_trace_nA = _prepare_trace_for_sampling(trace=trace)
 
-    v_sampled_mV = bin_y_over_x(
+    v_sampled_mV = bin(
+        z=v_trace_mV,
         x=i_trace_nA,
-        y=v_trace_mV,
-        x_bins=samplingspec.Ibins_nA,
+        xbins=samplingspec.Ibins_nA,
     )
-    i_sampled_nA = bin_y_over_x(
+    i_sampled_nA = bin(
+        z=i_trace_nA,
         x=v_trace_mV,
-        y=i_trace_nA,
-        x_bins=samplingspec.Vbins_mV,
+        xbins=samplingspec.Vbins_mV,
     )
 
     dG_G0 = np.gradient(i_sampled_nA, samplingspec.Vbins_mV) / G0_muS
@@ -247,7 +247,7 @@ def _smooth_supported_segment(
     lo = int(finite_idx[0])
     hi = int(finite_idx[-1]) + 1
     y_segment = np.asarray(y_arr[lo:hi], dtype=np.float64)
-    y_segment = fill_nans(y_segment, method="linear")
+    y_segment = fill_nans(y_segment, method="interpolate")
 
     gaussian_filter1d, median_filter = _import_scipy_ndimage()
     if spec.median_bins > 1:

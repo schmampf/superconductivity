@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from ....utilities.constants import G0_muS
-from ....utilities.functions.binning import bin as bin_y_over_x
+from ....utilities.functions.binning import bin
 from ....utilities.types import NDArray64
 from ...basics import get_Delta_meV, get_f
 
@@ -98,8 +98,8 @@ def get_I_btk_nA(
     I_1e_nA = np.concatenate((I_1e_nA, -np.flip(I_1e_nA[1:])))
     V_mV_temp = np.concatenate((V_mV_temp, -np.flip(V_mV_temp[1:])))
 
-    I_2e_nA = bin_y_over_x(V_mV_temp, I_2e_nA, V_mV)
-    I_1e_nA = bin_y_over_x(V_mV_temp, I_1e_nA, V_mV)
+    I_2e_nA = bin(z=I_2e_nA, x=V_mV_temp, xbins=V_mV)
+    I_1e_nA = bin(z=I_1e_nA, x=V_mV_temp, xbins=V_mV)
 
     I_tot_nA = I_2e_nA + I_1e_nA
     return np.vstack((I_tot_nA, I_1e_nA, I_2e_nA)).T

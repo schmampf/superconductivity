@@ -16,7 +16,7 @@ from optimizers.fit_pincode_helper import (
 from superconductivity.utilities.legacy.functions_jax import jbin_y_over_x as bin_y_over_x_jax
 
 from ..utilities.constants import G0_muS
-from ..utilities.functions.binning import bin as bin_y_over_x
+from ..utilities.functions.binning import bin
 from ..utilities.types import NDArray64
 
 # jax.config.update("jax_enable_x64", True)
@@ -123,10 +123,10 @@ def get_pincode(
     I_fit = np.sum(I_THEO[best_pincode_indices], axis=0)
 
     I_fit_nA = (
-        bin_y_over_x(
-            V_THEO,
-            I_fit,
-            V_mV / Delta_meV,
+        bin(
+            z=I_fit,
+            x=V_THEO,
+            xbins=V_mV / Delta_meV,
         )
         * G0_muS
         * Delta_meV

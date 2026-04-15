@@ -10,9 +10,9 @@ from typing import Iterator, Sequence, TypedDict, overload
 import numpy as np
 
 from ...utilities.constants import G0_muS
-from ...utilities.functions.binning import bin as bin_y_over_x
-from ...utilities.legacy.functions import fill_nans
-from ...utilities.legacy.functions import upsample as upsample_xy
+from ...utilities.functions.binning import bin
+from ...utilities.functions.fill_nans import fill as fill_nans
+from ...utilities.functions.upsampling import upsample as upsample_xy
 from ...utilities.safety import require_all_finite, require_min_size, to_1d_float64
 from ...utilities.types import NDArray64
 from ..sampling import downsample_trace
@@ -177,7 +177,7 @@ def _bin_y_over_x_offsets(
     """Bin ``y(x - x_off[k])`` onto ``x_bins`` for all offsets."""
     out = np.full((x_bins.size, x_off.size), np.nan, dtype=np.float64)
     for j_off, off in enumerate(x_off):
-        out[:, j_off] = bin_y_over_x(x=x - off, y=y, x_bins=x_bins)
+        out[:, j_off] = bin(z=y, x=x - off, xbins=x_bins)
     return out
 
 
@@ -199,12 +199,8 @@ def _prepare_trace_for_offset(
     v_down_mV = np.asarray(downsampled["V_mV"], dtype=np.float64)
     i_down_nA = np.asarray(downsampled["I_nA"], dtype=np.float64)
 
-    v_mV, i_nA = upsample_xy(
-        x=v_down_mV,
-        y=i_down_nA,
-        factor=spec.upsample,
-        method="linear",
-    )
+    v_mV = upsample_xy(v_down_mV, N_up=spec.upsample, axis=0, method="linear")
+    i_nA = upsample_xy(i_down_nA, N_up=spec.upsample, axis=0, method="linear")
     return (
         np.asarray(v_mV, dtype=np.float64),
         np.asarray(i_nA, dtype=np.float64),
@@ -253,7 +249,7 @@ def _compute_offset_errors_numpy(
     g_G0 = g_uS / G0_muS
     g_sym = np.abs(g_G0 - np.flip(g_G0, axis=0))
     g_err_G0 = np.nanmean(g_sym, axis=0)
-    g_err_G0 = fill_nans(g_err_G0, x=spec.Voff_mV, method="linear")
+    g_err_G0 = fill_nans(g_err_G0, method="interpolate")
 
     v_vs_i = _bin_y_over_x_offsets(
         x=i_nA,
@@ -265,7 +261,7 @@ def _compute_offset_errors_numpy(
     r_R0 = r_MOhm * G0_muS
     r_sym = np.abs(r_R0 - np.flip(r_R0, axis=0))
     r_err_R0 = np.nanmean(r_sym, axis=0)
-    r_err_R0 = fill_nans(r_err_R0, x=spec.Ioff_nA, method="linear")
+    r_err_R0 = fill_nans(r_err_R0, method="interpolate")
     return (
         np.asarray(g_err_G0, dtype=np.float64),
         np.asarray(r_err_R0, dtype=np.float64),
@@ -285,24 +281,22 @@ def _compute_offset_errors_jax(
         y=i_nA,
         x_bins=spec.Vbins_mV,
         x_off=spec.Voff_mV,
-        scale=G0_muS,
+        scale=float(G0_muS),
     )
     r_err_R0 = metric_from_offsets(
         x=i_nA,
         y=v_mV,
         x_bins=spec.Ibins_nA,
         x_off=spec.Ioff_nA,
-        scale=1.0 / G0_muS,
+        scale=1.0 / float(G0_muS),
     )
     g_err_G0_np = fill_nans(
         np.asarray(jax.device_get(g_err_G0), dtype=np.float64),
-        x=spec.Voff_mV,
-        method="linear",
+        method="interpolate",
     )
     r_err_R0_np = fill_nans(
         np.asarray(jax.device_get(r_err_R0), dtype=np.float64),
-        x=spec.Ioff_nA,
-        method="linear",
+        method="interpolate",
     )
     return (
         np.asarray(g_err_G0_np, dtype=np.float64),

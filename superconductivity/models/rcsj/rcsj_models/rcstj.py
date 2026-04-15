@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from ...utilities.constants import kB_meV_K
-from ...utilities.functions.binning import bin as bin_y_over_x
+from ...utilities.functions.binning import bin
 from ...utilities.functions.upsampling import upsample
 from ...utilities.safety import require_all_finite
 from ...utilities.types import NDArray64
@@ -114,15 +114,12 @@ def get_I_rcstj_nA(
         dtype=np.float64,
     )
     for i in range(A_arr_mV.size):
-        I_bias_nA_over, V_rcstj_mV_over = upsample(
-            x=I_bias_nA,
-            y=V_rcstj_mV[i],
-        )
-
-        I_rcstj_all_nA[i] = bin_y_over_x(
+        I_bias_nA_over = upsample(I_bias_nA, N_up=100, axis=0)
+        V_rcstj_mV_over = upsample(V_rcstj_mV[i], N_up=100, axis=0)
+        I_rcstj_all_nA[i] = bin(
+            z=I_bias_nA_over,
             x=V_rcstj_mV_over,
-            y=I_bias_nA_over,
-            x_bins=np.asarray(V_mV),
+            xbins=np.asarray(V_mV),
         )
 
     if A_is_scalar:
