@@ -15,6 +15,8 @@ from .label import LabelSpec, label
 class ParamSpec(LabelSpec):
     """Parameter metadata shared by fitting and GUI tables."""
 
+    __array_priority__ = 1000.0
+
     value: float | Sequence[float] | NDArray64
     error: float | Sequence[float] | NDArray64 | None = None
     lower: float | None = None
@@ -44,34 +46,41 @@ class ParamSpec(LabelSpec):
             return float(self.value)
         return float(self.value)
 
+    def __array__(self, dtype: object | None = None) -> np.ndarray:
+        """Return one NumPy scalar view for array arithmetic."""
+        array = np.asarray(float(self), dtype=np.float64)
+        if dtype is not None:
+            return np.asarray(array, dtype=dtype)
+        return array
+
     def _as_float(self, other: object) -> float:
         if isinstance(other, ParamSpec):
             return float(other)
-        return float(other)  # type: ignore[arg-type]
+        return float(np.asarray(other, dtype=np.float64))
 
     def __mul__(self, other: object):
-        return float(self) * self._as_float(other)
+        return float(self) * np.asarray(other, dtype=np.float64)
 
     def __rmul__(self, other: object):
-        return self._as_float(other) * float(self)
+        return np.asarray(other, dtype=np.float64) * float(self)
 
     def __truediv__(self, other: object):
-        return float(self) / self._as_float(other)
+        return float(self) / np.asarray(other, dtype=np.float64)
 
     def __rtruediv__(self, other: object):
-        return self._as_float(other) / float(self)
+        return np.asarray(other, dtype=np.float64) / float(self)
 
     def __add__(self, other: object):
-        return float(self) + self._as_float(other)
+        return float(self) + np.asarray(other, dtype=np.float64)
 
     def __radd__(self, other: object):
-        return self._as_float(other) + float(self)
+        return np.asarray(other, dtype=np.float64) + float(self)
 
     def __sub__(self, other: object):
-        return float(self) - self._as_float(other)
+        return float(self) - np.asarray(other, dtype=np.float64)
 
     def __rsub__(self, other: object):
-        return self._as_float(other) - float(self)
+        return np.asarray(other, dtype=np.float64) - float(self)
 
 
 def param(
