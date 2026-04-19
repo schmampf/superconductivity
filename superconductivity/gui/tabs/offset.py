@@ -1,5 +1,4 @@
 from __future__ import annotations
-from dataclasses import replace
 from queue import Empty, Queue
 from threading import Event
 
@@ -34,7 +33,7 @@ _OFFSET_INFO_TITLES = {
 }
 _OFFSET_INFO_PARAMETER_LABELS = {
     "nu_Hz": "<i>&nu;</i> (Hz)",
-    "upsample": "<i>N</i><sub>up</sub>",
+    "N_up": "<i>N</i><sub>up</sub>",
     "Voff_mV": "<i>V</i><sub>off</sub> (mV)",
     "Ioff_nA": "<i>I</i><sub>off</sub> (nA)",
 }
@@ -79,7 +78,7 @@ def _run_offset_batch(
         trace = traces[index]
         event_queue.put(("running", index, None, ""))
         try:
-            offset = offset_analysis(trace, spec=replace(spec))
+            offset = offset_analysis(trace, spec=spec)
         except Exception as exc:  # pragma: no cover - exercised via GUI tests
             event_queue.put(("failed", index, None, f"{type(exc).__name__}: {exc}"))
         else:
@@ -107,22 +106,22 @@ class GUIOffsetTabMixin:
     @staticmethod
     def _offset_specs_match(left: OffsetSpec, right: OffsetSpec) -> bool:
         return bool(
-            np.array_equal(left.Vbins_mV, right.Vbins_mV)
-            and np.array_equal(left.Ibins_nA, right.Ibins_nA)
-            and np.array_equal(left.Voff_mV, right.Voff_mV)
-            and np.array_equal(left.Ioff_nA, right.Ioff_nA)
-            and float(left.nu_Hz) == float(right.nu_Hz)
-            and int(left.upsample) == int(right.upsample)
+            np.array_equal(left.Vbins_mV.values, right.Vbins_mV.values)
+            and np.array_equal(left.Ibins_nA.values, right.Ibins_nA.values)
+            and np.array_equal(left.Voff_mV.values, right.Voff_mV.values)
+            and np.array_equal(left.Ioff_nA.values, right.Ioff_nA.values)
+            and float(left.nu_Hz.value) == float(right.nu_Hz.value)
+            and int(left.N_up.value) == int(right.N_up.value)
         )
 
     def _ensure_offset_stage_spec(self, spec: OffsetSpec) -> None:
         if self._offset_batch_spec is None:
-            self._offset_batch_spec = replace(spec)
+            self._offset_batch_spec = spec
             return
         if self._offset_specs_match(self._offset_batch_spec, spec):
             return
         self._clear_offset_batch_cache()
-        self._offset_batch_spec = replace(spec)
+        self._offset_batch_spec = spec
 
     def _stage_offset_result(
         self,
@@ -205,7 +204,7 @@ class GUIOffsetTabMixin:
             single_name="OffsetTrace",
             copy_fn=self._copy_offset_trace,
         )
-        self._offset_batch_spec = replace(self._offset_spec)
+        self._offset_batch_spec = self._offset_spec
         self._offset_batch_results = [None for _ in range(len(self.traces))]
         self._offset_batch_status = ["idle" for _ in range(len(self.traces))]
         self._offset_batch_errors = ["" for _ in range(len(self.traces))]
@@ -290,7 +289,7 @@ class GUIOffsetTabMixin:
                 "value": JSCode(
                     "function(cell) { "
                     "const key = cell.getData().key; "
-                    "return key === 'nu_Hz' || key === 'upsample'; "
+                    "return key === 'nu_Hz' || key === 'N_up'; "
                     "}"
                 )
             },
@@ -480,27 +479,27 @@ class GUIOffsetTabMixin:
             [
                 {
                     "parameter": _OFFSET_GRID_PARAMETER_LABELS["Vbins_mV"],
-                    "start": float(self._offset_spec.Vbins_mV[0]),
-                    "stop": float(self._offset_spec.Vbins_mV[-1]),
-                    "count": int(self._offset_spec.Vbins_mV.size),
+                    "start": float(self._offset_spec.Vbins_mV.values[0]),
+                    "stop": float(self._offset_spec.Vbins_mV.values[-1]),
+                    "count": int(self._offset_spec.Vbins_mV.values.size),
                 },
                 {
                     "parameter": _OFFSET_GRID_PARAMETER_LABELS["Ibins_nA"],
-                    "start": float(self._offset_spec.Ibins_nA[0]),
-                    "stop": float(self._offset_spec.Ibins_nA[-1]),
-                    "count": int(self._offset_spec.Ibins_nA.size),
+                    "start": float(self._offset_spec.Ibins_nA.values[0]),
+                    "stop": float(self._offset_spec.Ibins_nA.values[-1]),
+                    "count": int(self._offset_spec.Ibins_nA.values.size),
                 },
                 {
                     "parameter": _OFFSET_GRID_PARAMETER_LABELS["Voff_mV"],
-                    "start": float(self._offset_spec.Voff_mV[0]),
-                    "stop": float(self._offset_spec.Voff_mV[-1]),
-                    "count": int(self._offset_spec.Voff_mV.size),
+                    "start": float(self._offset_spec.Voff_mV.values[0]),
+                    "stop": float(self._offset_spec.Voff_mV.values[-1]),
+                    "count": int(self._offset_spec.Voff_mV.values.size),
                 },
                 {
                     "parameter": _OFFSET_GRID_PARAMETER_LABELS["Ioff_nA"],
-                    "start": float(self._offset_spec.Ioff_nA[0]),
-                    "stop": float(self._offset_spec.Ioff_nA[-1]),
-                    "count": int(self._offset_spec.Ioff_nA.size),
+                    "start": float(self._offset_spec.Ioff_nA.values[0]),
+                    "stop": float(self._offset_spec.Ioff_nA.values[-1]),
+                    "count": int(self._offset_spec.Ioff_nA.values.size),
                 },
             ]
         )
@@ -519,12 +518,12 @@ class GUIOffsetTabMixin:
                 {
                     "key": "nu_Hz",
                     "parameter": _OFFSET_INFO_PARAMETER_LABELS["nu_Hz"],
-                    "value": float(self._offset_spec.nu_Hz),
+                    "value": float(self._offset_spec.nu_Hz.value),
                 },
                 {
-                    "key": "upsample",
-                    "parameter": _OFFSET_INFO_PARAMETER_LABELS["upsample"],
-                    "value": int(self._offset_spec.upsample),
+                    "key": "N_up",
+                    "parameter": _OFFSET_INFO_PARAMETER_LABELS["N_up"],
+                    "value": int(self._offset_spec.N_up.value),
                 },
                 {
                     "key": "Voff_mV",
@@ -577,8 +576,8 @@ class GUIOffsetTabMixin:
                 name="Ioff_nA",
                 min_count=1,
             ),
-            nu_Hz=float(info_frame.at["nu_Hz", "value"]),
-            upsample=int(info_frame.at["upsample", "value"]),
+            nu_Hz=param("nu_Hz", float(info_frame.at["nu_Hz", "value"]), fixed=True),
+            N_up=param("N_up", int(info_frame.at["N_up", "value"]), fixed=True),
         )
 
     def _sync_offset_widgets_from_spec(self) -> None:
@@ -628,7 +627,7 @@ class GUIOffsetTabMixin:
         if selected_index != int(self.active_index):
             display_offset = offset_analysis(
                 self.traces[selected_index],
-                spec=replace(self._offset_spec),
+                spec=self._offset_spec,
             )
             self._stage_offset_result(selected_index, display_offset)
         self._sync_control_widgets_from_specs()
@@ -710,7 +709,7 @@ class GUIOffsetTabMixin:
             return
         self._offset_spec = self._build_offset_spec_from_table()
         self._clear_offset_batch_cache()
-        self._offset_batch_spec = replace(self._offset_spec)
+        self._offset_batch_spec = self._offset_spec
         self._offset_batch_queue = Queue()
         self._offset_batch_status = ["queued" for _ in range(len(self.traces))]
         self._offset_batch_running = True
@@ -748,7 +747,7 @@ class GUIOffsetTabMixin:
             _run_offset_batch,
             list(self.traces),
             run_order,
-            replace(self._offset_spec),
+            self._offset_spec,
             self._offset_batch_queue,
             self._offset_batch_stop_event,
         )
