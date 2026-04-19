@@ -13,6 +13,8 @@ from ...utilities.constants import G0_muS
 from ...utilities.functions.binning import bin
 from ...utilities.functions.fill_nans import fill as fill_nans
 from ...utilities.functions.upsampling import upsample as upsample_xy
+from ...utilities.meta.axis import AxisSpec
+from ...utilities.meta.param import ParamSpec
 from ...utilities.safety import require_all_finite, require_min_size, to_1d_float64
 from ...utilities.types import NDArray64
 from ..sampling import downsample_trace
@@ -77,39 +79,97 @@ def _import_jax_offset_kernels():
 class OffsetSpec:
     """Configuration for offset analysis on IV traces."""
 
-    Vbins_mV: Sequence[float] | NDArray64
-    Ibins_nA: Sequence[float] | NDArray64
-    Voff_mV: Sequence[float] | NDArray64
-    Ioff_nA: Sequence[float] | NDArray64
-    nu_Hz: float
-    upsample: int = 10
+    Vbins_mV: AxisSpec | Sequence[float] | NDArray64
+    Ibins_nA: AxisSpec | Sequence[float] | NDArray64
+    Voff_mV: AxisSpec | Sequence[float] | NDArray64
+    Ioff_nA: AxisSpec | Sequence[float] | NDArray64
+    nu_Hz: ParamSpec | float
+    N_up: ParamSpec | int = 10
 
     def __post_init__(self) -> None:
         """Normalize grids and validate scalar settings."""
-        self.Vbins_mV = to_1d_float64(self.Vbins_mV, "Vbins_mV")
-        self.Ibins_nA = to_1d_float64(self.Ibins_nA, "Ibins_nA")
-        self.Voff_mV = to_1d_float64(self.Voff_mV, "Voff_mV")
-        self.Ioff_nA = to_1d_float64(self.Ioff_nA, "Ioff_nA")
+        self.Vbins_mV = self._coerce_axis_spec("Vbins_mV", self.Vbins_mV)
+        self.Ibins_nA = self._coerce_axis_spec("Ibins_nA", self.Ibins_nA)
+        self.Voff_mV = self._coerce_axis_spec("Voff_mV", self.Voff_mV)
+        self.Ioff_nA = self._coerce_axis_spec("Ioff_nA", self.Ioff_nA)
 
-        require_min_size(self.Vbins_mV, 2, name="Vbins_mV")
-        require_min_size(self.Ibins_nA, 2, name="Ibins_nA")
-        require_min_size(self.Voff_mV, 1, name="Voff_mV")
-        require_min_size(self.Ioff_nA, 1, name="Ioff_nA")
+        self.nu_Hz = self._coerce_param_spec("nu_Hz", self.nu_Hz)
+        self.N_up = self._coerce_param_spec("N_up", self.N_up)
 
-        require_all_finite(self.Vbins_mV, name="Vbins_mV")
-        require_all_finite(self.Ibins_nA, name="Ibins_nA")
-        require_all_finite(self.Voff_mV, name="Voff_mV")
-        require_all_finite(self.Ioff_nA, name="Ioff_nA")
-
-        nu_Hz = float(self.nu_Hz)
+        nu_Hz = float(self.nu_Hz.values)
         if not np.isfinite(nu_Hz) or nu_Hz <= 0.0:
             raise ValueError("nu_Hz must be finite and > 0.")
-        self.nu_Hz = nu_Hz
+        n_up = int(self.N_up.values)
+        if n_up <= 0:
+            raise ValueError("N_up must be > 0.")
+        if float(self.nu_Hz.values) != nu_Hz:
+            self.nu_Hz = ParamSpec(
+                values=nu_Hz,
+                code_label=self.nu_Hz.code_label,
+                print_label=self.nu_Hz.print_label,
+                html_label=self.nu_Hz.html_label,
+                latex_label=self.nu_Hz.latex_label,
+                error=self.nu_Hz.error,
+                lower=self.nu_Hz.lower,
+                upper=self.nu_Hz.upper,
+                fixed=self.nu_Hz.fixed,
+            )
+        if int(self.N_up.values) != n_up:
+            self.N_up = ParamSpec(
+                values=n_up,
+                code_label=self.N_up.code_label,
+                print_label=self.N_up.print_label,
+                html_label=self.N_up.html_label,
+                latex_label=self.N_up.latex_label,
+                error=self.N_up.error,
+                lower=self.N_up.lower,
+                upper=self.N_up.upper,
+                fixed=self.N_up.fixed,
+            )
 
-        upsample = int(self.upsample)
-        if upsample <= 0:
-            raise ValueError("upsample must be > 0.")
-        self.upsample = upsample
+    @staticmethod
+    def _coerce_axis_spec(
+        name: str,
+        value: AxisSpec | Sequence[float] | NDArray64,
+    ) -> AxisSpec:
+        """Normalize one axis input to one ``AxisSpec``."""
+        if isinstance(value, AxisSpec):
+            if value.order != 1:
+                raise ValueError(f"{name} must have order 1.")
+            return value
+
+        values = to_1d_float64(value, name)
+        require_min_size(values, 2, name=name)
+        require_all_finite(values, name=name)
+        return AxisSpec(
+            values=values,
+            code_label=name,
+            print_label=name,
+            html_label=name,
+            latex_label=name,
+            order=1,
+        )
+
+    @staticmethod
+    def _coerce_param_spec(
+        name: str,
+        value: ParamSpec | float | int,
+    ) -> ParamSpec:
+        """Normalize one scalar setting to one ``ParamSpec``."""
+        if isinstance(value, ParamSpec):
+            return value
+
+        return ParamSpec(
+            values=value,
+            code_label=name,
+            print_label=name,
+            html_label=name,
+            latex_label=name,
+            error=None,
+            lower=None,
+            upper=None,
+            fixed=True,
+        )
 
 
 class OffsetTrace(TypedDict):
@@ -199,8 +259,18 @@ def _prepare_trace_for_offset(
     v_down_mV = np.asarray(downsampled["V_mV"], dtype=np.float64)
     i_down_nA = np.asarray(downsampled["I_nA"], dtype=np.float64)
 
-    v_mV = upsample_xy(v_down_mV, N_up=spec.upsample, axis=0, method="linear")
-    i_nA = upsample_xy(i_down_nA, N_up=spec.upsample, axis=0, method="linear")
+    v_mV = upsample_xy(
+        v_down_mV,
+        N_up=int(spec.N_up.values),
+        axis=0,
+        method="linear",
+    )
+    i_nA = upsample_xy(
+        i_down_nA,
+        N_up=int(spec.N_up.values),
+        axis=0,
+        method="linear",
+    )
     return (
         np.asarray(v_mV, dtype=np.float64),
         np.asarray(i_nA, dtype=np.float64),
@@ -242,10 +312,10 @@ def _compute_offset_errors_numpy(
     i_vs_v = _bin_y_over_x_offsets(
         x=v_mV,
         y=i_nA,
-        x_bins=spec.Vbins_mV,
-        x_off=spec.Voff_mV,
+        x_bins=spec.Vbins_mV.values,
+        x_off=spec.Voff_mV.values,
     )
-    g_uS = np.gradient(i_vs_v, spec.Vbins_mV, axis=0)
+    g_uS = np.gradient(i_vs_v, spec.Vbins_mV.values, axis=0)
     g_G0 = g_uS / G0_muS
     g_sym = np.abs(g_G0 - np.flip(g_G0, axis=0))
     g_err_G0 = np.nanmean(g_sym, axis=0)
@@ -254,10 +324,10 @@ def _compute_offset_errors_numpy(
     v_vs_i = _bin_y_over_x_offsets(
         x=i_nA,
         y=v_mV,
-        x_bins=spec.Ibins_nA,
-        x_off=spec.Ioff_nA,
+        x_bins=spec.Ibins_nA.values,
+        x_off=spec.Ioff_nA.values,
     )
-    r_MOhm = np.gradient(v_vs_i, spec.Ibins_nA, axis=0)
+    r_MOhm = np.gradient(v_vs_i, spec.Ibins_nA.values, axis=0)
     r_R0 = r_MOhm * G0_muS
     r_sym = np.abs(r_R0 - np.flip(r_R0, axis=0))
     r_err_R0 = np.nanmean(r_sym, axis=0)
@@ -279,15 +349,15 @@ def _compute_offset_errors_jax(
     g_err_G0 = metric_from_offsets(
         x=v_mV,
         y=i_nA,
-        x_bins=spec.Vbins_mV,
-        x_off=spec.Voff_mV,
+        x_bins=spec.Vbins_mV.values,
+        x_off=spec.Voff_mV.values,
         scale=float(G0_muS),
     )
     r_err_R0 = metric_from_offsets(
         x=i_nA,
         y=v_mV,
-        x_bins=spec.Ibins_nA,
-        x_off=spec.Ioff_nA,
+        x_bins=spec.Ibins_nA.values,
+        x_off=spec.Ioff_nA.values,
         scale=1.0 / float(G0_muS),
     )
     g_err_G0_np = fill_nans(
@@ -336,8 +406,8 @@ def _offset_analysis_one(
     return {
         "dGerr_G0": np.asarray(g_err_G0, dtype=np.float64),
         "dRerr_R0": np.asarray(r_err_R0, dtype=np.float64),
-        "Voff_mV": float(spec.Voff_mV[j_v]),
-        "Ioff_nA": float(spec.Ioff_nA[j_i]),
+        "Voff_mV": float(spec.Voff_mV.values[j_v]),
+        "Ioff_nA": float(spec.Ioff_nA.values[j_i]),
     }
 
 

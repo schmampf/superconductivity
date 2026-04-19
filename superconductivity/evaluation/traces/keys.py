@@ -9,6 +9,7 @@ from typing import Sequence
 import numpy as np
 from numpy.typing import NDArray
 
+from ...utilities.meta.label import LabelSpec, label as make_label
 from ...utilities.types import NDArray64
 from .file import FileSpec, _require_measurement, list_specific_keys
 from .meta import TraceMeta, YValue, numeric_yvalue
@@ -32,10 +33,8 @@ class KeysSpec:
     norm : float | None, optional
         Optional finite positive normalization factor applied to the parsed
         y-values.
-    label : str | None, optional
-        Plain-text label for the parsed values.
-    html_label : str | None, optional
-        HTML-formatted label for the parsed values.
+    label : str | LabelSpec | None, optional
+        Shared label metadata for the parsed values.
     limits : float, slice, tuple, list, or None, optional
         Optional selection applied after sorting.
     """
@@ -45,8 +44,7 @@ class KeysSpec:
     remove_key: str | Sequence[str] | None = None
     add_key: tuple[str, float] | Sequence[tuple[str, float]] | None = None
     norm: float | None = None
-    label: str | None = None
-    html_label: str | None = None
+    label: LabelSpec | str | None = None
     limits: float | slice | tuple[int | float | None, int | float | None] | None = None
 
     def __post_init__(self) -> None:
@@ -59,10 +57,10 @@ class KeysSpec:
             self.norm = float(self.norm)
             if not np.isfinite(self.norm) or self.norm <= 0.0:
                 raise ValueError("norm must be finite and > 0.")
-        if self.label is not None and not isinstance(self.label, str):
-            raise ValueError("label must be a string or None.")
-        if self.html_label is not None and not isinstance(self.html_label, str):
-            raise ValueError("html_label must be a string or None.")
+        if self.label is not None and not isinstance(self.label, (str, LabelSpec)):
+            raise ValueError("label must be a string, LabelSpec, or None.")
+        if isinstance(self.label, str):
+            self.label = make_label(self.label)
 
         self.remove_key = tuple(
             _normalize_removed_specific_keys(self.remove_key),
@@ -152,14 +150,6 @@ class Keys:
             specific_keys=self.specific_keys,
             spec=self._spec,
         )[0]
-
-    @property
-    def html_label(self) -> str:
-        """Return HTML-formatted label for the y-values."""
-        return _infer_keys_labels(
-            specific_keys=self.specific_keys,
-            spec=self._spec,
-        )[1]
 
     def __getitem__(self, key: str) -> object:
         """Provide mapping-style access for compatibility."""
@@ -459,7 +449,8 @@ def _infer_keys_labels(
 ) -> tuple[str, str]:
     """Infer plain and HTML labels for one key collection."""
     if spec.label is not None:
-        label = spec.label
+        label = spec.label.print_label
+        html_label = spec.label.html_label
     else:
         prefix = "y"
         for specific_key in specific_keys:
@@ -471,10 +462,6 @@ def _infer_keys_labels(
                     break
         unit = "" if spec.strip1 is None else spec.strip1.strip()
         label = prefix if unit == "" else f"{prefix} ({unit})"
-
-    if spec.html_label is not None:
-        html_label = spec.html_label
-    else:
         html_label = label
 
     return label, html_label
