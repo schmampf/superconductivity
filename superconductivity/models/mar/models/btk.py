@@ -7,7 +7,7 @@ import numpy as np
 from ....utilities.constants import G0_muS
 from ....utilities.functions.binning import bin
 from ....utilities.types import NDArray64
-from ...basics import get_Delta_meV, get_f
+from ...basics import get_DeltaT_meV, get_f
 
 
 def get_Z_btk(tau: float) -> float:
@@ -60,7 +60,7 @@ def get_I_btk_nA(
     GN_G0_muS = tau * G0_muS
     I_NN_nA = V_mV * GN_G0_muS
 
-    Delta_meV_T = get_Delta_meV(Delta_meV=Delta_meV, T_K=T_K)
+    Delta_meV_T = get_DeltaT_meV(Delta_meV=Delta_meV, T_K=T_K)
     if Delta_meV_T == 0.0:
         return np.vstack((I_NN_nA, I_NN_nA, np.zeros_like(I_NN_nA))).T
 

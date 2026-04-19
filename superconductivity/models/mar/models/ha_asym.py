@@ -9,7 +9,7 @@ import numpy as np
 
 from ....utilities.constants import G0_muS, kB_meV_K
 from ....utilities.types import NDArray64
-from ...basics import get_Delta_meV
+from ...basics import get_DeltaT_meV
 from ..backend import carlosha_asym as ha_asym
 from ..core import (
     V_TOL_MV,
@@ -46,8 +46,8 @@ def _evaluate_positive_curve(
     if delta_ref_meV <= 0.0:
         raise ValueError("Left gap reference must be positive for ha_asym.")
 
-    Delta_1_T_meV = get_Delta_meV(params.Delta_1_meV, params.T_K)
-    Delta_2_T_meV = get_Delta_meV(params.Delta_2_meV, params.T_K)
+    Delta_1_T_meV = get_DeltaT_meV(params.Delta_1_meV, params.T_K)
+    Delta_2_T_meV = get_DeltaT_meV(params.Delta_2_meV, params.T_K)
     if Delta_1_T_meV == 0.0 and Delta_2_T_meV == 0.0:
         return V_positive_mV * G0_muS * params.tau
 
