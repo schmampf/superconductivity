@@ -7,25 +7,36 @@ from typing import TypeAlias
 
 import numpy as np
 
+from ...utilities.constants import G0_muS
 from ...utilities.types import NDArray64
-from ..basics.noise import apply_voltage_noise, make_bias_support_grid
-from .backend import DEFAULT_E_MV, PAT_N_MAX, Backend, Kernel
+from ..basics.noise import evaluate_with_voltage_noise
+from .backend import Backend, E0_meV, Kernel, Nmax_
 
 _NOISE_OVERSAMPLE = 64
+_G0_uS = float(G0_muS)
 _ModelFunction: TypeAlias = Callable[
-    [NDArray64, NDArray64, float, float, float, float], NDArray64
+    [NDArray64, NDArray64, float, float, float, float, float, float], NDArray64
 ]
+_SWEEP_PARAM_ORDER: tuple[str, ...] = (
+    "GN_G0",
+    "T_K",
+    "Delta_meV",
+    "gamma_meV",
+    "nu_GHz",
+    "A_mV",
+    "sigmaV_mV",
+)
 
 
 def get_Ibcs_nA(
     V_mV: NDArray64,
-    GN_G0: float,
-    T_K: float,
-    Delta_meV: float,
-    gamma_meV: float,
-    nu_GHz: float = 0.0,
+    GN_G0: NDArray64 | float,
+    T_K: NDArray64 | float,
+    Delta_meV: NDArray64 | float,
+    gamma_meV: NDArray64 | float,
+    nu_GHz: NDArray64 | float = 0.0,
     A_mV: NDArray64 | float = 0.0,
-    sigmaV_mV: float = 0.0,
+    sigmaV_mV: NDArray64 | float = 0.0,
     *,
     backend: Backend = "jax",
     kernel: Kernel = "conv",
@@ -63,97 +74,216 @@ def get_Ibcs_nA(
     Returns
     -------
     NDArray64
-        Model current in nA. The return shape is ``(Nv,)`` for scalar
-        ``A_mV`` and ``(Na, Nv)`` for array ``A_mV``.
+        Model current in nA. For all-scalar inputs, shape is ``(Nv,)``.
+        If any sweep input is 1D, output shape is
+        ``(*sweep_shape, Nv)`` with sweep axes ordered by parameter
+        signature.
     """
     V_requested = _validate_voltage_axis(V_mV)
     base_function = _resolve_base_function(kernel=kernel, backend=backend)
-    GN_G0_value = _validate_finite_scalar(GN_G0, "GN_G0")
-    T_K_value = _validate_finite_scalar(T_K, "T_K")
-    Delta_value = _validate_finite_scalar(Delta_meV, "Delta_meV")
-    gamma_value = _validate_finite_scalar(gamma_meV, "gamma_meV")
-    sigma_value = _validate_nonnegative_scalar(sigmaV_mV, "sigmaV_mV")
-    A_values, scalar_amplitude = _normalize_amplitudes(A_mV)
-
-    V_evaluate = (
-        make_bias_support_grid(V_requested, sigma_value)
-        if sigma_value > 0.0
-        else V_requested
+    GN_values, GN_scalar = _normalize_sweep_values(
+        GN_G0,
+        "GN_G0",
+        validator=_validate_finite_scalar,
     )
-    current = np.asarray(
-        base_function(
-            V_evaluate,
-            DEFAULT_E_MV,
-            GN_G0_value,
-            T_K_value,
-            Delta_value,
-            gamma_value,
-        ),
-        dtype=np.float64,
+    T_values, T_scalar = _normalize_sweep_values(
+        T_K,
+        "T_K",
+        validator=_validate_finite_scalar,
+    )
+    Delta_values, Delta_scalar = _normalize_sweep_values(
+        Delta_meV,
+        "Delta_meV",
+        validator=_validate_finite_scalar,
+    )
+    gamma_values, gamma_scalar = _normalize_sweep_values(
+        gamma_meV,
+        "gamma_meV",
+        validator=_validate_finite_scalar,
+    )
+    nu_values, nu_scalar = _normalize_sweep_values(
+        nu_GHz,
+        "nu_GHz",
+        validator=_validate_finite_scalar,
+    )
+    A_values, A_scalar = _normalize_sweep_values(
+        A_mV,
+        "A_mV",
+        validator=_validate_finite_scalar,
+    )
+    sigma_values, sigma_scalar = _normalize_sweep_values(
+        sigmaV_mV,
+        "sigmaV_mV",
+        validator=_validate_nonnegative_scalar,
     )
 
-    if scalar_amplitude:
-        amplitude = float(A_values[0])
-        if amplitude != 0.0:
-            nu_value = _validate_positive_scalar(nu_GHz, "nu_GHz")
-            from .backend.pat import get_I_pat_nA
+    sweep_vectors: dict[str, NDArray64] = {
+        "GN_G0": GN_values,
+        "T_K": T_values,
+        "Delta_meV": Delta_values,
+        "gamma_meV": gamma_values,
+        "nu_GHz": nu_values,
+        "A_mV": A_values,
+        "sigmaV_mV": sigma_values,
+    }
+    scalar_flags: dict[str, bool] = {
+        "GN_G0": GN_scalar,
+        "T_K": T_scalar,
+        "Delta_meV": Delta_scalar,
+        "gamma_meV": gamma_scalar,
+        "nu_GHz": nu_scalar,
+        "A_mV": A_scalar,
+        "sigmaV_mV": sigma_scalar,
+    }
+    sweep_names = [name for name in _SWEEP_PARAM_ORDER if not scalar_flags[name]]
+    sweep_shape = tuple(sweep_vectors[name].size for name in sweep_names)
 
-            current_out: NDArray64 = np.asarray(
-                get_I_pat_nA(
+    base_cache: dict[tuple[float, float, float, float], NDArray64] = {}
+    pat_cache: dict[tuple[float, float, float, float, float, float], NDArray64] = {}
+    noise_cache: dict[
+        tuple[float, float, float, float, float, float, float], NDArray64
+    ] = {}
+
+    if not sweep_names:
+        params = {
+            "GN_G0": float(GN_values[0]),
+            "T_K": float(T_values[0]),
+            "Delta_meV": float(Delta_values[0]),
+            "gamma_meV": float(gamma_values[0]),
+            "nu_GHz": float(nu_values[0]),
+            "A_mV": float(A_values[0]),
+            "sigmaV_mV": float(sigma_values[0]),
+        }
+        non_gn = _evaluate_non_gn_current(
+            V_requested=V_requested,
+            base_function=base_function,
+            T_K_value=params["T_K"],
+            Delta_value=params["Delta_meV"],
+            gamma_value=params["gamma_meV"],
+            nu_value=params["nu_GHz"],
+            A_value=params["A_mV"],
+            sigma_value=params["sigmaV_mV"],
+            base_cache=base_cache,
+            pat_cache=pat_cache,
+            noise_cache=noise_cache,
+        )
+        return np.asarray(non_gn * (params["GN_G0"] * _G0_uS), dtype=np.float64)
+
+    output = np.empty(sweep_shape + (V_requested.size,), dtype=np.float64)
+    for sweep_index in np.ndindex(*sweep_shape):
+        values: dict[str, float] = {}
+        sweep_pos = 0
+        for name in _SWEEP_PARAM_ORDER:
+            if scalar_flags[name]:
+                values[name] = float(sweep_vectors[name][0])
+            else:
+                values[name] = float(sweep_vectors[name][sweep_index[sweep_pos]])
+                sweep_pos += 1
+        non_gn = _evaluate_non_gn_current(
+            V_requested=V_requested,
+            base_function=base_function,
+            T_K_value=values["T_K"],
+            Delta_value=values["Delta_meV"],
+            gamma_value=values["gamma_meV"],
+            nu_value=values["nu_GHz"],
+            A_value=values["A_mV"],
+            sigma_value=values["sigmaV_mV"],
+            base_cache=base_cache,
+            pat_cache=pat_cache,
+            noise_cache=noise_cache,
+        )
+        output[sweep_index] = np.asarray(
+            non_gn * (values["GN_G0"] * _G0_uS),
+            dtype=np.float64,
+        )
+    return output
+
+
+def _evaluate_non_gn_current(
+    *,
+    V_requested: NDArray64,
+    base_function: _ModelFunction,
+    T_K_value: float,
+    Delta_value: float,
+    gamma_value: float,
+    nu_value: float,
+    A_value: float,
+    sigma_value: float,
+    base_cache: dict[tuple[float, float, float, float], NDArray64],
+    pat_cache: dict[tuple[float, float, float, float, float, float], NDArray64],
+    noise_cache: dict[
+        tuple[float, float, float, float, float, float, float], NDArray64
+    ],
+) -> NDArray64:
+    """Evaluate current with GN fixed to 1 for one parameter combination."""
+    base_key = (
+        T_K_value,
+        Delta_value,
+        gamma_value,
+        sigma_value,
+    )
+    pat_key = (
+        T_K_value,
+        Delta_value,
+        gamma_value,
+        sigma_value,
+        A_value,
+        nu_value,
+    )
+
+    def evaluate_pat_on_grid(V_evaluate: NDArray64) -> NDArray64:
+        if base_key not in base_cache:
+            base_cache[base_key] = np.asarray(
+                base_function(
                     V_evaluate,
-                    current,
-                    amplitude,
-                    nu_GHz=nu_value,
-                    n_max=PAT_N_MAX,
+                    E0_meV,
+                    T_K_value,
+                    T_K_value,
+                    Delta_value,
+                    Delta_value,
+                    gamma_value,
+                    gamma_value,
                 ),
                 dtype=np.float64,
             )
-        else:
-            current_out = current
-    else:
-        if np.all(A_values == 0.0):
-            current_out = np.repeat(current[None, :], A_values.size, axis=0)
-        else:
-            nu_value = _validate_positive_scalar(nu_GHz, "nu_GHz")
-            from .backend.pat import get_I_pat_nA
+        base_current = base_cache[base_key]
 
-            current_out = np.asarray(
-                get_I_pat_nA(
-                    V_evaluate,
-                    current,
-                    A_values,
-                    nu_GHz=nu_value,
-                    n_max=PAT_N_MAX,
-                ),
-                dtype=np.float64,
-            )
+        if pat_key not in pat_cache:
+            if A_value == 0.0:
+                pat_cache[pat_key] = base_current
+            else:
+                nu_positive = _validate_positive_scalar(nu_value, "nu_GHz")
+                from .backend.pat import pat_kernel
 
-    if sigma_value == 0.0:
-        return current_out
-    if current_out.ndim == 1:
-        current_smoothed = apply_voltage_noise(
-            V_evaluate,
-            current_out,
+                pat_cache[pat_key] = np.asarray(
+                    pat_kernel(
+                        V_evaluate,
+                        base_current,
+                        A_value,
+                        nu_GHz=nu_positive,
+                        n_max=Nmax_,
+                    ),
+                    dtype=np.float64,
+                )
+        return pat_cache[pat_key]
+
+    noise_key = (
+        T_K_value,
+        Delta_value,
+        gamma_value,
+        sigma_value,
+        A_value,
+        nu_value,
+        float(V_requested.size),
+    )
+    if noise_key not in noise_cache:
+        noise_cache[noise_key] = evaluate_with_voltage_noise(
+            V_requested,
+            evaluate_pat_on_grid,
             sigma_value,
             _NOISE_OVERSAMPLE,
         )
-        return np.asarray(np.interp(V_requested, V_evaluate, current_smoothed), dtype=np.float64)
-    return np.asarray(
-        [
-            np.interp(
-                V_requested,
-                V_evaluate,
-                apply_voltage_noise(
-                    V_evaluate,
-                    row,
-                    sigma_value,
-                    _NOISE_OVERSAMPLE,
-                ),
-            )
-            for row in current_out
-        ],
-        dtype=np.float64,
-    )
+    return noise_cache[noise_key]
 
 
 def _resolve_base_function(*, kernel: Kernel, backend: Backend) -> _ModelFunction:
@@ -162,27 +292,32 @@ def _resolve_base_function(*, kernel: Kernel, backend: Backend) -> _ModelFunctio
 
         return integral_np if kernel == "int" else convolution_np
     if backend == "jax":
-        from .backend.jax import convolution_jax, integral_jax
+        from .backend.jnp import convolution_jnp, integral_jnp
 
-        return integral_jax if kernel == "int" else convolution_jax
+        return integral_jnp if kernel == "int" else convolution_jnp
     raise ValueError(
         "backend must be 'np' or 'jax' and kernel must be 'int' or 'conv'."
     )
 
 
-def _normalize_amplitudes(A_mV: NDArray64 | float) -> tuple[NDArray64, bool]:
-    values = np.asarray(A_mV, dtype=np.float64)
+def _normalize_sweep_values(
+    value: NDArray64 | float,
+    name: str,
+    *,
+    validator: Callable[[float, str], float],
+) -> tuple[NDArray64, bool]:
+    values = np.asarray(value, dtype=np.float64)
     if values.ndim == 0:
-        if not np.isfinite(values):
-            raise ValueError("A_mV must be finite.")
-        return np.asarray([float(values)], dtype=np.float64), True
+        return np.asarray([validator(float(values), name)], dtype=np.float64), True
     if values.ndim != 1:
-        raise ValueError("A_mV must be a scalar or a 1D array.")
+        raise ValueError(f"{name} must be a scalar or a 1D array.")
     if values.size == 0:
-        raise ValueError("A_mV must not be empty.")
-    if not np.all(np.isfinite(values)):
-        raise ValueError("A_mV must be finite.")
-    return np.asarray(values, dtype=np.float64), False
+        raise ValueError(f"{name} must not be empty.")
+    validated = np.asarray(
+        [validator(float(item), name) for item in values],
+        dtype=np.float64,
+    )
+    return validated, False
 
 
 def _validate_voltage_axis(V_mV: NDArray64) -> NDArray64:
@@ -219,8 +354,11 @@ def _validate_positive_scalar(value: float, name: str) -> float:
     return scalar
 
 
+from .sim import sim_bcs
+
 __all__ = [
     "Backend",
     "Kernel",
     "get_Ibcs_nA",
+    "sim_bcs",
 ]

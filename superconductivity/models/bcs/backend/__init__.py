@@ -9,12 +9,12 @@ import numpy as np
 Backend = Literal["np", "jax"]
 Kernel = Literal["int", "conv"]
 
-DEFAULT_E_MV = np.linspace(-4.0, 4.0, 4001, dtype=np.float64)
-PAT_N_MAX = 50
+E0_meV = np.linspace(-4.0, 4.0, 4001, dtype=np.float64)
+Nmax_ = 50
 
 __all__ = [
     "Backend",
     "Kernel",
-    "DEFAULT_E_MV",
-    "PAT_N_MAX",
+    "E0_meV",
+    "Nmax_",
 ]

@@ -14,9 +14,9 @@ from ....utilities.legacy.functions_jax import get_dydx, jinterp_y_of_x
 from ....utilities.types import JInterpolator, JNDArray, NDArray64
 
 
-def get_I_pat_nA(
+def pat_kernel(
     V_mV: NDArray64,
-    I_nA: NDArray64,
+    I_: NDArray64,
     A_mV: NDArray64 | float,
     nu_GHz: float = 10.0,
     n_max: int = 100,
@@ -29,8 +29,8 @@ def get_I_pat_nA(
     ----------
     V_mV
         Bias-voltage grid in mV.
-    I_nA
-        Base current on ``V_mV`` in nA.
+    I_
+        Base current on ``V_mV``.
     A_mV
         Drive amplitude in mV. A scalar returns a 1D trace; a 1D array returns
         one trace per amplitude.
@@ -49,7 +49,7 @@ def get_I_pat_nA(
         PAT-transformed current trace(s).
     """
     V_mV = np.asarray(V_mV, dtype=np.float64)
-    I_nA = np.asarray(I_nA, dtype=np.float64)
+    I_ = np.asarray(I_, dtype=np.float64)
 
     A_mV_arr = np.asarray(A_mV, dtype=np.float64)
     scalar_A = A_mV_arr.ndim == 0
@@ -59,8 +59,8 @@ def get_I_pat_nA(
     a_m: NDArray64 = m * A_mV_1d / nu_mV
     n = np.arange(-n_max, n_max + 1, dtype=np.int32)
 
-    GN_G0_muS = np.mean(np.stack(get_dydx(x=V_mV, y=I_nA)), axis=0)
-    I_i_nA: JInterpolator = jinterp_y_of_x(x=V_mV, y=I_nA, dydx=GN_G0_muS)
+    dIdV_ = np.mean(np.stack(get_dydx(x=V_mV, y=I_)), axis=0)
+    I_interp: JInterpolator = jinterp_y_of_x(x=V_mV, y=I_, dydx=dIdV_)
 
     V_nm_mV: NDArray64 = (n / m) * nu_mV
 
@@ -76,7 +76,7 @@ def get_I_pat_nA(
         V_mV=jnp.asarray(V_mV, dtype=jnp.float64),
         V_nm_mV=jnp.asarray(V_nm_mV, dtype=jnp.float64),
         J_n_pow=jnp.asarray(J_n_pow, dtype=jnp.float64),
-        I_i_nA=I_i_nA,
+        I_interp=I_interp,
     )
     I_pat = np.asarray(I_pat_j, dtype=np.float64)
     if scalar_A:
@@ -84,17 +84,17 @@ def get_I_pat_nA(
     return I_pat
 
 
-@partial(jax.jit, static_argnames=("I_i_nA",))
+@partial(jax.jit, static_argnames=("I_interp",))
 def _pat_kernel(
     V_mV: JNDArray,
     V_nm_mV: JNDArray,
     J_n_pow: JNDArray,
-    I_i_nA: JInterpolator,
+    I_interp: JInterpolator,
 ) -> JNDArray:
     """Evaluate the PAT sideband sum."""
     V_shift_mV: JNDArray = V_mV[None, :] - V_nm_mV[:, None]
-    I_shift_nA: JNDArray = I_i_nA(V_shift_mV)
-    return jnp.einsum("na,nv->av", J_n_pow, I_shift_nA)
+    I_shift: JNDArray = I_interp(V_shift_mV)
+    return jnp.einsum("na,nv->av", J_n_pow, I_shift)
 
 
-__all__ = ["get_I_pat_nA"]
+__all__ = ["pat_kernel"]

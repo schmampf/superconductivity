@@ -4,161 +4,130 @@ from __future__ import annotations
 
 import numpy as np
 
-from ....utilities.constants import G0_muS
 from ....utilities.types import NDArray64
-from ...basics import get_Delta_meV, get_dos, get_f
-
-_G0 = float(G0_muS)
+from ...basics import get_DeltaT_meV, get_dos, get_f
 
 
-def integral_current_np(
+def integral_np(
     V_mV: NDArray64,
-    E_mV: NDArray64,
-    *,
-    GN_G0: float,
-    T_K: float,
-    Delta_1_meV: float,
-    Delta_2_meV: float,
-    gamma_1_meV: float,
-    gamma_2_meV: float,
+    E_meV: NDArray64,
+    T1_K: float,
+    T2_K: float,
+    Delta1_meV: float,
+    Delta2_meV: float,
+    gamma1_meV: float,
+    gamma2_meV: float,
 ) -> NDArray64:
-    """Evaluate the direct SIS tunneling integral on ``V_mV``."""
-    delta_1 = get_Delta_meV(Delta_1_meV, T_K)
-    delta_2 = get_Delta_meV(Delta_2_meV, T_K)
-    ohmic = np.asarray(V_mV, dtype=np.float64) * (float(GN_G0) * _G0)
-    if delta_1 == 0.0 and delta_2 == 0.0:
-        return ohmic
+    """Evaluate the two-lead SIS integral model with unit conductance."""
+    DeltaT1_meV = get_DeltaT_meV(Delta1_meV, T1_K)
+    DeltaT2_meV = get_DeltaT_meV(Delta2_meV, T2_K)
+    V0_mV = np.asarray(V_mV, dtype=np.float64)
+    if DeltaT1_meV == 0.0 and DeltaT2_meV == 0.0:
+        return V0_mV
 
-    V = np.asarray(V_mV, dtype=np.float64)[:, None]
-    E = np.asarray(E_mV, dtype=np.float64)[None, :]
-    E_1 = E - V / 2.0
-    E_2 = E + V / 2.0
+    Vgrid_mV = np.asarray(V_mV, dtype=np.float64)[:, None]
+    Egrid_meV = np.asarray(E_meV, dtype=np.float64)[None, :]
+    E1_meV = Egrid_meV - Vgrid_mV / 2.0
+    E2_meV = Egrid_meV + Vgrid_mV / 2.0
 
-    dos_1 = get_dos(E_1, delta_1, gamma_1_meV)
-    dos_2 = get_dos(E_2, delta_2, gamma_2_meV)
-    f_1 = get_f(E_1, T_K)
-    f_2 = get_f(E_2, T_K)
-    integrand = dos_1 * dos_2 * (f_1 - f_2)
-    current_meV = np.trapezoid(integrand, np.asarray(E_mV, dtype=np.float64), axis=1)
-    return current_meV * (float(GN_G0) * _G0)
+    dos1 = get_dos(E1_meV, DeltaT1_meV, gamma1_meV)
+    dos2 = get_dos(E2_meV, DeltaT2_meV, gamma2_meV)
+    f1 = get_f(E1_meV, T1_K)
+    f2 = get_f(E2_meV, T2_K)
+    integrand = dos1 * dos2 * (f1 - f2)
+    return np.trapezoid(integrand, np.asarray(E_meV, dtype=np.float64), axis=1)
 
 
 def convolution_spectrum_np(
-    E_mV: NDArray64,
-    *,
-    GN_G0: float,
-    T_K: float,
-    Delta_1_meV: float,
-    Delta_2_meV: float,
-    gamma_1_meV: float,
-    gamma_2_meV: float,
+    E_meV: NDArray64,
+    T1_K: float,
+    T2_K: float,
+    Delta1_meV: float,
+    Delta2_meV: float,
+    gamma1_meV: float,
+    gamma2_meV: float,
 ) -> NDArray64:
-    """Build the convolution spectrum on the energy grid ``E_mV``."""
-    delta_1 = get_Delta_meV(Delta_1_meV, T_K)
-    delta_2 = get_Delta_meV(Delta_2_meV, T_K)
-    dos_1 = get_dos(np.asarray(E_mV, dtype=np.float64), delta_1, gamma_1_meV)
-    dos_2 = get_dos(np.asarray(E_mV, dtype=np.float64), delta_2, gamma_2_meV)
-    f = get_f(np.asarray(E_mV, dtype=np.float64), T_K)
-    occupied_1 = dos_1 * f
-    occupied_2 = dos_2 * f
-    empty_1 = dos_1 * (1.0 - f)
-    empty_2 = dos_2 * (1.0 - f)
-    dE = float(
-        np.asarray(E_mV, dtype=np.float64)[1] - np.asarray(E_mV, dtype=np.float64)[0]
-    )
-    forward = np.correlate(empty_2, occupied_1, mode="full") * dE
-    backward = np.correlate(occupied_2, empty_1, mode="full") * dE
-    return (forward - backward) * (float(GN_G0) * _G0)
+    """Build the convolution spectrum on the energy grid ``E_meV``."""
+    Egrid_meV = np.asarray(E_meV, dtype=np.float64)
+    DeltaT1_meV = get_DeltaT_meV(Delta1_meV, T1_K)
+    DeltaT2_meV = get_DeltaT_meV(Delta2_meV, T2_K)
+    dos1 = get_dos(Egrid_meV, DeltaT1_meV, gamma1_meV)
+    dos2 = get_dos(Egrid_meV, DeltaT2_meV, gamma2_meV)
+    occupied1 = dos1 * get_f(Egrid_meV, T1_K)
+    occupied2 = dos2 * get_f(Egrid_meV, T2_K)
+    empty1 = dos1 * (1.0 - get_f(Egrid_meV, T1_K))
+    empty2 = dos2 * (1.0 - get_f(Egrid_meV, T2_K))
+    dE_meV = float(Egrid_meV[1] - Egrid_meV[0])
+    forward = np.correlate(empty2, occupied1, mode="full") * dE_meV
+    backward = np.correlate(occupied2, empty1, mode="full") * dE_meV
+    return forward - backward
 
 
-def interpolate_convolution_trace_np(
+def interpolate_convolution_np(
     V_mV: NDArray64,
-    E_mV: NDArray64,
-    current_nA: NDArray64,
-    *,
-    GN_G0: float,
+    E_meV: NDArray64,
+    I_mV: NDArray64,
 ) -> NDArray64:
     """Interpolate the convolution spectrum back onto the requested bias grid."""
-    step = float(
-        np.asarray(E_mV, dtype=np.float64)[1] - np.asarray(E_mV, dtype=np.float64)[0]
-    )
-    current_axis = (
+    V_mV = np.asarray(V_mV, dtype=np.float64)
+    Egrid_meV = np.asarray(E_meV, dtype=np.float64)
+    dE_meV = float(Egrid_meV[1] - Egrid_meV[0])
+    Egrid_meV = (
         np.arange(
-            -(np.asarray(E_mV, dtype=np.float64).size - 1),
-            np.asarray(E_mV, dtype=np.float64).size,
+            -(Egrid_meV.size - 1),
+            Egrid_meV.size,
             dtype=np.float64,
         )
-        * step
+        * dE_meV
     )
-    ohmic = np.asarray(V_mV, dtype=np.float64) * (float(GN_G0) * _G0)
     result = np.interp(
-        np.asarray(V_mV, dtype=np.float64),
-        current_axis,
-        np.asarray(current_nA, dtype=np.float64),
+        V_mV,
+        Egrid_meV,
+        np.asarray(I_mV, dtype=np.float64),
         left=np.nan,
         right=np.nan,
     )
     invalid = ~np.isfinite(result)
     if np.any(invalid):
-        result[invalid] = ohmic[invalid]
+        result[invalid] = V_mV[invalid]
     return result
-
-
-def integral_np(
-    V_mV: NDArray64,
-    E_mV: NDArray64,
-    GN_G0: float,
-    T_K: float,
-    Delta_meV: float,
-    gamma_meV: float,
-) -> NDArray64:
-    """Evaluate the symmetric SIS integral model."""
-    return integral_current_np(
-        V_mV=V_mV,
-        E_mV=E_mV,
-        GN_G0=GN_G0,
-        T_K=T_K,
-        Delta_1_meV=Delta_meV,
-        Delta_2_meV=Delta_meV,
-        gamma_1_meV=gamma_meV,
-        gamma_2_meV=gamma_meV,
-    )
 
 
 def convolution_np(
     V_mV: NDArray64,
-    E_mV: NDArray64,
-    GN_G0: float,
-    T_K: float,
-    Delta_meV: float,
-    gamma_meV: float,
+    E_meV: NDArray64,
+    T1_K: float,
+    T2_K: float,
+    Delta1_meV: float,
+    Delta2_meV: float,
+    gamma1_meV: float,
+    gamma2_meV: float,
 ) -> NDArray64:
-    """Evaluate the symmetric SIS convolution model."""
-    delta_meV = get_Delta_meV(Delta_meV, T_K)
-    if delta_meV == 0.0:
-        return np.asarray(V_mV, dtype=np.float64) * (float(GN_G0) * _G0)
+    """Evaluate the two-lead SIS convolution model with unit conductance."""
+    DeltaT1_meV = get_DeltaT_meV(Delta1_meV, T1_K)
+    DeltaT2_meV = get_DeltaT_meV(Delta2_meV, T2_K)
+    if DeltaT1_meV == 0.0 and DeltaT2_meV == 0.0:
+        return np.asarray(V_mV, dtype=np.float64)
 
-    current_nA = convolution_spectrum_np(
-        np.asarray(E_mV, dtype=np.float64),
-        GN_G0=GN_G0,
-        T_K=T_K,
-        Delta_1_meV=Delta_meV,
-        Delta_2_meV=Delta_meV,
-        gamma_1_meV=gamma_meV,
-        gamma_2_meV=gamma_meV,
+    I_mV = convolution_spectrum_np(
+        np.asarray(E_meV, dtype=np.float64),
+        T1_K=T1_K,
+        T2_K=T2_K,
+        Delta1_meV=Delta1_meV,
+        Delta2_meV=Delta2_meV,
+        gamma1_meV=gamma1_meV,
+        gamma2_meV=gamma2_meV,
     )
-    return interpolate_convolution_trace_np(
+    return interpolate_convolution_np(
         V_mV,
-        E_mV,
-        current_nA,
-        GN_G0=GN_G0,
+        E_meV,
+        I_mV,
     )
 
 
 __all__ = [
     "convolution_np",
     "convolution_spectrum_np",
-    "integral_current_np",
     "integral_np",
-    "interpolate_convolution_trace_np",
+    "interpolate_convolution_np",
 ]

@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
-from .bcs import Backend, Kernel, get_Ibcs_nA
+from .bcs import Backend, Kernel, get_Ibcs_nA, sim_bcs
 
 
-def get_I_pat_nA(*args, **kwargs):
+def pat_kernel(*args, **kwargs):
     """Lazily import the PAT helper so BCS-only imports stay lightweight."""
-    from .backend.pat import get_I_pat_nA as _get_I_pat_nA
+    from .backend.pat import pat_kernel as _pat_kernel
 
-    return _get_I_pat_nA(*args, **kwargs)
+    return _pat_kernel(*args, **kwargs)
 
 __all__ = [
     "Backend",
     "Kernel",
-    "get_I_pat_nA",
+    "pat_kernel",
     "get_Ibcs_nA",
+    "sim_bcs",
 ]
