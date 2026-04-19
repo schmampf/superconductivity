@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 
 from ...utilities.safety import (
@@ -110,6 +112,55 @@ def apply_voltage_noise(
     return np.convolve(I_padded, kernel, mode="valid")
 
 
+def evaluate_with_voltage_noise(
+    V_mV: NDArray64,
+    evaluator: Callable[[NDArray64], NDArray64],
+    sigmaV_mV: float,
+    order: int,
+) -> NDArray64:
+    """Evaluate one theory curve with optional noise on the requested grid.
+
+    Parameters
+    ----------
+    V_mV
+        Requested voltage grid in mV.
+    evaluator
+        Callable that evaluates the theory current on the grid it receives.
+        It must return one current array with the same shape as its input.
+    sigmaV_mV
+        Standard deviation of the voltage fluctuations in mV.
+    order
+        Kernel resolution hint forwarded to :func:`apply_voltage_noise`.
+
+    Returns
+    -------
+    NDArray64
+        Mean current on the originally requested grid ``V_mV``.
+    """
+    V_requested = _validate_curve_inputs(
+        V_mV,
+        np.zeros_like(V_mV, dtype=np.float64),
+    )[0]
+    sigma_V = _validate_sigma(sigmaV_mV, "sigmaV_mV")
+
+    if sigma_V == 0.0:
+        return _validate_curve_inputs(
+            V_requested,
+            np.asarray(evaluator(V_requested), dtype=np.float64),
+        )[1]
+
+    V_support = make_bias_support_grid(V_requested, sigma_V)
+    I_support = _validate_curve_inputs(
+        V_support,
+        np.asarray(evaluator(V_support), dtype=np.float64),
+    )[1]
+    I_smoothed = apply_voltage_noise(V_support, I_support, sigma_V, order)
+    return np.asarray(
+        np.interp(V_requested, V_support, I_smoothed),
+        dtype=np.float64,
+    )
+
+
 def _apply_voltage_noise_general(
     V_mV: NDArray64,
     I_nA: NDArray64,
@@ -153,5 +204,6 @@ def _validate_sigma(value: float, name: str) -> float:
 
 __all__ = [
     "apply_voltage_noise",
+    "evaluate_with_voltage_noise",
     "make_bias_support_grid",
 ]
