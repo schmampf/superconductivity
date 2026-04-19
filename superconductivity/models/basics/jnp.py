@@ -16,7 +16,7 @@ _CONST_174 = jnp.array(1.74, dtype=jnp.float64)
 
 
 @jax.jit
-def get_T_c_jnp_K(Delta_meV: JNDArray) -> JNDArray:
+def get_Tc_K_jnp(Delta_meV: JNDArray) -> JNDArray:
     """Estimate the BCS critical temperature from a gap.
 
     Parameters
@@ -33,7 +33,7 @@ def get_T_c_jnp_K(Delta_meV: JNDArray) -> JNDArray:
 
 
 @jax.jit
-def get_Delta_jnp_meV(Delta_meV: JNDArray, T_K: JNDArray) -> JNDArray:
+def get_DeltaT_meV_jnp(Delta_meV: JNDArray, T_K: JNDArray) -> JNDArray:
     """Return the weak-coupling BCS gap at temperature ``T_K``.
 
     Parameters
@@ -48,7 +48,7 @@ def get_Delta_jnp_meV(Delta_meV: JNDArray, T_K: JNDArray) -> JNDArray:
     JNDArray
         Thermal gap ``Delta(T)`` in meV.
     """
-    T_c_K = get_T_c_jnp_K(Delta_meV)
+    T_c_K = get_Tc_K_jnp(Delta_meV)
     safe_T_K = jnp.where(T_K == 0.0, 1.0, T_K)
     thermal_delta = Delta_meV * jnp.tanh(
         _CONST_174 * jnp.sqrt(jnp.maximum(T_c_K / safe_T_K - 1.0, 0.0))
@@ -121,8 +121,8 @@ def get_dos_jnp(
 
 
 __all__ = [
-    "get_T_c_jnp_K",
-    "get_Delta_jnp_meV",
+    "get_Tc_K_jnp",
+    "get_DeltaT_meV_jnp",
     "get_f_jnp",
     "get_dos_jnp",
 ]

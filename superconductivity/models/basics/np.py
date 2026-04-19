@@ -8,7 +8,7 @@ from ...utilities.constants import kB_meV_K
 from ...utilities.types import NDArray64
 
 
-def get_T_c_K(Delta_meV: float = 0.18) -> float:
+def get_Tc_K(Delta_meV: float = 0.18) -> float:
     """Estimate the BCS critical temperature from a zero-temperature gap.
 
     Parameters
@@ -24,7 +24,7 @@ def get_T_c_K(Delta_meV: float = 0.18) -> float:
     return float(Delta_meV) / (1.764 * float(kB_meV_K))
 
 
-def get_Delta_meV(Delta_meV: float, T_K: float) -> float:
+def get_DeltaT_meV(Delta_meV: float, T_K: float) -> float:
     """Return the weak-coupling BCS gap at temperature ``T_K``.
 
     Parameters
@@ -48,7 +48,7 @@ def get_Delta_meV(Delta_meV: float, T_K: float) -> float:
     if temperature == 0.0:
         return delta_0
 
-    T_c_K = get_T_c_K(delta_0)
+    T_c_K = get_Tc_K(delta_0)
     if temperature >= T_c_K:
         return 0.0
     return delta_0 * np.tanh(1.74 * np.sqrt(T_c_K / temperature - 1.0))
@@ -116,8 +116,8 @@ def get_dos(E_meV: NDArray64, Delta_meV: float, gamma_meV: float) -> NDArray64:
 
 
 __all__ = [
-    "get_T_c_K",
-    "get_Delta_meV",
+    "get_Tc_K",
+    "get_DeltaT_meV",
     "get_f",
     "get_dos",
 ]

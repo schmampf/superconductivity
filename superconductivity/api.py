@@ -57,8 +57,8 @@ from .evaluation.traces import (
 )
 
 # imports from BCS basics / tunneling
-from .models.basics import get_Delta_meV, get_dos, get_f, get_T_c_K
-from .models.bcs import get_I_pat_nA, get_Ibcs_nA
+from .models.basics import get_DeltaT_meV, get_dos, get_f, get_Tc_K
+from .models.bcs import get_Ibcs_nA, pat_kernel, sim_bcs
 
 # imports from btk
 from .models.mar import get_AB_btk, get_I_btk_nA, get_I_fcs_nA, get_I_ha_asym_nA
