@@ -55,12 +55,15 @@ class GUILeftMixin:
     def _y_axis_html_label(self) -> str:
         keys = getattr(self, "_keys", None)
         if keys is not None:
-            html_label = getattr(keys, "html_label", None)
+            spec = getattr(keys, "_spec", None)
+            label_spec = None if spec is None else getattr(spec, "label", None)
+            html_label = None if label_spec is None else label_spec.html_label
             if isinstance(html_label, str) and html_label.strip() != "":
                 return html_label
         keysspec = getattr(self, "_keysspec", None)
         if keysspec is not None:
-            html_label = getattr(keysspec, "html_label", None)
+            label_spec = getattr(keysspec, "label", None)
+            html_label = None if label_spec is None else label_spec.html_label
             if isinstance(html_label, str) and html_label.strip() != "":
                 return html_label
         return "y"
@@ -782,14 +785,14 @@ class GUILeftMixin:
         fit_style = gui_trace_style("fit")
         cutoff_style = gui_trace_style("cutoff")["line"]
         if kind == "G":
-            x = np.asarray(self._offset_spec.Voff_mV, dtype=np.float64)
+            x = np.asarray(self._offset_spec.Voff_mV.values, dtype=np.float64)
             y = np.asarray(offset["dGerr_G0"], dtype=np.float64)
             vline = float(offset["Voff_mV"])
             xlabel = "<i>V</i><sub>off</sub> (mV)"
             ylabel_top = "<i>dG</i><sub>err</sub> / <i>G</i><sub>0</sub>"
             batch_kind = "V"
         else:
-            x = np.asarray(self._offset_spec.Ioff_nA, dtype=np.float64)
+            x = np.asarray(self._offset_spec.Ioff_nA.values, dtype=np.float64)
             y = np.asarray(offset["dRerr_R0"], dtype=np.float64)
             vline = float(offset["Ioff_nA"])
             xlabel = "<i>I</i><sub>off</sub> (nA)"
@@ -1005,9 +1008,9 @@ class GUILeftMixin:
 
     def _offset_batch_y_range(self, *, kind: str) -> list[float]:
         values = (
-            np.asarray(self._offset_spec.Voff_mV, dtype=np.float64)
+            np.asarray(self._offset_spec.Voff_mV.values, dtype=np.float64)
             if kind == "V"
-            else np.asarray(self._offset_spec.Ioff_nA, dtype=np.float64)
+            else np.asarray(self._offset_spec.Ioff_nA.values, dtype=np.float64)
         )
         return self._padded_axis_range(values)
 
@@ -1239,7 +1242,7 @@ class GUILeftMixin:
     def _refresh_offset_views(self) -> None:
         offset = self._display_offset()
         self._offset_g_figure.data[0].x = np.asarray(
-            self._offset_spec.Voff_mV,
+            self._offset_spec.Voff_mV.values,
             dtype=np.float64,
         )
         self._offset_g_figure.layout.shapes = ()
@@ -1281,7 +1284,7 @@ class GUILeftMixin:
         )
 
         self._offset_r_figure.data[0].x = np.asarray(
-            self._offset_spec.Ioff_nA,
+            self._offset_spec.Ioff_nA.values,
             dtype=np.float64,
         )
         self._offset_r_figure.layout.shapes = ()

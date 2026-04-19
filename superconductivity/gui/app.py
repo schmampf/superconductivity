@@ -390,7 +390,7 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
             )
         if offsetspec is None:
             return _default_offset_spec(self._shared_nu_Hz)
-        return replace(offsetspec)
+        return offsetspec
 
     def _init_psd_stage_state(self) -> None:
         self._psd_stage_spec: PSDSpec | None = None

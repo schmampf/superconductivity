@@ -21,6 +21,7 @@ from ...evaluation.traces import (
     get_keys,
     get_traces,
 )
+from ...utilities.meta.label import LabelSpec
 from ..state import _trace_label
 
 _TRACES_TABLE_TITLES = {
@@ -50,7 +51,6 @@ _KEYS_PARAMETER_LABELS = {
     "add_key": "add_key",
     "norm": "norm",
     "label": "label",
-    "html_label": "html_label",
     "limits": "limits",
 }
 _TRACE_PARAMETER_LABELS = {
@@ -548,13 +548,10 @@ class GUIMeasurementTabMixin:
                 {
                     "key": "label",
                     "parameter": _KEYS_PARAMETER_LABELS["label"],
-                    "value": _trace_table_value(None if spec is None else spec.label),
-                },
-                {
-                    "key": "html_label",
-                    "parameter": _KEYS_PARAMETER_LABELS["html_label"],
                     "value": _trace_table_value(
-                        None if spec is None else spec.html_label,
+                        None if spec is None
+                        else None if spec.label is None
+                        else spec.label.print_label,
                     ),
                 },
                 {
@@ -580,7 +577,7 @@ class GUIMeasurementTabMixin:
         else:
             text = None
 
-        if key in {"strip0", "strip1", "label", "html_label"}:
+        if key in {"strip0", "strip1", "label"}:
             if text is None:
                 return value
             return text
@@ -616,7 +613,14 @@ class GUIMeasurementTabMixin:
             )
             if key == "strip0":
                 values[key] = "" if parsed is None else str(parsed)
-            elif key in {"strip1", "label", "html_label"}:
+            elif key == "label":
+                values[key] = None if parsed is None else LabelSpec(
+                    code_label=str(parsed),
+                    print_label=str(parsed),
+                    html_label=str(parsed),
+                    latex_label=str(parsed),
+                )
+            elif key == "strip1":
                 values[key] = None if parsed is None else str(parsed)
             else:
                 values[key] = parsed
@@ -951,7 +955,16 @@ class GUIMeasurementTabMixin:
         parsed = self._parse_keysspec_value(key=key, value=value)
         if key == "strip0":
             return "" if parsed is None else str(parsed)
-        if key in {"strip1", "label", "html_label"}:
+        if key == "label":
+            if parsed is None:
+                return None
+            return LabelSpec(
+                code_label=str(parsed),
+                print_label=str(parsed),
+                html_label=str(parsed),
+                latex_label=str(parsed),
+            )
+        if key == "strip1":
             return None if parsed is None else str(parsed)
         return parsed
 
