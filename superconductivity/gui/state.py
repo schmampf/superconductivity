@@ -41,7 +41,7 @@ def _default_offset_spec(nu_Hz: float) -> OffsetSpec:
         Voff_mV=np.linspace(-0.045, 0.045, 451, dtype=np.float64),
         Ioff_nA=np.linspace(-0.35, 0.35, 701, dtype=np.float64),
         nu_Hz=float(nu_Hz),
-        upsample=10,
+        N_up=10,
     )
 
 
