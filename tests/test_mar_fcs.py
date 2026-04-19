@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from superconductivity.models.basics import get_Delta_meV
+from superconductivity.models.basics import get_DeltaT_meV
 from superconductivity.models.mar import fcs as mar_fcs
 from superconductivity.models.mar.core import FCSParams, load_curve
 from superconductivity.utilities.constants import kB_meV_K
@@ -60,8 +60,8 @@ def test_fcs_direct_path_works_without_cache(monkeypatch) -> None:
 
     assert captured["trans_in"] == 0.4
     assert captured["temp_in"] == pytest.approx(kB_meV_K * T_K)
-    assert captured["delta1_T_in"] == pytest.approx(get_Delta_meV(Delta_1_meV, T_K))
-    assert captured["delta2_T_in"] == pytest.approx(get_Delta_meV(Delta_2_meV, T_K))
+    assert captured["delta1_T_in"] == pytest.approx(get_DeltaT_meV(Delta_1_meV, T_K))
+    assert captured["delta2_T_in"] == pytest.approx(get_DeltaT_meV(Delta_2_meV, T_K))
     assert captured["eta1_in"] == pytest.approx(gamma_1_meV)
     assert captured["eta2_in"] == pytest.approx(gamma_2_meV)
     np.testing.assert_allclose(

@@ -25,6 +25,10 @@ from superconductivity.evaluation.traces import (
     Traces,
     TraceSpec,
 )
+from superconductivity.utilities.meta.axis import AxisSpec
+from superconductivity.utilities.meta.param import ParamSpec
+from superconductivity.utilities.meta.label import LabelSpec
+from superconductivity.utilities.meta.param import param
 from superconductivity.gui import GUIPanel, gui, gui_app
 
 gui_mod = importlib.import_module("superconductivity.gui.app")
@@ -274,14 +278,14 @@ def test_gui_app_builds_without_server() -> None:
     assert panel._offset_info_table.titles["parameter"] == "Parameter"
     assert panel._offset_info_table.titles["value"] == "Value"
     assert offset_info_rows.at["nu_Hz", "parameter"] == "<i>&nu;</i> (Hz)"
-    assert offset_info_rows.at["upsample", "parameter"] == ("<i>N</i><sub>up</sub>")
+    assert offset_info_rows.at["N_up", "parameter"] == ("<i>N</i><sub>up</sub>")
     assert offset_info_rows.at["Voff_mV", "parameter"] == (
         "<i>V</i><sub>off</sub> (mV)"
     )
     assert offset_info_rows.at["Ioff_nA", "parameter"] == (
         "<i>I</i><sub>off</sub> (nA)"
     )
-    assert isinstance(offset_info_rows.at["upsample", "value"], int)
+    assert isinstance(offset_info_rows.at["N_up", "value"], int)
     assert panel._offset_grid_table.value.iloc[0]["parameter"] == (
         "<i>V</i><sub>bins</sub> (mV)"
     )
@@ -396,8 +400,12 @@ def test_gui_app_accepts_spec_presets() -> None:
     )
     keysspec = KeysSpec(
         strip0="=",
-        label="Power",
-        html_label="<i>P</i>",
+        label=LabelSpec(
+            code_label="Power",
+            print_label="Power",
+            html_label="<i>P</i>",
+            latex_label="P",
+        ),
     )
     tracespec = TraceSpec(
         amp_voltage=2.0,
@@ -414,10 +422,10 @@ def test_gui_app_accepts_spec_presets() -> None:
     offset_spec = OffsetSpec(
         Vbins_mV=np.linspace(-0.3, 0.3, 31, dtype=np.float64),
         Ibins_nA=np.linspace(-4.0, 4.0, 81, dtype=np.float64),
-        Voff_mV=np.linspace(-0.02, 0.02, 21, dtype=np.float64),
-        Ioff_nA=np.linspace(-0.15, 0.15, 31, dtype=np.float64),
+        Voff_mV=np.linspace(-0.4, 0.4, 41, dtype=np.float64),
+        Ioff_nA=np.linspace(-0.3, 0.3, 31, dtype=np.float64),
         nu_Hz=11.0,
-        upsample=7,
+        N_up=7,
     )
     sampling_spec = SamplingSpec(
         N_up=6,
@@ -457,7 +465,6 @@ def test_gui_app_accepts_spec_presets() -> None:
     assert filespec_rows.at["measurement", "value"] == "measurement_a"
     assert keysspec_rows.at["strip0", "value"] == "="
     assert keysspec_rows.at["label", "value"] == "Power"
-    assert keysspec_rows.at["html_label", "value"] == "<i>P</i>"
     assert panel._keys_table.titles["yvalue"] == "Value"
     assert tracespec_rows.at["amp_voltage", "value"] == pytest.approx(2.0)
     assert tracespec_rows.at["amp_current", "value"] == pytest.approx(3.0)
@@ -466,7 +473,7 @@ def test_gui_app_accepts_spec_presets() -> None:
     assert panel._experimental_detrend is psd_spec.detrend
     assert experimental_setting_rows.at["detrend", "value"] is False
     assert offset_rows.at["nu_Hz", "value"] == pytest.approx(11.0)
-    assert offset_rows.at["upsample", "value"] == 7
+    assert offset_rows.at["N_up", "value"] == 7
     assert np.isfinite(float(offset_rows.at["Voff_mV", "value"]))
     assert np.isfinite(float(offset_rows.at["Ioff_nA", "value"]))
     assert sampling_rows.at["nu_Hz", "value"] == pytest.approx(sampling_spec.nu_Hz)
@@ -774,7 +781,6 @@ def test_traces_tab_keysspec_table_is_editable() -> None:
     assert rows.at["remove_key", "value"] == "no_irradiation"
     assert rows.at["norm", "value"] == "1000"
     assert rows.at["label", "value"] == "Aout_mV"
-    assert rows.at["html_label", "value"] == "<i>A</i>"
     assert panel._keys_table.titles["yvalue"] == "Value"
 
 
@@ -794,7 +800,15 @@ def test_traces_tab_keysspec_edit_does_not_auto_update_keys_and_traces(
         specific_keys=["mode=alpha", "mode=beta"],
         indices=np.asarray([0, 1], dtype=np.int64),
         yvalues=np.asarray(["alpha", "beta"], dtype=object),
-        spec=KeysSpec(strip0="=", label="mode"),
+        spec=KeysSpec(
+            strip0="=",
+            label=LabelSpec(
+                code_label="mode",
+                print_label="mode",
+                html_label="mode",
+                latex_label="mode",
+            ),
+        ),
     )
     loaded_traces = Traces(
         traces=[
@@ -856,7 +870,15 @@ def test_traces_tab_update_all_applies_edited_keysspec(
         specific_keys=["mode=alpha", "mode=beta", "mode=gamma"],
         indices=np.asarray([0, 1, 2], dtype=np.int64),
         yvalues=np.asarray(["alpha", "beta", "gamma"], dtype=object),
-        spec=KeysSpec(strip0="=", label="mode"),
+        spec=KeysSpec(
+            strip0="=",
+            label=LabelSpec(
+                code_label="mode",
+                print_label="mode",
+                html_label="mode",
+                latex_label="mode",
+            ),
+        ),
     )
     loaded_traces = Traces(
         traces=[
@@ -1012,7 +1034,15 @@ def test_traces_tab_keys_preview_is_independent_of_active_trace(
         specific_keys=["mode=alpha", "mode=beta"],
         indices=np.asarray([0, 1], dtype=np.int64),
         yvalues=np.asarray(["alpha", "beta"], dtype=object),
-        spec=KeysSpec(strip0="=", label="mode"),
+        spec=KeysSpec(
+            strip0="=",
+            label=LabelSpec(
+                code_label="mode",
+                print_label="mode",
+                html_label="mode",
+                latex_label="mode",
+            ),
+        ),
     )
 
     monkeypatch.setattr(
@@ -1072,7 +1102,12 @@ def test_traces_tab_update_file_reloads_traces(
         ),
         keysspec=KeysSpec(
             strip0="=",
-            html_label="<i>P</i>",
+            label=LabelSpec(
+                code_label="P",
+                print_label="P",
+                html_label="<i>P</i>",
+                latex_label="P",
+            ),
         ),
     )
 
@@ -1305,7 +1340,12 @@ def test_traces_tab_update_file_shows_raw_yvalues_when_parsing_fails(
         ),
         keysspec=KeysSpec(
             strip0="=",
-            label="mode",
+            label=LabelSpec(
+                code_label="mode",
+                print_label="mode",
+                html_label="mode",
+                latex_label="mode",
+            ),
         ),
     )
 
@@ -1347,8 +1387,8 @@ def test_gui_app_accepts_offset_analysis_preset() -> None:
         Ibins_nA=np.linspace(-4.0, 4.0, 81, dtype=np.float64),
         Voff_mV=np.linspace(-0.02, 0.02, 21, dtype=np.float64),
         Ioff_nA=np.linspace(-0.15, 0.15, 31, dtype=np.float64),
-        nu_Hz=11.0,
-        upsample=7,
+        nu_Hz=param("nu_Hz", 11.0, fixed=True),
+        N_up=param("N_up", 7, fixed=True),
     )
     offsets = offset_analysis(
         traces,
@@ -1405,8 +1445,8 @@ def test_gui_app_accepts_samples_preset() -> None:
         Ibins_nA=np.linspace(-4.0, 4.0, 81, dtype=np.float64),
         Voff_mV=np.linspace(-0.02, 0.02, 21, dtype=np.float64),
         Ioff_nA=np.linspace(-0.15, 0.15, 31, dtype=np.float64),
-        nu_Hz=11.0,
-        upsample=7,
+        nu_Hz=param("nu_Hz", 11.0, fixed=True),
+        N_up=param("N_up", 7, fixed=True),
     )
     offsets = offset_analysis(
         traces,
@@ -1459,8 +1499,8 @@ def test_gui_app_accepts_combined_stage_presets() -> None:
         Ibins_nA=np.linspace(-4.0, 4.0, 81, dtype=np.float64),
         Voff_mV=np.linspace(-0.02, 0.02, 21, dtype=np.float64),
         Ioff_nA=np.linspace(-0.15, 0.15, 31, dtype=np.float64),
-        nu_Hz=11.0,
-        upsample=7,
+        nu_Hz=param("nu_Hz", 11.0, fixed=True),
+        N_up=param("N_up", 7, fixed=True),
     )
     sampling_spec = SamplingSpec(
         N_up=6,
@@ -1694,10 +1734,10 @@ def test_apply_buttons_update_expected_pipeline_stages(
 
     offset_info_table = panel._offset_info_table.value.copy()
     offset_info_table.loc[
-        offset_info_table["key"] == "upsample",
+        offset_info_table["key"] == "N_up",
         "value",
     ] = (
-        panel._offset_spec.upsample + 1
+        panel._offset_spec.N_up + 1
     )
     panel._offset_info_table.value = offset_info_table
     panel._on_offset_apply(SimpleNamespace())
@@ -2365,8 +2405,8 @@ def test_sampling_apply_replaces_staged_preset_and_clears_stale_entries() -> Non
         Ibins_nA=np.linspace(-4.0, 4.0, 81, dtype=np.float64),
         Voff_mV=np.linspace(-0.02, 0.02, 21, dtype=np.float64),
         Ioff_nA=np.linspace(-0.15, 0.15, 31, dtype=np.float64),
-        nu_Hz=11.0,
-        upsample=7,
+        nu_Hz=param("nu_Hz", 11.0, fixed=True),
+        N_up=param("N_up", 7, fixed=True),
     )
     offsets = offset_analysis(
         traces,
@@ -2441,7 +2481,7 @@ def test_gui_panel_matches_backend_outputs() -> None:
     assert bool(experimental_setting_rows.at["detrend", "value"]) is True
     offset_rows = _offset_info_rows(panel)
     assert offset_rows.at["nu_Hz", "value"] == pytest.approx(panel._offset_spec.nu_Hz)
-    assert offset_rows.at["upsample", "value"] == panel._offset_spec.upsample
+    assert offset_rows.at["N_up", "value"] == panel._offset_spec.N_up
     assert offset_rows.at["Voff_mV", "value"] == pytest.approx(
         offset_expected["Voff_mV"]
     )
@@ -2729,10 +2769,17 @@ def test_sampling_offsets_follow_active_trace() -> None:
     )
 
 
-def test_offset_and_sampling_plots_use_keysspec_html_label() -> None:
+def test_offset_and_sampling_plots_use_keysspec_label() -> None:
     panel = GUIPanel(
         _make_traces(),
-        keysspec=KeysSpec(html_label="<i>T</i> (K)"),
+        keysspec=KeysSpec(
+            label=LabelSpec(
+                code_label="T",
+                print_label="T (K)",
+                html_label="<i>T</i> (K)",
+                latex_label=r"$T$ (K)",
+            ),
+        ),
     )
 
     assert panel._offset_g_figure.layout.yaxis2.title.text == "<i>T</i> (K)"

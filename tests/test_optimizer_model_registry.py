@@ -7,14 +7,14 @@ from superconductivity.models.basics.noise import (
     apply_voltage_noise,
     make_bias_support_grid,
 )
-from superconductivity.models.bcs import get_I_pat_nA
+from superconductivity.models.bcs import pat_kernel
 from superconductivity.optimizers.bcs import (
     MODEL_OPTIONS,
     BCSModelConfig,
     get_model_key,
     get_model_spec,
 )
-from superconductivity.optimizers.bcs.registry import PAT_N_MAX
+from superconductivity.optimizers.bcs.registry import Nmax_
 
 _SCIPY_AVAILABLE = importlib.util.find_spec("scipy") is not None
 _JAX_AVAILABLE = importlib.util.find_spec("jax") is not None
@@ -105,7 +105,7 @@ def test_registry_stacks_noise_after_pat() -> None:
     guess[6] = 0.04
     composed = spec.function(V_mV, *guess)
     V_support = make_bias_support_grid(V_mV, guess[6])
-    pat_support = get_I_pat_nA(
+    pat_support = pat_kernel(
         V_support,
         get_model_spec(BCSModelConfig("conv", "np")).function(
             V_support,
@@ -116,13 +116,10 @@ def test_registry_stacks_noise_after_pat() -> None:
         ),
         guess[4],
         nu_GHz=guess[5],
-        n_max=PAT_N_MAX,
+        n_max=Nmax_,
     )
     pat_noise = apply_voltage_noise(
-        V_support,
-        pat_support,
-        guess[6],
-        config.noise_oversample
+        V_support, pat_support, guess[6], config.noise_oversample
     )
     pat_noise = np.interp(V_mV, V_support, pat_noise)
 

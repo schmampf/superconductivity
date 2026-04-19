@@ -93,7 +93,7 @@ Ic_nA = sc.get_Ic_abs_nA(tau=0.8, Delta_meV=0.18)
 `superconductivity.api` re-exports the functions/constants that are used most frequently in day-to-day evaluation scripts.
 
 Core model families (representative entry points):
-- BCS tunneling / DOS: `get_dos`, `get_f`, `get_Delta_meV`, `get_I_bcs_nA`
+- BCS tunneling / DOS: `get_dos`, `get_f`, `get_DeltaT_meV`, `get_I_bcs_nA`
 - PAT (Tien-Gordon): `get_I_pat_nA`
 - BTK: `get_I_btk_nA`, `get_Z_btk`, `get_AB_btk`
 - Andreev bound states / CPR: `get_E_abs_meV`, `get_cpr_abs_nA`, plus KO/AB variants and critical currents (`get_Ic_*`)

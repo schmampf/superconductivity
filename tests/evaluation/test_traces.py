@@ -11,6 +11,7 @@ import superconductivity.evaluation.traces.file as file_module
 from superconductivity.evaluation.traces.file import FileSpec
 from superconductivity.evaluation.traces.keys import Keys, KeysSpec
 import superconductivity.evaluation.traces.traces as traces_module
+from superconductivity.utilities.meta.label import LabelSpec
 
 
 class _FakeGroup:
@@ -169,7 +170,12 @@ def test_get_traces_resolves_one_trace_by_value(
             spec=KeysSpec(
                 strip0="=",
                 strip1="dBm",
-                html_label="<i>nu</i> (dBm)",
+                label=LabelSpec(
+                    code_label="nu_GHz",
+                    print_label="nu_GHz",
+                    html_label="<i>nu</i> (dBm)",
+                    latex_label=r"$\nu$ (dBm)",
+                ),
             ),
         ),
     )

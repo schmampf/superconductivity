@@ -10,6 +10,7 @@ from superconductivity.evaluation.traces.keys import (
     KeysSpec,
     get_keys,
 )
+from superconductivity.utilities.meta.label import LabelSpec
 
 
 def test_get_keys_forwards_remove_and_add_keys(
@@ -43,7 +44,7 @@ def test_get_keys_forwards_remove_and_add_keys(
     assert np.allclose(out["yvalues"], np.asarray([0.0, 3.0]))
     assert np.array_equal(out["indices"], np.asarray([0, 1]))
     assert out.label == "nu (dBm)"
-    assert out.html_label == "nu (dBm)"
+    assert out._spec.label is None
 
 
 def test_get_keys_accepts_filespec_and_keysspec(
@@ -74,15 +75,19 @@ def test_get_keys_accepts_filespec_and_keysspec(
             strip1="dBm",
             remove_key=["off", "no_irradiation"],
             add_key=("no_irradiation", 0.0),
-            label="nu_GHz",
-            html_label="<i>nu</i> (dBm)",
+            label=LabelSpec(
+                code_label="nu_GHz",
+                print_label="nu_GHz",
+                html_label="<i>nu</i> (dBm)",
+                latex_label=r"$\nu$ (dBm)",
+            ),
         ),
     )
 
     assert out["specific_keys"] == ["no_irradiation", "nu=3dBm"]
     assert np.allclose(out["yvalues"], np.asarray([0.0, 3.0]))
     assert out.label == "nu_GHz"
-    assert out.html_label == "<i>nu</i> (dBm)"
+    assert out._spec.label.html_label == "<i>nu</i> (dBm)"
 
 
 def test_get_keys_accepts_keysspec(
@@ -111,14 +116,19 @@ def test_get_keys_accepts_keysspec(
             strip1="dBm",
             remove_key=["off", "no_irradiation"],
             add_key=("no_irradiation", 0.0),
-            html_label="<i>nu</i> (dBm)",
+            label=LabelSpec(
+                code_label="nu",
+                print_label="nu (dBm)",
+                html_label="<i>nu</i> (dBm)",
+                latex_label=r"$\nu$ (dBm)",
+            ),
         ),
     )
 
     assert out["specific_keys"] == ["no_irradiation", "nu=3dBm"]
     assert np.allclose(out["yvalues"], np.asarray([0.0, 3.0]))
     assert out.label == "nu (dBm)"
-    assert out.html_label == "<i>nu</i> (dBm)"
+    assert out._spec.label.html_label == "<i>nu</i> (dBm)"
 
 
 def test_get_keys_accepts_add_key_as_tuple_of_tuples(

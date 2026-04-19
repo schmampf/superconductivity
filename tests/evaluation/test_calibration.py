@@ -8,6 +8,7 @@ from superconductivity.evaluation.sampling.containers import Sample, Samples
 from superconductivity.evaluation.traces import KeysSpec
 from superconductivity.evaluation.traces.meta import TraceMeta
 from superconductivity.utilities.meta.axis import AxisSpec, axis
+from superconductivity.utilities.meta.label import label
 from superconductivity.utilities.functions.binning import bin
 
 
@@ -33,7 +34,7 @@ def _make_samples() -> Samples:
 
 
 def _make_keysspec() -> KeysSpec:
-    return KeysSpec(label="Aout_mV", html_label="<i>A</i> (mV)")
+    return KeysSpec(label=label("A_mV"))
 
 
 def test_axis_spec_validates_axis_and_kind() -> None:

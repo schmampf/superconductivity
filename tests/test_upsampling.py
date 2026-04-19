@@ -5,7 +5,7 @@ import pytest
 
 from superconductivity.utilities.functions.upsampling import upsample
 from superconductivity.utilities.meta.axis import axis
-from superconductivity.utilities.meta.dataset import Dataset, dataset
+from superconductivity.utilities.meta.data import data
 
 
 def test_upsample_1d_linear_matches_expected_grid() -> None:
@@ -145,16 +145,12 @@ def test_upsample_invalid_method_raises() -> None:
         upsample(z, N_up=2, method="cubic")
 
 
-def test_upsample_dataset_returns_dataset() -> None:
-    z = dataset(
+def test_upsample_data_returns_array() -> None:
+    z = data(
         "trace",
         [10.0, 20.0, 30.0],
-        axes=axis("V_mV", values=[0.0, 1.0, 2.0]),
     )
 
     out = upsample(z, N_up=2)
 
-    assert isinstance(out, type(z))
-    np.testing.assert_allclose(out.values, [10.0, 14.0, 18.0, 22.0, 26.0, 30.0])
-    np.testing.assert_allclose(out.axes[0].values, [0.0, 0.4, 0.8, 1.2, 1.6, 2.0])
-    assert out.axes[0].order == z.axes[0].order
+    np.testing.assert_allclose(out, [10.0, 14.0, 18.0, 22.0, 26.0, 30.0])

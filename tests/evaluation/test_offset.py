@@ -8,6 +8,8 @@ import pytest
 import superconductivity.evaluation.analysis.offset as offset
 from superconductivity.evaluation.traces import TraceMeta
 from superconductivity.evaluation.traces import Trace, Traces
+from superconductivity.utilities.meta.axis import AxisSpec
+from superconductivity.utilities.meta.param import ParamSpec
 
 
 def _make_iv_trace(
@@ -34,12 +36,12 @@ def _make_iv_trace(
 
 def _make_spec() -> offset.OffsetSpec:
     return offset.OffsetSpec(
-        Vbins_mV=np.linspace(-2.0, 2.0, 81),
-        Ibins_nA=np.linspace(-4.0, 4.0, 81),
-        Voff_mV=np.asarray([-0.4, 0.0, 0.2, 0.4]),
-        Ioff_nA=np.asarray([-0.3, 0.0, 0.1, 0.3]),
-        nu_Hz=20.0,
-        upsample=4,
+        Vbins_mV=AxisSpec(code_label="Vbins_mV", print_label="Vbins_mV", html_label="Vbins_mV", latex_label="Vbins_mV", values=np.linspace(-2.0, 2.0, 81, dtype=np.float64), order=1),
+        Ibins_nA=AxisSpec(code_label="Ibins_nA", print_label="Ibins_nA", html_label="Ibins_nA", latex_label="Ibins_nA", values=np.linspace(-4.0, 4.0, 81, dtype=np.float64), order=1),
+        Voff_mV=AxisSpec(code_label="Voff_mV", print_label="Voff_mV", html_label="Voff_mV", latex_label="Voff_mV", values=np.asarray([-0.4, 0.0, 0.2, 0.4], dtype=np.float64), order=1),
+        Ioff_nA=AxisSpec(code_label="Ioff_nA", print_label="Ioff_nA", html_label="Ioff_nA", latex_label="Ioff_nA", values=np.asarray([-0.3, 0.0, 0.1, 0.3], dtype=np.float64), order=1),
+        nu_Hz=ParamSpec(code_label="nu_Hz", print_label="nu_Hz", html_label="nu_Hz", latex_label="nu_Hz", values=20.0, fixed=True),
+        N_up=ParamSpec(code_label="N_up", print_label="N_up", html_label="N_up", latex_label="N_up", values=4, fixed=True),
     )
 
 

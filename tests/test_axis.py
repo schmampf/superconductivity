@@ -4,8 +4,7 @@ import numpy as np
 import pytest
 
 from superconductivity.utilities.meta.axis import AxisSpec, axis
-from superconductivity.utilities.meta.dataset import Dataset, dataset
-from superconductivity.utilities.meta.dataset import Dataset, dataset
+from superconductivity.utilities.meta.dataset import DataSpec, data
 from superconductivity.utilities.meta.label import LABELS, LabelSpec, label
 from superconductivity.utilities.meta.param import ParamSpec, param
 from superconductivity.utilities.constants import G0_muS, h_Vs, kB_meV_K
@@ -25,9 +24,12 @@ def test_label_lookup_returns_matching_meta() -> None:
     assert meta == LABELS["V_mV"]
 
 
-def test_label_lookup_rejects_unknown_name() -> None:
-    with pytest.raises(KeyError, match="Unknown label"):
-        label("missing")
+def test_label_lookup_falls_back_to_name() -> None:
+    meta = label("missing")
+    assert meta.code_label == "missing"
+    assert meta.print_label == "missing"
+    assert meta.html_label == "missing"
+    assert meta.latex_label == "missing"
 
 
 def test_label_meta_reuse() -> None:
@@ -67,23 +69,49 @@ def test_param_spec_accepts_sequence_error() -> None:
     np.testing.assert_allclose(spec.error, [0.01, 0.02])
 
 
+def test_data_spec_supports_numeric_operations() -> None:
+    scalar = DataSpec(
+        code_label="tau",
+        print_label="tau",
+        html_label="tau",
+        latex_label="tau",
+        values=2.0,
+    )
+    vector = DataSpec(
+        code_label="x",
+        print_label="x",
+        html_label="x",
+        latex_label="x",
+        values=[1.0, 2.0, 3.0],
+    )
+
+    assert float(scalar) == pytest.approx(2.0)
+    assert scalar.shape == ()
+    assert scalar + 1.0 == pytest.approx(3.0)
+    assert 1.0 + scalar == pytest.approx(3.0)
+    assert scalar * 2.0 == pytest.approx(4.0)
+    assert 2.0 * scalar == pytest.approx(4.0)
+    assert scalar / 2.0 == pytest.approx(1.0)
+    assert 8.0 / scalar == pytest.approx(4.0)
+    assert -scalar == pytest.approx(-2.0)
+    np.testing.assert_allclose(np.asarray(vector), [1.0, 2.0, 3.0])
+    assert vector.shape == (3,)
+    np.testing.assert_allclose(vector + 1.0, [2.0, 3.0, 4.0])
+    np.testing.assert_allclose(1.0 + vector, [2.0, 3.0, 4.0])
+    np.testing.assert_allclose(abs(-vector), [1.0, 2.0, 3.0])
+
+
 def test_param_spec_rejects_mismatched_error_shape() -> None:
     with pytest.raises(ValueError, match="error must match value shape"):
         param("tau", value=[0.1, 0.2], error=0.01)
 
 
 def test_dataset_collects_axes_and_params() -> None:
-    x_axis = axis("V_mV", 0.0, 1.0, 5)
-    temperature = param("T_K", value=0.12, fixed=True)
-
-    spec = dataset("measurement", [1.0, 2.0, 3.0], axes=x_axis, params=temperature)
-
-    assert isinstance(spec, Dataset)
+    spec = data("measurement", [1.0, 2.0, 3.0])
+    assert isinstance(spec, DataSpec)
     assert spec.code_label == "measurement"
     assert spec.print_label == "measurement"
     np.testing.assert_allclose(spec.values, [1.0, 2.0, 3.0])
-    assert spec.axes == (x_axis,)
-    assert spec.params == (temperature,)
 
 
 def test_construct_axis_uses_values_over_linspace() -> None:
@@ -177,14 +205,14 @@ def test_constant_param_specs_still_behave_numerically() -> None:
 
 
 def test_data_spec_inherits_label_meta() -> None:
-    spec = dataset("I_nA", [1.0, 2.0, 3.0])
+    spec = data("I_nA", [1.0, 2.0, 3.0])
     assert isinstance(spec, LabelSpec)
-    assert isinstance(spec, Dataset)
+    assert isinstance(spec, DataSpec)
     np.testing.assert_allclose(spec.values, [1.0, 2.0, 3.0])
 
 
 def test_data_lookup_falls_back_to_name() -> None:
-    spec = dataset("custom", [1.0, 2.0])
+    spec = data("custom", [1.0, 2.0])
     assert spec.code_label == "custom"
     assert spec.print_label == "custom"
     assert spec.html_label == "custom"
