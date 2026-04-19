@@ -40,7 +40,7 @@ from tqdm import tqdm
 
 from ....utilities.constants import G0_muS, kB_meV_K
 from ....utilities.types import NDArray64
-from ...basics import get_Delta_meV
+from ...basics import get_DeltaT_meV
 
 
 def get_Ic_ab(
@@ -80,7 +80,7 @@ def get_Ic_ab(
     Using `R_N = 1/(GN_G0 G_0)` and normalizing by `G_0 Δ(0)` yields the
     dimensionless form implemented here.
     """
-    Delta_T_meV = get_Delta_meV(Delta_meV=Delta_meV, T_K=T_K)
+    Delta_T_meV = get_DeltaT_meV(Delta_meV=Delta_meV, T_K=T_K)
     if T_K > 0.0:
         k_T = np.tanh(Delta_T_meV / (2 * kB_meV_K * T_K))
     else:
@@ -206,7 +206,7 @@ def get_E_abs(
     NDArray64
         Dimensionless ABS energy `E(φ)/Δ(0)`.
     """
-    Delta_T_meV = get_Delta_meV(Delta_meV=Delta_meV, T_K=T_K)
+    Delta_T_meV = get_DeltaT_meV(Delta_meV=Delta_meV, T_K=T_K)
     E_ABS = np.sqrt(1 - tau * np.sin(phi / 2) ** 2) * Delta_T_meV / Delta_meV
     return E_ABS
 

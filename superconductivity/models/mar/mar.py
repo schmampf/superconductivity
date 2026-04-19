@@ -9,7 +9,7 @@ import numpy as np
 
 from ...utilities.constants import G0_muS
 from ...utilities.types import NDArray64
-from ..basics import get_Delta_meV
+from ..basics import get_DeltaT_meV
 from .models.btk import get_I_btk_nA
 from .models.fcs import NMAX_DEFAULT as QMAX_DEFAULT
 from .models.fcs import get_I_fcs_nA
@@ -204,8 +204,8 @@ def get_Imar_nA(
     Delta_1_meV, Delta_2_meV = _as_pair(Delta_meV)
     gamma_1_meV, gamma_2_meV = _as_pair(gamma_meV)
 
-    Delta_1_T_meV = get_Delta_meV(Delta_1_meV, T_K)
-    Delta_2_T_meV = get_Delta_meV(Delta_2_meV, T_K)
+    Delta_1_T_meV = get_DeltaT_meV(Delta_1_meV, T_K)
+    Delta_2_T_meV = get_DeltaT_meV(Delta_2_meV, T_K)
 
     symmetric_gap = np.isclose(
         Delta_1_T_meV,

@@ -9,7 +9,8 @@ from typing import Callable
 import numpy as np
 
 from ...models.basics.noise import apply_voltage_noise, make_bias_support_grid
-from ...models.bcs.backend import DEFAULT_E_MV, PAT_N_MAX, Backend, Kernel
+from ...models.bcs.backend import Backend, E0_meV, Kernel, Nmax_
+from ...utilities.constants import G0_muS
 from ...utilities.types import NDArray64
 from .parameters import (
     ParameterSpec,
@@ -20,9 +21,10 @@ from .parameters import (
 
 ModelFunction = Callable[..., NDArray64]
 BaseModelFunction = Callable[
-    [NDArray64, NDArray64, float, float, float, float],
+    [NDArray64, NDArray64, float, float, float, float, float, float],
     NDArray64,
 ]
+_G0_uS = float(G0_muS)
 
 BCS_INT_HTML = r"""
 I(V)=G_\mathrm{N}\int_{-\infty}^{\infty}
@@ -205,9 +207,9 @@ def _compose_info(config: BCSModelConfig) -> OrderedDict[str, str]:
     info["PAT"] = "yes" if config.pat_enabled else "no"
     info["noise"] = "yes" if config.noise_enabled else "no"
     info["noise_oversample"] = str(config.noise_oversample)
-    info["energy_grid"] = _energy_grid_summary(DEFAULT_E_MV)
+    info["energy_grid"] = _energy_grid_summary(E0_meV)
     if config.pat_enabled:
-        info["n_max"] = str(PAT_N_MAX)
+        info["n_max"] = str(Nmax_)
     return info
 
 
@@ -258,25 +260,28 @@ def _compose_function(config: BCSModelConfig) -> ModelFunction:
         current = np.asarray(
             base_function(
                 V_evaluate,
-                DEFAULT_E_MV,
-                float(GN_G0),
+                E0_meV,
+                float(T_K),
                 float(T_K),
                 float(Delta_meV),
+                float(Delta_meV),
+                float(gamma_meV),
                 float(gamma_meV),
             ),
             dtype=np.float64,
         )
+        current = np.asarray(current * (float(GN_G0) * _G0_uS), dtype=np.float64)
 
         if config.pat_enabled and A_mV != 0.0:
-            from ...models.bcs import get_I_pat_nA
+            from ...models.bcs import pat_kernel
 
             current = np.asarray(
-                get_I_pat_nA(
+                pat_kernel(
                     V_evaluate,
                     current,
                     A_mV,
                     nu_GHz=nu_GHz,
-                    n_max=PAT_N_MAX,
+                    n_max=Nmax_,
                 ),
                 dtype=np.float64,
             )
@@ -307,9 +312,9 @@ def _resolve_base_function(
 
         return integral_np if kernel == "int" else convolution_np
     if backend == "jax":
-        from ...models.bcs.backend.jax import convolution_jax, integral_jax
+        from ...models.bcs.backend.jnp import convolution_jnp, integral_jnp
 
-        return integral_jax if kernel == "int" else convolution_jax
+        return integral_jnp if kernel == "int" else convolution_jnp
     raise ValueError("Unknown backend/kernel combination.")
 
 
@@ -361,7 +366,7 @@ __all__ = [
     "MODEL_OPTIONS",
     "MODEL_REGISTRY",
     "ModelSpec",
-    "PAT_N_MAX",
+    "Nmax_",
     "get_model_config",
     "get_model_key",
     "get_model_spec",
