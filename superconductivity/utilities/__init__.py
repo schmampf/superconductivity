@@ -1,23 +1,31 @@
 from .meta import (
     AxisSpec,
+    DataSpec,
     Dataset,
+    dataset,
+    gridded_dataset,
+    validate_gridded_dataset,
     LABELS,
     LabelSpec,
     ParamSpec,
     axis,
-    dataset,
+    data,
     label,
     param,
 )
 
 __all__ = [
     "AxisSpec",
+    "DataSpec",
     "Dataset",
+    "dataset",
+    "gridded_dataset",
+    "validate_gridded_dataset",
     "LabelSpec",
     "LABELS",
     "ParamSpec",
     "axis",
-    "dataset",
+    "data",
     "label",
     "param",
 ]

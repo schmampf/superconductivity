@@ -6,18 +6,18 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from ..meta.dataset import Dataset
-from ..meta.utils import unwrap_dataset_value, wrap_dataset_value
+from ..meta.dataset import DataSpec
+from ..meta.utils import unwrap_dataset_value
 from ..safety import is_ragged_sequence, normalize_axis, require_min_size
 from ..types import NDArray64
 
 
 def fill(
-    y: np.ndarray | Sequence[np.ndarray] | Dataset,
+    y: np.ndarray | Sequence[np.ndarray] | DataSpec,
     axis: int = -1,
     method: str = "interpolate",
     value: float = 0.0,
-) -> np.ndarray | list[np.ndarray] | Dataset:
+) -> np.ndarray | list[np.ndarray]:
     """Fill NaN values along one axis."""
     if is_ragged_sequence(y):
         return [
@@ -30,9 +30,11 @@ def fill(
             for item in y
         ]
     values = unwrap_dataset_value(y)
-    return wrap_dataset_value(
-        y,
-        _fill_dense(np.asarray(values), axis=axis, method=method, value=value),
+    return _fill_dense(
+        np.asarray(values),
+        axis=axis,
+        method=method,
+        value=value,
     )
 
 

@@ -7,7 +7,7 @@ from collections.abc import Sequence
 import numpy as np
 
 from ..meta.axis import AxisSpec
-from ..meta.dataset import Dataset
+from ..meta.dataset import DataSpec
 from ..meta.utils import infer_axis, unwrap_dataset_value
 from ..safety import (
     is_ragged_sequence,
@@ -20,11 +20,11 @@ from ..safety import (
 
 
 def bin(
-    z: np.ndarray | Sequence[np.ndarray] | Dataset,
+    z: np.ndarray | Sequence[np.ndarray] | DataSpec,
     x: np.ndarray | Sequence[np.ndarray] | AxisSpec,
     xbins: np.ndarray | AxisSpec,
     axis: int | None = None,
-) -> np.ndarray | list[np.ndarray] | Dataset:
+) -> np.ndarray | list[np.ndarray]:
     """Bin ``z`` over ``x`` onto the 1D grid ``xbins``."""
     z_arr = unwrap_dataset_value(z)
     x_arr = unwrap_dataset_value(x)
@@ -40,17 +40,6 @@ def bin(
             )
         result = _bin_dense(
             np.asarray(z_arr), np.asarray(x_arr), xbins_arr, axis_inferred
-        )
-    if isinstance(z, Dataset):
-        axes = (xbins,) if isinstance(xbins, AxisSpec) else ()
-        return Dataset(
-            code_label=z.code_label,
-            print_label=z.print_label,
-            html_label=z.html_label,
-            latex_label=z.latex_label,
-            values=result,
-            axes=axes,
-            params=z.params,
         )
     return result
 

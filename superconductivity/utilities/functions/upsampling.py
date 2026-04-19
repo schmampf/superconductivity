@@ -6,9 +6,8 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from ..meta.axis import axis as make_axis
-from ..meta.dataset import Dataset
-from ..meta.utils import unwrap_dataset_value, wrap_dataset_value
+from ..meta.dataset import DataSpec
+from ..meta.utils import unwrap_dataset_value
 from ..safety import (
     is_ragged_sequence,
     normalize_axis,
@@ -18,83 +17,27 @@ from ..safety import (
 
 
 def upsample(
-    z: np.ndarray | Sequence[np.ndarray] | Dataset,
+    z: np.ndarray | Sequence[np.ndarray] | DataSpec,
     N_up: int = 100,
     axis: int = -1,
     method: str = "linear",
-) -> np.ndarray | list[np.ndarray] | Dataset:
+) -> np.ndarray | list[np.ndarray]:
     """Upsample arrays along one axis by sample-index interpolation."""
-    if isinstance(z, Dataset):
-        return _upsample_dataset(
-            z,
-            N_up=N_up,
-            axis=axis,
-            method=method,
-        )
     if is_ragged_sequence(z):
         return [
-            wrap_dataset_value(
-                item,
-                _upsample_dense(
-                    unwrap_dataset_value(item),
-                    N_up=N_up,
-                    axis=axis,
-                    method=method,
-                ),
+            _upsample_dense(
+                unwrap_dataset_value(item),
+                N_up=N_up,
+                axis=axis,
+                method=method,
             )
             for item in z
         ]
-    return wrap_dataset_value(
-        z,
-        _upsample_dense(
-            unwrap_dataset_value(z),
-            N_up=N_up,
-            axis=axis,
-            method=method,
-        ),
-    )
-
-
-def _upsample_dataset(
-    dataset: Dataset, *, N_up: int, axis: int, method: str
-) -> Dataset:
-    data_up = _upsample_dense(
-        dataset.values,
+    return _upsample_dense(
+        unwrap_dataset_value(z),
         N_up=N_up,
         axis=axis,
         method=method,
-    )
-    axis_norm = normalize_axis(axis, np.asarray(dataset.values).ndim)
-    axes = list(dataset.axes)
-    if len(axes) == 1:
-        idx = 0
-    else:
-        matches = [i for i, ax in enumerate(axes) if ax.order == axis_norm]
-        if len(matches) != 1:
-            raise ValueError(
-                "Dataset upsampling requires exactly one matching axis order."
-            )
-        idx = matches[0]
-    if axes:
-        axis_spec = axes[idx]
-        axes[idx] = make_axis(
-            axis_spec.code_label,
-            values=_upsample_dense(
-                axis_spec.values,
-                N_up=N_up,
-                axis=0,
-                method=method,
-            ),
-            order=axis_spec.order,
-        )
-    return Dataset(
-        code_label=dataset.code_label,
-        print_label=dataset.print_label,
-        html_label=dataset.html_label,
-        latex_label=dataset.latex_label,
-        values=data_up,
-        axes=tuple(axes),
-        params=dataset.params,
     )
 
 
