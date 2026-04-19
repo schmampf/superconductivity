@@ -63,6 +63,11 @@ LABEL_ROWS = {
         "html_label": "<i>A</i> (mV)",
         "latex_label": r"$A$ (mV)",
     },
+    "Aout_mV": {
+        "print_label": "Aout (mV)",
+        "html_label": "<i>A</i><sub>out</sub> (mV)",
+        "latex_label": r"$A_\mathrm{out}$ (mV)",
+    },
     "nu_GHz": {
         "print_label": "nu (GHz)",
         "html_label": "<i>&nu;</i> (GHz)",

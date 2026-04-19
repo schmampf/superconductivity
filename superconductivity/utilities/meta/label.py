@@ -36,10 +36,15 @@ LABELS: dict[str, LabelSpec] = {
 
 def label(name: str) -> LabelSpec:
     """Return a shared label metadata object by name."""
-    try:
+    if name in LABELS:
         return LABELS[name]
-    except KeyError as exc:
-        raise KeyError(f"Unknown label '{name}'.") from exc
+    text = str(name)
+    return LabelSpec(
+        code_label=text,
+        print_label=text,
+        html_label=text,
+        latex_label=text,
+    )
 
 
 __all__ = ["LabelSpec", "LABELS", "label"]

@@ -2,24 +2,25 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 import numpy as np
 
 from ..safety import require_all_finite, require_min_size
 from ..types import NDArray64
-from .label import LabelSpec, label
+from .data import DataSpec
+from .label import label
+
 
 @dataclass(frozen=True, slots=True)
-class AxisSpec(LabelSpec):
+class AxisSpec(DataSpec):
     """One labeled, strictly increasing axis grid."""
 
-    values: Sequence[float] | NDArray64
     order: int
 
     def __post_init__(self) -> None:
-        LabelSpec.__post_init__(self)
+        DataSpec.__post_init__(self)
         values = _validate_axis(self.values, "values")
         try:
             kind = int(self.order)
@@ -32,7 +33,7 @@ class AxisSpec(LabelSpec):
 
     @property
     def axis(self) -> NDArray64:
-        return self.values
+        return np.asarray(self.values, dtype=np.float64)
 
 
 def axis(
@@ -51,16 +52,16 @@ def axis(
         if min_value is None or max_value is None or bins is None:
             raise ValueError(
                 "min_value, max_value, and bins"
-                "are required when values is not given."
+                " are required when values is not given."
             )
         axis_values = _linspace_axis(min_value, max_value, bins)
     return AxisSpec(
-        values=axis_values,
-        order=order,
         code_label=meta.code_label,
         print_label=meta.print_label,
         html_label=meta.html_label,
         latex_label=meta.latex_label,
+        values=axis_values,
+        order=order,
     )
 
 

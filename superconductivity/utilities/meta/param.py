@@ -2,85 +2,72 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 import numpy as np
 
 from ..types import NDArray64
-from .label import LabelSpec, label
+from .data import DataSpec, _coerce_values
+from .label import label
 
 
 @dataclass(frozen=True, slots=True)
-class ParamSpec(LabelSpec):
+class ParamSpec(DataSpec):
     """Parameter metadata shared by fitting and GUI tables."""
 
-    __array_priority__ = 1000.0
-
-    value: float | Sequence[float] | NDArray64
     error: float | Sequence[float] | NDArray64 | None = None
     lower: float | None = None
     upper: float | None = None
     fixed: bool = False
 
     def __post_init__(self) -> None:
-        LabelSpec.__post_init__(self)
-        value = _coerce_value(self.value)
-        object.__setattr__(self, "value", value)
+        DataSpec.__post_init__(self)
         if self.lower is not None:
             object.__setattr__(self, "lower", float(self.lower))
         if self.upper is not None:
             object.__setattr__(self, "upper", float(self.upper))
         if self.error is not None:
-            error = _coerce_value(self.error)
-            _validate_error_shape(value, error)
+            error = _coerce_values(self.error)
+            _validate_error_shape(self.values, error)
             object.__setattr__(self, "error", error)
         object.__setattr__(self, "fixed", bool(self.fixed))
 
     def __float__(self) -> float:
-        if isinstance(self.value, np.ndarray):
-            if self.value.ndim != 0:
-                raise TypeError(
-                    "Cannot convert non-scalar ParamSpec to float.",
-                )
-            return float(self.value)
-        return float(self.value)
+        return DataSpec.__float__(self)
 
-    def __array__(self, dtype: object | None = None) -> np.ndarray:
-        """Return one NumPy scalar view for array arithmetic."""
-        array = np.asarray(float(self), dtype=np.float64)
-        if dtype is not None:
-            return np.asarray(array, dtype=dtype)
-        return array
-
-    def _as_float(self, other: object) -> float:
-        if isinstance(other, ParamSpec):
-            return float(other)
-        return float(np.asarray(other, dtype=np.float64))
+    def _scalar_value(self) -> float:
+        return float(self)
 
     def __mul__(self, other: object):
-        return float(self) * np.asarray(other, dtype=np.float64)
+        return self._binary_op(other, np.multiply)
 
     def __rmul__(self, other: object):
-        return np.asarray(other, dtype=np.float64) * float(self)
+        return self._binary_rop(other, np.multiply)
 
     def __truediv__(self, other: object):
-        return float(self) / np.asarray(other, dtype=np.float64)
+        return self._binary_op(other, np.divide)
 
     def __rtruediv__(self, other: object):
-        return np.asarray(other, dtype=np.float64) / float(self)
+        return self._binary_rop(other, np.divide)
 
     def __add__(self, other: object):
-        return float(self) + np.asarray(other, dtype=np.float64)
+        return self._binary_op(other, np.add)
 
     def __radd__(self, other: object):
-        return np.asarray(other, dtype=np.float64) + float(self)
+        return self._binary_rop(other, np.add)
 
     def __sub__(self, other: object):
-        return float(self) - np.asarray(other, dtype=np.float64)
+        return self._binary_op(other, np.subtract)
 
     def __rsub__(self, other: object):
-        return np.asarray(other, dtype=np.float64) - float(self)
+        return self._binary_rop(other, np.subtract)
+
+    def __pow__(self, other: object):
+        return self._binary_op(other, np.power)
+
+    def __rpow__(self, other: object):
+        return self._binary_rop(other, np.power)
 
 
 def param(
@@ -92,39 +79,18 @@ def param(
     upper: float | None = None,
     fixed: bool = False,
 ) -> ParamSpec:
-    try:
-        meta = label(name)
-    except KeyError:
-        meta = LabelSpec(
-            code_label=name,
-            print_label=name,
-            html_label=name,
-            latex_label=name,
-        )
+    meta = label(name)
     return ParamSpec(
         code_label=meta.code_label,
         print_label=meta.print_label,
         html_label=meta.html_label,
         latex_label=meta.latex_label,
-        value=value,
+        values=value,
         error=error,
         lower=lower,
         upper=upper,
         fixed=fixed,
     )
-
-
-def _coerce_value(
-    value: float | Sequence[float] | NDArray64,
-) -> float | NDArray64:
-    if isinstance(value, (list, tuple)):
-        return np.asarray(value, dtype=np.float64)
-    if hasattr(value, "__array__"):
-        array = np.asarray(value, dtype=np.float64)
-        if getattr(array, "ndim", 1) == 0:
-            return float(array)
-        return array
-    return float(value)
 
 
 def _validate_error_shape(
