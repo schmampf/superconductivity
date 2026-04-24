@@ -4,8 +4,6 @@ import numpy as np
 import pytest
 
 from superconductivity.utilities.functions.upsampling import upsample
-from superconductivity.utilities.meta.axis import axis
-from superconductivity.utilities.meta.data import data
 
 
 def test_upsample_1d_linear_matches_expected_grid() -> None:
@@ -144,13 +142,3 @@ def test_upsample_invalid_method_raises() -> None:
     with pytest.raises(ValueError, match="Unsupported method"):
         upsample(z, N_up=2, method="cubic")
 
-
-def test_upsample_data_returns_array() -> None:
-    z = data(
-        "trace",
-        [10.0, 20.0, 30.0],
-    )
-
-    out = upsample(z, N_up=2)
-
-    np.testing.assert_allclose(out, [10.0, 14.0, 18.0, 22.0, 26.0, 30.0])

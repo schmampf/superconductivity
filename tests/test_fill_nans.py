@@ -4,7 +4,6 @@ import numpy as np
 import pytest
 
 from superconductivity.utilities.functions.fill_nans import fill
-from superconductivity.utilities.meta.dataset import data
 
 
 def test_fill_1d_interpolate_matches_linear_gap() -> None:
@@ -71,18 +70,3 @@ def test_fill_invalid_method_raises() -> None:
     with pytest.raises(ValueError, match="Unsupported method"):
         fill(y, method="bad")
 
-
-def test_fill_data_returns_array() -> None:
-    y = data("I_nA", [0.0, np.nan, 2.0])
-
-    out = fill(y, method="nearest")
-
-    np.testing.assert_allclose(out, [0.0, 0.0, 2.0])
-
-
-def test_fill_data_with_values_returns_array() -> None:
-    y = data("trace", [0.0, np.nan, 2.0])
-
-    out = fill(y, method="interpolate")
-
-    np.testing.assert_allclose(out, [0.0, 1.0, 2.0])

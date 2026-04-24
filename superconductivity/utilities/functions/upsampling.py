@@ -6,8 +6,6 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from ..meta.dataset import DataSpec
-from ..meta.utils import unwrap_dataset_value
 from ..safety import (
     is_ragged_sequence,
     normalize_axis,
@@ -17,7 +15,7 @@ from ..safety import (
 
 
 def upsample(
-    z: np.ndarray | Sequence[np.ndarray] | DataSpec,
+    z: np.ndarray | Sequence[np.ndarray],
     N_up: int = 100,
     axis: int = -1,
     method: str = "linear",
@@ -26,7 +24,7 @@ def upsample(
     if is_ragged_sequence(z):
         return [
             _upsample_dense(
-                unwrap_dataset_value(item),
+                np.asarray(item),
                 N_up=N_up,
                 axis=axis,
                 method=method,
@@ -34,7 +32,7 @@ def upsample(
             for item in z
         ]
     return _upsample_dense(
-        unwrap_dataset_value(z),
+        np.asarray(z),
         N_up=N_up,
         axis=axis,
         method=method,

@@ -5,8 +5,6 @@ import pytest
 
 from superconductivity.utilities.functions.binning import bin
 from superconductivity.utilities.legacy.functions import bin_y_over_x
-from superconductivity.utilities.meta.axis import axis
-from superconductivity.utilities.meta.data import DataSpec, data
 
 
 def test_bin_1d_matches_legacy_helper() -> None:
@@ -200,32 +198,6 @@ def test_bin_rejects_non_1d_xbins() -> None:
 
     with pytest.raises(ValueError):
         bin(z=z, x=x, xbins=xbins)
-
-
-def test_bin_accepts_axis_metadata_without_explicit_axis() -> None:
-    z = data("I_nA", [1.0, 2.0, 3.0, 4.0])
-    x = axis("V_mV", values=[-0.75, -0.25, 0.25, 0.75], order=0)
-    xbins = axis("V_mV", values=[-0.5, 0.5], order=0)
-
-    out = bin(z=z, x=x, xbins=xbins)
-
-    expected = np.array([1.5, 3.5], dtype=np.float64)
-    np.testing.assert_allclose(out, expected)
-    assert not isinstance(out, DataSpec)
-
-
-def test_bin_accepts_data_z_and_axis_inputs() -> None:
-    z = data(
-        "trace",
-        [1.0, 2.0, 3.0, 4.0],
-    )
-    x = axis("V_mV", values=[-0.75, -0.25, 0.25, 0.75], order=0)
-    xbins = axis("V_mV", values=[-0.5, 0.5], order=0)
-
-    out = bin(z=z, x=x, xbins=xbins)
-
-    expected = np.array([1.5, 3.5], dtype=np.float64)
-    np.testing.assert_allclose(out, expected)
 
 
 def test_bin_rejects_incompatible_ragged_x() -> None:

@@ -6,9 +6,6 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from ..meta.axis import AxisSpec
-from ..meta.dataset import DataSpec
-from ..meta.utils import infer_axis, unwrap_dataset_value
 from ..safety import (
     is_ragged_sequence,
     normalize_axis,
@@ -20,16 +17,16 @@ from ..safety import (
 
 
 def bin(
-    z: np.ndarray | Sequence[np.ndarray] | DataSpec,
-    x: np.ndarray | Sequence[np.ndarray] | AxisSpec,
-    xbins: np.ndarray | AxisSpec,
+    z: np.ndarray | Sequence[np.ndarray],
+    x: np.ndarray | Sequence[np.ndarray],
+    xbins: np.ndarray,
     axis: int | None = None,
 ) -> np.ndarray | list[np.ndarray]:
     """Bin ``z`` over ``x`` onto the 1D grid ``xbins``."""
-    z_arr = unwrap_dataset_value(z)
-    x_arr = unwrap_dataset_value(x)
-    xbins_arr = _validate_xbins(unwrap_dataset_value(xbins))
-    axis_inferred = infer_axis(axis, x)
+    z_arr = z
+    x_arr = x
+    xbins_arr = _validate_xbins(xbins)
+    axis_inferred = -1 if axis is None else int(axis)
 
     if is_ragged_sequence(z_arr):
         result = _bin_ragged(z_arr, x_arr, xbins_arr, axis_inferred)
