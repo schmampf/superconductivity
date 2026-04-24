@@ -3,13 +3,18 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from superconductivity.utilities.constants import G0_muS, kB_meV_K
 from superconductivity.utilities.meta import (
+    DataSpec,
     Dataset,
+    TransportDatasetSpec,
+    ParamSpec,
     axis,
     data,
     dataset,
     gridded_dataset,
     param,
+    reduced_dataset,
     validate_gridded_dataset,
 )
 
@@ -201,3 +206,233 @@ def test_plain_dataset_still_allows_non_gridded_payloads() -> None:
         nu_Hz=13.7,
     )
     assert len(ds.data) == 2
+
+
+def test_reduced_dataset_valid_voltage_bias() -> None:
+    ds = reduced_dataset(
+        V_mV=axis("V_mV", values=[0.0, 1.0, 2.0], order=0),
+        I_nA=data("I_nA", [0.0, 2.0, 4.0]),
+        Delta_meV=param("Delta_meV", 2.0),
+        GN_G0=param("GN_G0", 4.0),
+        gamma_meV=param("gamma_meV", 0.5),
+    )
+
+    assert isinstance(ds, TransportDatasetSpec)
+    assert ds.V_mV.values.tolist() == [0.0, 1.0, 2.0]
+    assert ds.I_nA.values.tolist() == [0.0, 2.0, 4.0]
+
+
+def test_reduced_dataset_valid_current_bias() -> None:
+    ds = reduced_dataset(
+        I_nA=axis("I_nA", values=[0.0, 1.0, 2.0], order=0),
+        V_mV=data("V_mV", [0.0, 2.0, 4.0]),
+        Delta_meV=param("Delta_meV", 2.0),
+        GN_G0=param("GN_G0", 4.0),
+    )
+
+    assert isinstance(ds, TransportDatasetSpec)
+    assert ds.I_nA.values.tolist() == [0.0, 1.0, 2.0]
+    assert ds.V_mV.values.tolist() == [0.0, 2.0, 4.0]
+
+
+def test_reduced_dataset_rejects_both_transport_axes() -> None:
+    with pytest.raises(
+        ValueError,
+        match="Exactly one of 'I_nA' and 'V_mV' must be a data entry",
+    ):
+        reduced_dataset(
+            I_nA=axis("I_nA", values=[0.0, 1.0, 2.0], order=0),
+            V_mV=axis("V_mV", values=[0.0, 1.0, 2.0], order=0),
+            Delta_meV=param("Delta_meV", 2.0),
+            GN_G0=param("GN_G0", 4.0),
+        )
+
+
+def test_reduced_dataset_rejects_both_transport_data() -> None:
+    with pytest.raises(
+        ValueError,
+        match="Exactly one of 'I_nA' and 'V_mV' must be an axis entry",
+    ):
+        reduced_dataset(
+            I_nA=data("I_nA", [0.0, 1.0, 2.0]),
+            V_mV=data("V_mV", [0.0, 2.0, 4.0]),
+            Delta_meV=param("Delta_meV", 2.0),
+            GN_G0=param("GN_G0", 4.0),
+        )
+
+
+def test_reduced_dataset_rejects_missing_required_labels() -> None:
+    with pytest.raises(ValueError, match="requires 'Delta_meV'"):
+        reduced_dataset(
+            V_mV=axis("V_mV", values=[0.0, 1.0, 2.0], order=0),
+            I_nA=data("I_nA", [0.0, 2.0, 4.0]),
+            GN_G0=param("GN_G0", 4.0),
+        )
+    with pytest.raises(ValueError, match="requires 'GN_G0'"):
+        reduced_dataset(
+            V_mV=axis("V_mV", values=[0.0, 1.0, 2.0], order=0),
+            I_nA=data("I_nA", [0.0, 2.0, 4.0]),
+            Delta_meV=param("Delta_meV", 2.0),
+        )
+
+
+def test_reduced_dataset_lazy_properties_voltage_bias() -> None:
+    ds = reduced_dataset(
+        V_mV=axis("V_mV", values=[0.0, 1.0, 2.0], order=0),
+        I_nA=data("I_nA", [0.0, 2.0, 4.0]),
+        Delta_meV=param("Delta_meV", 2.0),
+        GN_G0=param("GN_G0", 4.0),
+        gamma_meV=param("gamma_meV", 0.5),
+        A_mV=param("A_mV", 0.25),
+        nu_GHz=param("nu_GHz", 1.0),
+        sigmaV_mV=param("sigmaV_mV", 0.0),
+        T_K=param("T_K", 4.0),
+    )
+
+    G0_uS = float(G0_muS)
+    GN_uS = 4.0 * G0_uS
+
+    np.testing.assert_allclose(ds.dG_uS.values, [2.0, 2.0, 2.0])
+    np.testing.assert_allclose(ds.dR_MOhm.values, [0.5, 0.5, 0.5])
+    np.testing.assert_allclose(ds.G_uS.values[1:], [2.0, 2.0])
+    np.testing.assert_allclose(ds.R_MOhm.values[1:], [0.5, 0.5])
+    assert np.isnan(np.asarray(ds.G_uS.values)[0])
+    assert np.isnan(np.asarray(ds.R_MOhm.values)[0])
+    np.testing.assert_allclose(
+        ds.dG_G0.values,
+        np.asarray(ds.dG_uS.values) / G0_uS,
+    )
+    np.testing.assert_allclose(
+        ds.dG_GN.values,
+        np.asarray(ds.dG_uS.values) / GN_uS,
+    )
+    np.testing.assert_allclose(
+        ds.dR_R0.values,
+        np.asarray(ds.dR_MOhm.values) * G0_uS,
+    )
+    np.testing.assert_allclose(
+        ds.dR_RN.values,
+        np.asarray(ds.dR_MOhm.values) * GN_uS,
+    )
+    np.testing.assert_allclose(
+        ds.G_G0.values[1:],
+        np.asarray(ds.G_uS.values)[1:] / G0_uS,
+    )
+    np.testing.assert_allclose(
+        ds.G_GN.values[1:],
+        np.asarray(ds.G_uS.values)[1:] / GN_uS,
+    )
+    np.testing.assert_allclose(
+        ds.R_R0.values[1:],
+        np.asarray(ds.R_MOhm.values)[1:] * G0_uS,
+    )
+    np.testing.assert_allclose(
+        ds.R_RN.values[1:],
+        np.asarray(ds.R_MOhm.values)[1:] * GN_uS,
+    )
+    np.testing.assert_allclose(ds.gamma_Delta.values, [0.25, 0.25, 0.25])
+    np.testing.assert_allclose(
+        ds.Tc_K.values,
+        2.0 / (1.764 * float(kB_meV_K)),
+    )
+    np.testing.assert_allclose(ds.eV_Delta.values, [0.0, 0.5, 1.0])
+    np.testing.assert_allclose(
+        ds.eI_DeltaG0.values,
+        np.asarray(ds.I_nA.values) / (2.0 * G0_uS),
+    )
+    np.testing.assert_allclose(
+        ds.eI_DeltaGN.values,
+        np.asarray(ds.I_nA.values) / (2.0 * GN_uS),
+    )
+    np.testing.assert_allclose(ds.eA_hnu.values, 0.25)
+    np.testing.assert_allclose(ds.eA_Delta.values, 0.125)
+    np.testing.assert_allclose(ds.hnu_Delta.values, 0.5)
+    np.testing.assert_allclose(
+        ds.T_Tc.values,
+        4.0 / (2.0 / (1.764 * float(kB_meV_K))),
+    )
+    np.testing.assert_allclose(
+        ds.DeltaT_meV.values,
+        2.0 * np.tanh(1.74 * np.sqrt((2.0 / (1.764 * float(kB_meV_K))) / 4.0 - 1.0)),
+    )
+    np.testing.assert_allclose(
+        ds.DeltaT_Delta.values,
+        ds.DeltaT_meV.values / ds.Delta_meV.values,
+    )
+    np.testing.assert_allclose(ds.sigmaV_Delta.values, 0.0)
+    assert isinstance(ds.eV_Delta, DataSpec)
+    assert isinstance(ds.eA_hnu, DataSpec)
+    assert isinstance(ds.T_Tc, DataSpec)
+
+
+def test_reduced_dataset_lazy_properties_current_bias() -> None:
+    ds = reduced_dataset(
+        I_nA=axis("I_nA", values=[0.0, 1.0, 2.0], order=0),
+        V_mV=data("V_mV", [0.0, 2.0, 4.0]),
+        Delta_meV=param("Delta_meV", 2.0),
+        GN_G0=param("GN_G0", 4.0),
+    )
+
+    np.testing.assert_allclose(ds.dR_MOhm.values, [2.0, 2.0, 2.0])
+    np.testing.assert_allclose(ds.dG_uS.values, [0.5, 0.5, 0.5])
+
+
+def test_reduced_dataset_gamma_delta_requires_gamma_mev() -> None:
+    ds = reduced_dataset(
+        V_mV=axis("V_mV", values=[0.0, 1.0, 2.0], order=0),
+        I_nA=data("I_nA", [0.0, 2.0, 4.0]),
+        Delta_meV=param("Delta_meV", 2.0),
+        GN_G0=param("GN_G0", 4.0),
+    )
+
+    with pytest.raises(ValueError, match="gamma_meV"):
+        _ = ds.gamma_Delta
+
+
+def test_reduced_dataset_supports_dataset_methods() -> None:
+    ds = reduced_dataset(
+        V_mV=axis("V_mV", values=[0.0, 1.0, 2.0], order=0),
+        I_nA=data("I_nA", [0.0, 2.0, 4.0]),
+        Delta_meV=param("Delta_meV", 2.0),
+        GN_G0=param("GN_G0", 4.0),
+    )
+
+    assert "V_mV" in ds.keys()
+    ds2 = ds.add(gamma_meV=param("gamma_meV", 0.5))
+    assert isinstance(ds2, TransportDatasetSpec)
+    assert float(ds2.gamma_meV) == pytest.approx(0.5)
+
+    ds3 = ds2.remove("gamma_meV")
+    assert isinstance(ds3, TransportDatasetSpec)
+    assert "gamma_meV" not in ds3
+
+
+def test_transport_dataset_keys_include_available_lazy_properties() -> None:
+    ds = reduced_dataset(
+        V_mV=axis("V_mV", values=[0.0, 1.0, 2.0], order=0),
+        I_nA=data("I_nA", [0.0, 2.0, 4.0]),
+        Delta_meV=param("Delta_meV", 2.0),
+        GN_G0=param("GN_G0", 4.0),
+        gamma_meV=param("gamma_meV", 0.5),
+        A_mV=param("A_mV", 0.25),
+        nu_GHz=param("nu_GHz", 1.0),
+        sigmaV_mV=param("sigmaV_mV", 0.0),
+        T_K=param("T_K", 4.0),
+    )
+
+    keys = ds.keys()
+    assert "I_nA" in keys
+    assert "V_mV" in keys
+    assert "dG_uS" in keys
+    assert "eV_Delta" in keys
+    assert "Tc_K" in keys
+    assert "DeltaT_meV" in keys
+    assert "gamma_Delta" in keys
+    assert "sigmaV_Delta" in keys
+    assert "dG_uS" in ds
+    assert "gamma_Delta" in ds
+    assert "sigmaV_Delta" in ds
+    assert "hnu_Delta" in keys
+    assert ds["dG_uS"].code_label == "dG_uS"
+    assert ds["Tc_K"].code_label == "Tc_K"
+    assert ds["sigmaV_Delta"].code_label == "sigmaV_Delta"

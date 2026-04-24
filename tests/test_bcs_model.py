@@ -13,7 +13,7 @@ from superconductivity.models.bcs import bcs as bcs_module
 from superconductivity.models.bcs import pat_kernel, sim_bcs
 from superconductivity.models.bcs.backend import Nmax_
 from superconductivity.models.bcs.bcs import get_Ibcs_nA
-from superconductivity.utilities.meta import axis, param
+from superconductivity.utilities.meta import TransportDatasetSpec, axis, param
 
 _SCIPY_AVAILABLE = importlib.util.find_spec("scipy") is not None
 _JAX_AVAILABLE = importlib.util.find_spec("jax") is not None
@@ -293,7 +293,7 @@ def test_get_Ibcs_nA_gn_sweep_reuses_base_stage(
     assert call_count["base"] == 1
 
 
-def test_sim_bcs_returns_gridded_dataset_scalar() -> None:
+def test_sim_bcs_returns_transport_dataset_scalar() -> None:
     V_mV = np.linspace(-1.0, 1.0, 41, dtype=np.float64)
     ds = sim_bcs(
         V_mV=axis("V_mV", values=V_mV, order=0),
@@ -304,11 +304,22 @@ def test_sim_bcs_returns_gridded_dataset_scalar() -> None:
         backend="np",
         kernel="conv",
     )
+    assert isinstance(ds, TransportDatasetSpec)
     assert ds.I_nA.values.shape == (V_mV.size,)
-    assert ds.G_muS.values.shape == (V_mV.size,)
     assert ds.V_mV.values.shape == (V_mV.size,)
+    assert ds.dG_uS.values.shape == (V_mV.size,)
+    assert ds.dR_MOhm.values.shape == (V_mV.size,)
+    assert ds.eV_Delta.values.shape == (V_mV.size,)
+    assert ds.eI_DeltaG0.values.shape == (V_mV.size,)
+    assert ds.eI_DeltaGN.values.shape == (V_mV.size,)
+    assert ds.Tc_K.values.shape == (V_mV.size,)
+    assert ds.T_Tc.values.shape == (V_mV.size,)
+    assert ds.DeltaT_meV.values.shape == (V_mV.size,)
+    assert ds.DeltaT_Delta.values.shape == (V_mV.size,)
+    assert ds.gamma_Delta.values.shape == (V_mV.size,)
     axis_labels = {entry.code_label for entry in ds.axes}
     param_labels = {entry.code_label for entry in ds.params}
+    data_labels = {entry.code_label for entry in ds.data}
     assert axis_labels == {"V_mV"}
     assert {
         "GN_G0",
@@ -319,21 +330,14 @@ def test_sim_bcs_returns_gridded_dataset_scalar() -> None:
         "A_mV",
         "sigmaV_mV",
     } <= param_labels
-    assert {
-        "T_Tc",
-        "DeltaT_meV",
-        "DeltaT_Delta",
-        "gamma_Delta",
-        "hnu_Delta",
-        "eA_hnu",
-        "sigmaV_Delta",
-        "GN_muS",
-        "RN_MOhm",
-        "RN_R0",
-    } <= param_labels
+    assert data_labels == {"I_nA"}
+    assert "G_muS" not in data_labels
+    assert "dG_uS" not in data_labels
+    assert "eI_DeltaG0" not in data_labels
+    assert "eI_DeltaGN" not in data_labels
 
 
-def test_sim_bcs_returns_gridded_dataset_with_sweeps() -> None:
+def test_sim_bcs_returns_transport_dataset_with_sweeps() -> None:
     V_mV = np.linspace(-1.0, 1.0, 41, dtype=np.float64)
     ds = sim_bcs(
         V_mV=axis("V_mV", values=V_mV, order=3),
@@ -347,8 +351,11 @@ def test_sim_bcs_returns_gridded_dataset_with_sweeps() -> None:
         backend="np",
         kernel="conv",
     )
+    assert isinstance(ds, TransportDatasetSpec)
     assert ds.I_nA.values.shape == (2, 2, 2, V_mV.size)
-    assert ds.G_GN.values.shape == (2, 2, 2, V_mV.size)
+    assert ds.dG_GN.values.shape == (2, 2, 2, V_mV.size)
+    assert ds.eA_hnu.values.shape == (2, 2, 2, V_mV.size)
+    assert ds.hnu_Delta.values.shape == (2, 2, 2, V_mV.size)
     axis_by_label = {entry.code_label: entry for entry in ds.axes}
     assert axis_by_label["GN_G0"].order == 0
     assert axis_by_label["T_K"].order == 1
@@ -364,9 +371,7 @@ def test_sim_bcs_returns_gridded_dataset_with_sweeps() -> None:
     assert "T_K" not in param_labels
     assert "A_mV" not in param_labels
     data_labels = {entry.code_label for entry in ds.data}
-    assert "eA_hnu" in data_labels
-    assert "hnu_Delta" in data_labels
-    assert "sigmaV_Delta" in data_labels
+    assert data_labels == {"I_nA"}
 
 
 def test_sim_bcs_accepts_axis_as_sweep_parameter() -> None:

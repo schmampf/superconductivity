@@ -8,10 +8,13 @@ from .meta import (
     LABELS,
     LabelSpec,
     ParamSpec,
+    TransportDatasetSpec,
     axis,
     data,
     label,
     param,
+    reduced_dataset,
+    validate_reduced_dataset,
 )
 
 __all__ = [
@@ -24,8 +27,11 @@ __all__ = [
     "LabelSpec",
     "LABELS",
     "ParamSpec",
+    "TransportDatasetSpec",
     "axis",
     "data",
     "label",
     "param",
+    "reduced_dataset",
+    "validate_reduced_dataset",
 ]
