@@ -67,14 +67,6 @@ def _make_spec(**updates: object) -> sampling.SamplingSpec:
     return sampling.SamplingSpec(**defaults)
 
 
-def _make_offset(v_shift_mV: float, i_shift_nA: float) -> Dataset:
-    return Dataset(
-        data=(
-            data("Voff_mV", np.asarray([float(v_shift_mV)], dtype=np.float64)),
-            data("Ioff_nA", np.asarray([float(i_shift_nA)], dtype=np.float64)),
-        ),
-    )
-
 
 def _manual_binning(
     trace: Trace,
@@ -142,9 +134,13 @@ def test_upsampling_densifies_trace_and_preserves_axes() -> None:
 def test_offset_correction_subtracts_offsets() -> None:
     """The explicit offset-correction stage should shift the trace arrays."""
     trace = _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3)
+    spec = _make_spec(
+        Voff_mV=data("Voff_mV", np.asarray([0.4], dtype=np.float64)),
+        Ioff_nA=data("Ioff_nA", np.asarray([0.3], dtype=np.float64)),
+    )
     corrected = sampling.offset_correction(
         trace,
-        offsetanalysis=_make_offset(0.4, 0.3),
+        samplingspec=spec,
     )
 
     assert np.allclose(
@@ -195,11 +191,16 @@ def test_binning_of_upsampled_trace_matches_previous_hidden_upsample() -> None:
 def test_sampling_matches_manual_pipeline_with_offsets() -> None:
     """Full sampling should use the explicit stage order."""
     trace = _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3)
-    spec = _make_spec()
-    offset = _make_offset(0.4, 0.3)
+    spec = _make_spec(
+        Voff_mV=data("Voff_mV", np.asarray([0.4], dtype=np.float64)),
+        Ioff_nA=data("Ioff_nA", np.asarray([0.3], dtype=np.float64)),
+    )
 
-    exp_v, exp_i = sampling.sample(trace, samplingspec=spec, offsetanalysis=offset)
-    corrected = sampling.offset_correction(trace, offsetanalysis=offset)
+    exp_v, exp_i = sampling.sample(trace, samplingspec=spec)
+    corrected = sampling.offset_correction(
+        trace,
+        samplingspec=spec,
+    )
     downsampled = sampling.downsampling(corrected, samplingspec=spec)
     upsampled = sampling.upsampling(downsampled, samplingspec=spec)
     i_exp_nA, v_exp_mV, dG_exp_G0, dR_exp_R0 = _manual_binning(
@@ -219,22 +220,17 @@ def test_sampling_matches_manual_pipeline_with_offsets() -> None:
     assert exp_i.I_nA.order == 0
 
 
-def test_sampling_without_offsetanalysis_uses_zero_offsets() -> None:
+def test_sampling_without_offset_spec_uses_zero_offsets() -> None:
     """Missing offset input should behave like explicit zero offsets."""
     trace = _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3)
-    spec = _make_spec()
-    zero_offset = _make_offset(0.0, 0.0)
+    implicit_spec = _make_spec()
+    explicit_spec = _make_spec(
+        Voff_mV=data("Voff_mV", np.asarray([0.0], dtype=np.float64)),
+        Ioff_nA=data("Ioff_nA", np.asarray([0.0], dtype=np.float64)),
+    )
 
-    implicit_v, implicit_i = sampling.sample(
-        trace,
-        samplingspec=spec,
-        offsetanalysis=None,
-    )
-    explicit_v, explicit_i = sampling.sample(
-        trace,
-        samplingspec=spec,
-        offsetanalysis=zero_offset,
-    )
+    implicit_v, implicit_i = sampling.sample(trace, samplingspec=implicit_spec)
+    explicit_v, explicit_i = sampling.sample(trace, samplingspec=explicit_spec)
 
     assert np.allclose(implicit_v.I_nA.values, explicit_v.I_nA.values, equal_nan=True)
     assert np.allclose(implicit_i.V_mV.values, explicit_i.V_mV.values, equal_nan=True)
@@ -254,9 +250,9 @@ def test_sample_calls_stages_in_explicit_order(monkeypatch: pytest.MonkeyPatch) 
         V_mV=np.zeros_like(spec.Ibins_nA),
     )
 
-    def _offset(traces, *, offsetanalysis):
+    def _offset(traces, *, samplingspec):
         calls.append("offset")
-        assert offsetanalysis is not None
+        assert samplingspec is not None
         return traces
 
     def _downsampling(traces, *, samplingspec, show_progress):
@@ -281,7 +277,7 @@ def test_sample_calls_stages_in_explicit_order(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(pipeline_mod, "binning", _binning)
     monkeypatch.setattr(pipeline_mod, "smooth", _smooth)
 
-    out = sampling.sample(trace, samplingspec=spec, offsetanalysis=None)
+    out = sampling.sample(trace, samplingspec=spec)
 
     assert out == (sample_out.exp_v, sample_out.exp_i)
     assert calls == ["offset", "downsample", "upsample", "binning", "smooth"]
@@ -333,7 +329,7 @@ def test_sampling_skips_disabled_stages(
     monkeypatch.setattr(
         pipeline_mod,
         "offset_correction",
-        lambda traces, *, offsetanalysis: calls.append("offset") or traces,
+        lambda traces, *, samplingspec: calls.append("offset") or traces,
     )
     monkeypatch.setattr(
         pipeline_mod,
@@ -364,7 +360,7 @@ def test_sampling_skips_disabled_stages(
         ),
     )
 
-    sampling.sample(trace, samplingspec=spec, offsetanalysis=_make_offset(0.4, 0.3))
+    sampling.sample(trace, samplingspec=spec)
 
     assert calls == expected_calls
 
@@ -381,20 +377,12 @@ def test_sampling_returns_collection() -> None:
         yvalues=[1.0, 5.0],
         y_label=None,
     )
-    offsets = Dataset(
-        data=(
-            data("Voff_mV", np.asarray([0.4, 0.2], dtype=np.float64)),
-            data("Ioff_nA", np.asarray([0.3, 0.1], dtype=np.float64)),
-        ),
+    spec = _make_spec(
+        Voff_mV=data("Voff_mV", np.asarray([0.4, 0.2], dtype=np.float64)),
+        Ioff_nA=data("Ioff_nA", np.asarray([0.3, 0.1], dtype=np.float64)),
     )
-    spec = _make_spec()
 
-    exp_v, exp_i = sampling.sample(
-        traces,
-        samplingspec=spec,
-        offsetanalysis=offsets,
-        show_progress=False,
-    )
+    exp_v, exp_i = sampling.sample(traces, samplingspec=spec, show_progress=False)
 
     assert isinstance(exp_v, TransportDatasetSpec)
     assert isinstance(exp_i, TransportDatasetSpec)
@@ -416,20 +404,15 @@ def test_sampling_with_smoothing_returns_collection() -> None:
             _make_iv_trace("b", 1, 5.0, v_shift_mV=0.2, i_shift_nA=0.1),
         ],
     )
-    offsets = Dataset(
-        data=(
-            data("Voff_mV", np.asarray([0.4, 0.2], dtype=np.float64)),
-            data("Ioff_nA", np.asarray([0.3, 0.1], dtype=np.float64)),
-        ),
+    spec = _make_spec(
+        Voff_mV=data("Voff_mV", np.asarray([0.4, 0.2], dtype=np.float64)),
+        Ioff_nA=data("Ioff_nA", np.asarray([0.3, 0.1], dtype=np.float64)),
+        apply_smoothing=True,
+        median_bins=3,
+        sigma_bins=1.0,
     )
-    spec = _make_spec(apply_smoothing=True, median_bins=3, sigma_bins=1.0)
 
-    exp_v, exp_i = sampling.sample(
-        traces,
-        samplingspec=spec,
-        offsetanalysis=offsets,
-        show_progress=False,
-    )
+    exp_v, exp_i = sampling.sample(traces, samplingspec=spec, show_progress=False)
 
     assert isinstance(exp_v, TransportDatasetSpec)
     assert isinstance(exp_i, TransportDatasetSpec)
@@ -443,12 +426,10 @@ def test_offset_correction_rejects_length_mismatch() -> None:
             _make_iv_trace("b", 1, 5.0, v_shift_mV=0.2, i_shift_nA=0.1),
         ],
     )
-    offsets = Dataset(
-        data=(
-            data("Voff_mV", np.asarray([0.4], dtype=np.float64)),
-            data("Ioff_nA", np.asarray([0.3], dtype=np.float64)),
-        ),
+    spec = _make_spec(
+        Voff_mV=data("Voff_mV", np.asarray([0.4], dtype=np.float64)),
+        Ioff_nA=data("Ioff_nA", np.asarray([0.3], dtype=np.float64)),
     )
 
-    with pytest.raises(ValueError, match="same length"):
-        sampling.offset_correction(traces, offsetanalysis=offsets)
+    with pytest.raises(ValueError, match="must match the number of traces"):
+        sampling.offset_correction(traces, samplingspec=spec)
