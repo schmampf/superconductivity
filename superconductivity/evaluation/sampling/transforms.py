@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import TYPE_CHECKING, Iterator
 
 import numpy as np
 
 from ...utilities.constants import G0_muS
-from ...utilities.meta import Dataset, data
+from ...utilities.meta import data
 from ...utilities.functions.binning import bin
 from ...utilities.functions.fill_nans import fill as fill_nans
 from ...utilities.safety import (
@@ -21,10 +20,6 @@ from ...utilities.types import NDArray64
 from ..traces import Trace, Traces
 from .containers import Sample, Samples, make_sample, make_samples
 from .specs import SamplingSpec, _validate_downsample_rate_Hz
-
-if TYPE_CHECKING:
-    from ..analysis import OffsetDataset
-
 
 def _import_tqdm():
     """Import tqdm lazily."""
@@ -335,20 +330,26 @@ def _smooth_samples(
     )
 
 
-def _offset_arrays_from_analysis(
-    offsetanalysis: Dataset | Mapping[str, object],
+def _offset_arrays_from_spec(
+    samplingspec: SamplingSpec,
     *,
     count: int,
 ) -> tuple[NDArray64, NDArray64]:
-    """Return aligned per-trace offsets from one offset analysis result."""
-    if isinstance(offsetanalysis, Mapping):
-        voff = np.asarray(offsetanalysis["Voff_mV"], dtype=np.float64).reshape(-1)
-        ioff = np.asarray(offsetanalysis["Ioff_nA"], dtype=np.float64).reshape(-1)
+    """Return aligned offsets from one sampling spec."""
+    if samplingspec.Voff_mV is None:
+        voff = np.zeros(count, dtype=np.float64)
     else:
-        voff = np.asarray(offsetanalysis["Voff_mV"].values, dtype=np.float64).reshape(-1)
-        ioff = np.asarray(offsetanalysis["Ioff_nA"].values, dtype=np.float64).reshape(-1)
-    if voff.size != count or ioff.size != count:
-        raise ValueError("traces and offsetanalysis must have the same length.")
+        voff = np.asarray(samplingspec.Voff_mV.values, dtype=np.float64).reshape(-1)
+        if voff.size != count:
+            raise ValueError("Voff_mV must match the number of traces.")
+
+    if samplingspec.Ioff_nA is None:
+        ioff = np.zeros(count, dtype=np.float64)
+    else:
+        ioff = np.asarray(samplingspec.Ioff_nA.values, dtype=np.float64).reshape(-1)
+        if ioff.size != count:
+            raise ValueError("Ioff_nA must match the number of traces.")
+
     return voff, ioff
 
 
@@ -420,14 +421,21 @@ def downsampling(
 def offset_correction(
     traces: Trace | Traces,
     *,
-    offsetanalysis: OffsetTrace | OffsetTraces,
+    samplingspec: SamplingSpec,
 ) -> Trace | Traces:
-    """Apply one offset analysis result to one trace or trace collection."""
+    """Apply offsets from one sampling spec to one trace or collection."""
     if isinstance(traces, Traces):
-        voff_mV, ioff_nA = _offset_arrays_from_analysis(
-            offsetanalysis,
+        voff_mV, ioff_nA = _offset_arrays_from_spec(
+            samplingspec,
             count=len(traces),
         )
+    else:
+        voff_mV, ioff_nA = _offset_arrays_from_spec(
+            samplingspec,
+            count=1,
+        )
+
+    if isinstance(traces, Traces):
         return Traces.from_fields(
             traces=[
                 _offset_correct_trace(
@@ -443,7 +451,6 @@ def offset_correction(
             y_label=None if traces.y is None else traces.y,
         )
 
-    voff_mV, ioff_nA = _offset_arrays_from_analysis(offsetanalysis, count=1)
     return _offset_correct_trace(
         traces,
         Voff_mV=float(voff_mV[0]),

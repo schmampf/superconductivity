@@ -7,6 +7,7 @@ from typing import Sequence
 
 import numpy as np
 
+from ...utilities.meta import DataSpec
 from ...utilities.safety import require_all_finite, require_min_size, to_1d_float64
 from ...utilities.types import NDArray64
 
@@ -51,6 +52,8 @@ class SamplingSpec:
 
     Vbins_mV: Sequence[float] | NDArray64
     Ibins_nA: Sequence[float] | NDArray64
+    Voff_mV: DataSpec | None = None
+    Ioff_nA: DataSpec | None = None
     apply_offset_correction: bool = True
     apply_downsampling: bool = True
     apply_upsampling: bool = True
@@ -64,6 +67,21 @@ class SamplingSpec:
     def __post_init__(self) -> None:
         """Normalize grids and validate scalar settings."""
         self.nu_Hz = _validate_downsample_rate_Hz(self.nu_Hz)
+
+        if self.Voff_mV is not None:
+            if not isinstance(self.Voff_mV, DataSpec):
+                raise ValueError("Voff_mV must be a DataSpec or None.")
+            values = np.asarray(self.Voff_mV.values, dtype=np.float64).reshape(-1)
+            if values.size == 0:
+                raise ValueError("Voff_mV must not be empty.")
+            require_all_finite(values, name="Voff_mV")
+        if self.Ioff_nA is not None:
+            if not isinstance(self.Ioff_nA, DataSpec):
+                raise ValueError("Ioff_nA must be a DataSpec or None.")
+            values = np.asarray(self.Ioff_nA.values, dtype=np.float64).reshape(-1)
+            if values.size == 0:
+                raise ValueError("Ioff_nA must not be empty.")
+            require_all_finite(values, name="Ioff_nA")
 
         N_up = int(self.N_up)
         if N_up <= 0:
@@ -99,6 +117,24 @@ class SamplingSpec:
         require_min_size(self.Ibins_nA, 2, name="Ibins_nA")
         require_all_finite(self.Vbins_mV, name="Vbins_mV")
         require_all_finite(self.Ibins_nA, name="Ibins_nA")
+
+    def keys(self) -> tuple[str, ...]:
+        """Return public mapping-style keys."""
+        return (
+            "Vbins_mV",
+            "Ibins_nA",
+            "Voff_mV",
+            "Ioff_nA",
+            "apply_offset_correction",
+            "apply_downsampling",
+            "apply_upsampling",
+            "apply_smoothing",
+            "nu_Hz",
+            "N_up",
+            "median_bins",
+            "sigma_bins",
+            "mode",
+        )
 
 
 __all__ = ["SamplingSpec", "_validate_downsample_rate_Hz"]
