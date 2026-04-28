@@ -261,19 +261,17 @@ def test_reduced_dataset_rejects_both_transport_data() -> None:
         )
 
 
-def test_reduced_dataset_rejects_missing_required_labels() -> None:
-    with pytest.raises(ValueError, match="requires 'Delta_meV'"):
-        reduced_dataset(
-            V_mV=axis("V_mV", values=[0.0, 1.0, 2.0], order=0),
-            I_nA=data("I_nA", [0.0, 2.0, 4.0]),
-            GN_G0=param("GN_G0", 4.0),
-        )
-    with pytest.raises(ValueError, match="requires 'GN_G0'"):
-        reduced_dataset(
-            V_mV=axis("V_mV", values=[0.0, 1.0, 2.0], order=0),
-            I_nA=data("I_nA", [0.0, 2.0, 4.0]),
-            Delta_meV=param("Delta_meV", 2.0),
-        )
+def test_reduced_dataset_accepts_missing_reduction_params() -> None:
+    ds = reduced_dataset(
+        V_mV=axis("V_mV", values=[0.0, 1.0, 2.0], order=0),
+        I_nA=data("I_nA", [0.0, 2.0, 4.0]),
+    )
+
+    assert isinstance(ds, TransportDatasetSpec)
+    with pytest.raises(AttributeError):
+        _ = ds.eV_Delta
+    with pytest.raises(AttributeError):
+        _ = ds.eI_DeltaGN
 
 
 def test_reduced_dataset_lazy_properties_voltage_bias() -> None:

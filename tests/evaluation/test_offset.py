@@ -6,10 +6,11 @@ import numpy as np
 import pytest
 
 import superconductivity.evaluation.analysis.offset as offset
-from superconductivity.evaluation.traces import TraceMeta
 from superconductivity.evaluation.traces import Trace, Traces
 from superconductivity.utilities.meta.axis import AxisSpec
+from superconductivity.utilities.meta.label import LabelSpec
 from superconductivity.utilities.meta.param import ParamSpec
+from superconductivity.utilities.meta.dataset import Dataset
 
 
 def _make_iv_trace(
@@ -22,31 +23,86 @@ def _make_iv_trace(
     t_s = np.linspace(0.0, 10.0, 401, dtype=np.float64)
     v_true_mV = np.linspace(-2.0, 2.0, t_s.size, dtype=np.float64)
     i_true_nA = v_true_mV + 0.2 * v_true_mV**3
-    return {
-        "meta": TraceMeta(
-            specific_key=specific_key,
-            index=index,
-            yvalue=yvalue,
+    return Trace(
+        V_mV=v_true_mV + v_shift_mV,
+        I_nA=i_true_nA + i_shift_nA,
+        t_s=t_s,
+    )
+
+
+def _make_traces() -> Traces:
+    return Traces.from_fields(
+        traces=[
+            _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3),
+            _make_iv_trace("b", 1, 5.0, v_shift_mV=0.2, i_shift_nA=0.1),
+        ],
+        specific_keys=["a", "b"],
+        indices=[0, 1],
+        yvalues=[1.0, 5.0],
+        y_label=LabelSpec(
+            code_label="Aout_mV",
+            print_label="Aout_mV",
+            html_label="Aout_mV",
+            latex_label="Aout_mV",
         ),
-        "V_mV": v_true_mV + v_shift_mV,
-        "I_nA": i_true_nA + i_shift_nA,
-        "t_s": t_s,
-    }
+    )
 
 
 def _make_spec() -> offset.OffsetSpec:
     return offset.OffsetSpec(
-        Vbins_mV=AxisSpec(code_label="Vbins_mV", print_label="Vbins_mV", html_label="Vbins_mV", latex_label="Vbins_mV", values=np.linspace(-2.0, 2.0, 81, dtype=np.float64), order=1),
-        Ibins_nA=AxisSpec(code_label="Ibins_nA", print_label="Ibins_nA", html_label="Ibins_nA", latex_label="Ibins_nA", values=np.linspace(-4.0, 4.0, 81, dtype=np.float64), order=1),
-        Voff_mV=AxisSpec(code_label="Voff_mV", print_label="Voff_mV", html_label="Voff_mV", latex_label="Voff_mV", values=np.asarray([-0.4, 0.0, 0.2, 0.4], dtype=np.float64), order=1),
-        Ioff_nA=AxisSpec(code_label="Ioff_nA", print_label="Ioff_nA", html_label="Ioff_nA", latex_label="Ioff_nA", values=np.asarray([-0.3, 0.0, 0.1, 0.3], dtype=np.float64), order=1),
-        nu_Hz=ParamSpec(code_label="nu_Hz", print_label="nu_Hz", html_label="nu_Hz", latex_label="nu_Hz", values=20.0, fixed=True),
-        N_up=ParamSpec(code_label="N_up", print_label="N_up", html_label="N_up", latex_label="N_up", values=4, fixed=True),
+        Vbins_mV=AxisSpec(
+            code_label="Vbins_mV",
+            print_label="Vbins_mV",
+            html_label="Vbins_mV",
+            latex_label="Vbins_mV",
+            values=np.linspace(-2.0, 2.0, 81, dtype=np.float64),
+            order=1,
+        ),
+        Ibins_nA=AxisSpec(
+            code_label="Ibins_nA",
+            print_label="Ibins_nA",
+            html_label="Ibins_nA",
+            latex_label="Ibins_nA",
+            values=np.linspace(-4.0, 4.0, 81, dtype=np.float64),
+            order=1,
+        ),
+        Voffscan_mV=AxisSpec(
+            code_label="Voffscan_mV",
+            print_label="Voffscan_mV",
+            html_label="Voffscan_mV",
+            latex_label="Voffscan_mV",
+            values=np.asarray([-0.4, 0.0, 0.2, 0.4], dtype=np.float64),
+            order=1,
+        ),
+        Ioffscan_nA=AxisSpec(
+            code_label="Ioffscan_nA",
+            print_label="Ioffscan_nA",
+            html_label="Ioffscan_nA",
+            latex_label="Ioffscan_nA",
+            values=np.asarray([-0.3, 0.0, 0.1, 0.3], dtype=np.float64),
+            order=1,
+        ),
+        nu_Hz=ParamSpec(
+            code_label="nu_Hz",
+            print_label="nu_Hz",
+            html_label="nu_Hz",
+            latex_label="nu_Hz",
+            values=20.0,
+            fixed=True,
+        ),
+        N_up=ParamSpec(
+            code_label="N_up",
+            print_label="N_up",
+            html_label="N_up",
+            latex_label="N_up",
+            values=4,
+            fixed=True,
+        ),
     )
 
 
-def test_get_offset_returns_offsettrace_for_single_trace() -> None:
-    """Single-trace offset search should return the best offsets."""
+def test_offset_analysis_returns_single_dataset_for_single_trace() -> None:
+    """Single-trace offset search should return one stacked dataset."""
     trace = _make_iv_trace(
         specific_key="a",
         index=0,
@@ -57,36 +113,26 @@ def test_get_offset_returns_offsettrace_for_single_trace() -> None:
 
     out = offset.offset_analysis(traces=trace, spec=_make_spec())
 
-    assert out["Voff_mV"] == pytest.approx(0.4)
-    assert out["Ioff_nA"] == pytest.approx(0.3)
-    assert out["dGerr_G0"].shape == (4,)
-    assert out["dRerr_R0"].shape == (4,)
+    assert isinstance(out, Dataset)
+    assert isinstance(out.y, AxisSpec)
+    assert isinstance(out.index, AxisSpec)
+    assert isinstance(out.indices, AxisSpec)
+    assert isinstance(out.i, AxisSpec)
+    assert np.allclose(out.y.values, np.asarray([0.0]))
+    assert np.allclose(out.index.values, np.asarray([0.0]))
+    assert np.allclose(out.indices.values, np.asarray([0.0]))
+    assert out.dGerr_G0.values.shape == (1, 4)
+    assert out.dRerr_R0.values.shape == (1, 4)
+    assert out.Voff_mV.values.shape == (1,)
+    assert out.Ioff_nA.values.shape == (1,)
+    assert out.keys()[:7] == ("y", "i", "indices", "skeys", "specific_keys", "Voffscan_mV", "Ioffscan_nA")
+    assert out.Voffscan_mV.code_label == "Voffscan_mV"
+    assert out.Ioffscan_nA.code_label == "Ioffscan_nA"
 
 
-def test_offset_analysis_dispatches_single_trace() -> None:
-    """The public offset-analysis entrypoint should accept one trace."""
-    trace = _make_iv_trace(
-        specific_key="a",
-        index=0,
-        yvalue=1.0,
-        v_shift_mV=0.4,
-        i_shift_nA=0.3,
-    )
-
-    out = offset.offset_analysis(trace, spec=_make_spec())
-
-    assert out["Voff_mV"] == pytest.approx(0.4)
-    assert out["Ioff_nA"] == pytest.approx(0.3)
-
-
-def test_offset_analysis_returns_collection_with_lookup_methods() -> None:
-    """Collection offset search should return stacked offset arrays."""
-    traces = Traces(
-        traces=[
-            _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3),
-            _make_iv_trace("b", 1, 5.0, v_shift_mV=0.2, i_shift_nA=0.1),
-        ],
-    )
+def test_offset_analysis_returns_stacked_dataset_for_collection() -> None:
+    """Collection offset search should preserve trace order and y metadata."""
+    traces = _make_traces()
 
     out = offset.offset_analysis(
         traces=traces,
@@ -94,22 +140,32 @@ def test_offset_analysis_returns_collection_with_lookup_methods() -> None:
         show_progress=False,
     )
 
-    assert np.allclose(out.Voff_mV, np.asarray([0.4, 0.2]))
-    assert np.allclose(out.Ioff_nA, np.asarray([0.3, 0.1]))
-    assert out.dGerr_G0.shape == (2, 4)
-    assert out.dRerr_R0.shape == (2, 4)
-    assert out[0]["Voff_mV"] == pytest.approx(0.4)
-    assert out[1]["Voff_mV"] == pytest.approx(0.2)
+    assert isinstance(out, Dataset)
+    assert isinstance(out.y, AxisSpec)
+    assert isinstance(out.index, AxisSpec)
+    assert isinstance(out.indices, AxisSpec)
+    assert isinstance(out.i, AxisSpec)
+    assert isinstance(out.Aout_mV, AxisSpec)
+    assert np.allclose(out.y.values, np.asarray([1.0, 5.0]))
+    assert np.allclose(out.index.values, np.asarray([0.0, 1.0]))
+    assert np.allclose(out.indices.values, np.asarray([0.0, 1.0]))
+    assert out.y.code_label == "Aout_mV"
+    assert out.Aout_mV.code_label == "Aout_mV"
+    assert out.Voffscan_mV.code_label == "Voffscan_mV"
+    assert out.Ioffscan_nA.code_label == "Ioffscan_nA"
+    assert out.dGerr_G0.values.shape == (2, 4)
+    assert out.dRerr_R0.values.shape == (2, 4)
+    assert out.Voff_mV.values.shape == (2,)
+    assert out.Ioff_nA.values.shape == (2,)
+    assert np.allclose(out.Voff_mV.values, np.asarray([0.4, 0.2]))
+    assert np.allclose(out.Ioff_nA.values, np.asarray([0.3, 0.1]))
+    assert out["Aout_mV"] is out.y
+    assert out.keys()[:8] == ("y", "Aout_mV", "i", "indices", "skeys", "specific_keys", "Voffscan_mV", "Ioffscan_nA")
 
 
 def test_offset_analysis_parallel_matches_single_worker() -> None:
     """Trace-level parallelism should preserve numerical results."""
-    traces = Traces(
-        traces=[
-            _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3),
-            _make_iv_trace("b", 1, 5.0, v_shift_mV=0.2, i_shift_nA=0.1),
-        ],
-    )
+    traces = _make_traces()
     spec_obj = _make_spec()
 
     serial = offset.offset_analysis(
@@ -127,33 +183,10 @@ def test_offset_analysis_parallel_matches_single_worker() -> None:
         workers=2,
     )
 
-    assert np.allclose(parallel.Voff_mV, serial.Voff_mV)
-    assert np.allclose(parallel.Ioff_nA, serial.Ioff_nA)
-    assert np.allclose(parallel.dGerr_G0, serial.dGerr_G0)
-    assert np.allclose(parallel.dRerr_R0, serial.dRerr_R0)
-
-
-def test_offsettraces_accepts_plain_payload_traces() -> None:
-    """OffsetTraces should only need the per-trace payload."""
-    traces = offset.OffsetTraces(
-        traces=[
-            {
-                "dGerr_G0": np.asarray([0.0]),
-                "dRerr_R0": np.asarray([0.0]),
-                "Voff_mV": 0.0,
-                "Ioff_nA": 0.0,
-            },
-            {
-                "dGerr_G0": np.asarray([0.0]),
-                "dRerr_R0": np.asarray([0.0]),
-                "Voff_mV": 0.0,
-                "Ioff_nA": 0.0,
-            },
-        ],
-    )
-
-    assert len(traces) == 2
-    assert np.allclose(traces.Voff_mV, np.asarray([0.0, 0.0]))
+    assert np.allclose(parallel.Voff_mV.values, serial.Voff_mV.values)
+    assert np.allclose(parallel.Ioff_nA.values, serial.Ioff_nA.values)
+    assert np.allclose(parallel.dGerr_G0.values, serial.dGerr_G0.values)
+    assert np.allclose(parallel.dRerr_R0.values, serial.dRerr_R0.values)
 
 
 def test_resolve_backend_auto_uses_numpy_for_parallel_workers(
@@ -211,5 +244,7 @@ def test_get_offset_dispatches_to_jax_backend(
 
     out = offset.offset_analysis(traces=trace, spec=spec_obj, backend="jax")
 
-    assert out["Voff_mV"] == pytest.approx(0.2)
-    assert out["Ioff_nA"] == pytest.approx(0.0)
+    assert out.Voff_mV.values.shape == (1,)
+    assert out.Ioff_nA.values.shape == (1,)
+    assert out.Voff_mV.values[0] == pytest.approx(0.2)
+    assert out.Ioff_nA.values[0] == pytest.approx(0.0)

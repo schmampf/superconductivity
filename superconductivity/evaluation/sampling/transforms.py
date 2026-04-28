@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Iterator
 
 import numpy as np
 
 from ...utilities.constants import G0_muS
+from ...utilities.meta import Dataset, data
 from ...utilities.functions.binning import bin
 from ...utilities.functions.fill_nans import fill as fill_nans
 from ...utilities.safety import (
@@ -17,11 +19,11 @@ from ...utilities.safety import (
 )
 from ...utilities.types import NDArray64
 from ..traces import Trace, Traces
-from .containers import Sample, Samples
+from .containers import Sample, Samples, make_sample, make_samples
 from .specs import SamplingSpec, _validate_downsample_rate_Hz
 
 if TYPE_CHECKING:
-    from ..analysis import OffsetTrace, OffsetTraces
+    from ..analysis import OffsetDataset
 
 
 def _import_tqdm():
@@ -53,7 +55,7 @@ def _downsample_trace_arrays(
     nu_Hz: float,
 ) -> tuple[NDArray64, NDArray64, NDArray64]:
     """Downsample one raw IV trace onto a uniform time grid."""
-    label = trace["meta"].specific_key
+    label = "trace"
     t_raw = to_1d_float64(trace["t_s"], f"{label}.t_s")
     v_raw_mV = to_1d_float64(trace["V_mV"], f"{label}.V_mV")
     i_raw_nA = to_1d_float64(trace["I_nA"], f"{label}.I_nA")
@@ -114,13 +116,12 @@ def _copy_trace_with_arrays(
     t_s: NDArray64 | None = None,
 ) -> Trace:
     """Copy one trace while replacing its numeric arrays."""
-    t_values = np.asarray(trace["t_s"] if t_s is None else t_s, dtype=np.float64)
-    return {
-        "meta": trace["meta"],
-        "I_nA": np.asarray(I_nA, dtype=np.float64),
-        "V_mV": np.asarray(V_mV, dtype=np.float64),
-        "t_s": t_values,
-    }
+    t_values = np.asarray(trace.t_s.values if t_s is None else t_s, dtype=np.float64)
+    return Trace(
+        I_nA=np.asarray(I_nA, dtype=np.float64),
+        V_mV=np.asarray(V_mV, dtype=np.float64),
+        t_s=t_values,
+    )
 
 
 def _copy_sample(
@@ -128,17 +129,16 @@ def _copy_sample(
     **updates: object,
 ) -> Sample:
     """Copy one sampled trace and normalize numeric arrays."""
-    copied: Sample = {
-        "meta": sample["meta"],
-        "Vbins_mV": np.asarray(sample["Vbins_mV"], dtype=np.float64),
-        "Ibins_nA": np.asarray(sample["Ibins_nA"], dtype=np.float64),
-        "I_nA": np.asarray(sample["I_nA"], dtype=np.float64),
-        "V_mV": np.asarray(sample["V_mV"], dtype=np.float64),
-        "dG_G0": np.asarray(sample["dG_G0"], dtype=np.float64),
-        "dR_R0": np.asarray(sample["dR_R0"], dtype=np.float64),
-    }
-    copied.update(updates)
-    return copied
+    vbins_mV = np.asarray(updates.get("Vbins_mV", sample["Vbins_mV"]), dtype=np.float64)
+    ibins_nA = np.asarray(updates.get("Ibins_nA", sample["Ibins_nA"]), dtype=np.float64)
+    i_nA = np.asarray(updates.get("I_nA", sample["I_nA"]), dtype=np.float64)
+    v_mV = np.asarray(updates.get("V_mV", sample["V_mV"]), dtype=np.float64)
+    return make_sample(
+        Vbins_mV=vbins_mV,
+        Ibins_nA=ibins_nA,
+        I_nA=i_nA,
+        V_mV=v_mV,
+    )
 
 
 def downsample_trace(
@@ -167,8 +167,12 @@ def downsample_traces(
             desc="downsample_traces",
             unit="trace",
         )
-    return Traces(
+    return Traces.from_fields(
         traces=[downsample_trace(trace, nu_Hz=nu_Hz) for trace in iterable],
+        specific_keys=traces.specific_keys,
+        indices=np.asarray(traces.indices, dtype=np.int64),
+        yvalues=np.asarray(traces.yvalues, dtype=np.float64),
+        y_label=None if traces.y is None else traces.y,
     )
 
 
@@ -201,15 +205,13 @@ def _sample_trace(
     dG_G0 = np.gradient(i_sampled_nA, samplingspec.Vbins_mV) / G0_muS
     dR_R0 = np.gradient(v_sampled_mV, samplingspec.Ibins_nA) * G0_muS
 
-    return {
-        "meta": trace["meta"],
-        "Vbins_mV": np.asarray(samplingspec.Vbins_mV, dtype=np.float64),
-        "Ibins_nA": np.asarray(samplingspec.Ibins_nA, dtype=np.float64),
-        "I_nA": np.asarray(i_sampled_nA, dtype=np.float64),
-        "V_mV": np.asarray(v_sampled_mV, dtype=np.float64),
-        "dG_G0": np.asarray(dG_G0, dtype=np.float64),
-        "dR_R0": np.asarray(dR_R0, dtype=np.float64),
-    }
+    _ = dG_G0, dR_R0, trace
+    return make_sample(
+        Vbins_mV=np.asarray(samplingspec.Vbins_mV, dtype=np.float64),
+        Ibins_nA=np.asarray(samplingspec.Ibins_nA, dtype=np.float64),
+        I_nA=np.asarray(i_sampled_nA, dtype=np.float64),
+        V_mV=np.asarray(v_sampled_mV, dtype=np.float64),
+    )
 
 
 def _sample_traces(
@@ -228,10 +230,14 @@ def _sample_traces(
             unit="trace",
         )
 
-    sampled = [
-        _sample_trace(trace=trace, samplingspec=samplingspec) for trace in iterable
-    ]
-    return Samples(traces=sampled)
+    sampled = [_sample_trace(trace=trace, samplingspec=samplingspec) for trace in iterable]
+    return make_samples(
+        Vbins_mV=np.asarray(samplingspec.Vbins_mV, dtype=np.float64),
+        Ibins_nA=np.asarray(samplingspec.Ibins_nA, dtype=np.float64),
+        I_nA=np.vstack([np.asarray(sample["I_nA"], dtype=np.float64) for sample in sampled]),
+        V_mV=np.vstack([np.asarray(sample["V_mV"], dtype=np.float64) for sample in sampled]),
+        yvalues=np.asarray(traces.yvalues, dtype=np.float64),
+    )
 
 
 def _smooth_supported_segment(
@@ -298,44 +304,52 @@ def _smooth_samples(
     show_progress: bool = False,
 ) -> Samples:
     """Smooth one collection of sampled IV traces."""
-    iterable: Iterator[Sample] | Samples = samples
+    iterable = range(len(samples))
     if show_progress:
         tqdm = _import_tqdm()
         iterable = tqdm(
-            samples,
+            iterable,
             total=len(samples),
             desc="smoothing",
             unit="trace",
         )
 
-    traces = [_smooth_sample(sample=sample, spec=spec) for sample in iterable]
-    return Samples(traces=traces)
+    traces = [
+        _smooth_sample(
+            sample=make_sample(
+                Vbins_mV=np.asarray(samples["Vbins_mV"], dtype=np.float64),
+                Ibins_nA=np.asarray(samples["Ibins_nA"], dtype=np.float64),
+                I_nA=np.asarray(samples["I_nA"], dtype=np.float64)[index],
+                V_mV=np.asarray(samples["V_mV"], dtype=np.float64)[index],
+            ),
+            spec=spec,
+        )
+        for index in iterable
+    ]
+    return make_samples(
+        Vbins_mV=np.asarray(samples["Vbins_mV"], dtype=np.float64),
+        Ibins_nA=np.asarray(samples["Ibins_nA"], dtype=np.float64),
+        I_nA=np.vstack([np.asarray(trace["I_nA"], dtype=np.float64) for trace in traces]),
+        V_mV=np.vstack([np.asarray(trace["V_mV"], dtype=np.float64) for trace in traces]),
+        yvalues=np.asarray(samples.yvalues, dtype=np.float64),
+    )
 
 
 def _offset_arrays_from_analysis(
-    offsetanalysis: OffsetTrace | OffsetTraces,
+    offsetanalysis: Dataset | Mapping[str, object],
     *,
     count: int,
 ) -> tuple[NDArray64, NDArray64]:
     """Return aligned per-trace offsets from one offset analysis result."""
-    from ..analysis import OffsetTraces
-
-    if isinstance(offsetanalysis, dict):
-        if count != 1:
-            raise ValueError("OffsetTrace can only be used with one IV trace.")
-        return (
-            np.asarray([float(offsetanalysis["Voff_mV"])], dtype=np.float64),
-            np.asarray([float(offsetanalysis["Ioff_nA"])], dtype=np.float64),
-        )
-
-    if not isinstance(offsetanalysis, OffsetTraces):
-        raise TypeError("offsetanalysis must be an OffsetTrace or OffsetTraces.")
-    if len(offsetanalysis) != count:
+    if isinstance(offsetanalysis, Mapping):
+        voff = np.asarray(offsetanalysis["Voff_mV"], dtype=np.float64).reshape(-1)
+        ioff = np.asarray(offsetanalysis["Ioff_nA"], dtype=np.float64).reshape(-1)
+    else:
+        voff = np.asarray(offsetanalysis["Voff_mV"].values, dtype=np.float64).reshape(-1)
+        ioff = np.asarray(offsetanalysis["Ioff_nA"].values, dtype=np.float64).reshape(-1)
+    if voff.size != count or ioff.size != count:
         raise ValueError("traces and offsetanalysis must have the same length.")
-    return (
-        np.asarray(offsetanalysis.Voff_mV, dtype=np.float64),
-        np.asarray(offsetanalysis.Ioff_nA, dtype=np.float64),
-    )
+    return voff, ioff
 
 
 def _offset_correct_trace(
@@ -414,7 +428,7 @@ def offset_correction(
             offsetanalysis,
             count=len(traces),
         )
-        return Traces(
+        return Traces.from_fields(
             traces=[
                 _offset_correct_trace(
                     trace,
@@ -423,6 +437,10 @@ def offset_correction(
                 )
                 for index, trace in enumerate(traces)
             ],
+            specific_keys=traces.specific_keys,
+            indices=np.asarray(traces.indices, dtype=np.int64),
+            yvalues=np.asarray(traces.yvalues, dtype=np.float64),
+            y_label=None if traces.y is None else traces.y,
         )
 
     voff_mV, ioff_nA = _offset_arrays_from_analysis(offsetanalysis, count=1)
@@ -450,10 +468,14 @@ def upsampling(
                 desc="upsampling",
                 unit="trace",
             )
-        return Traces(
+        return Traces.from_fields(
             traces=[
                 _upsample_trace(trace, factor=samplingspec.N_up) for trace in iterable
             ],
+            specific_keys=traces.specific_keys,
+            indices=np.asarray(traces.indices, dtype=np.int64),
+            yvalues=np.asarray(traces.yvalues, dtype=np.float64),
+            y_label=None if traces.y is None else traces.y,
         )
     return _upsample_trace(traces, factor=samplingspec.N_up)
 

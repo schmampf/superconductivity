@@ -13,7 +13,13 @@ from superconductivity.models.bcs import bcs as bcs_module
 from superconductivity.models.bcs import pat_kernel, sim_bcs
 from superconductivity.models.bcs.backend import Nmax_
 from superconductivity.models.bcs.bcs import get_Ibcs_nA
-from superconductivity.utilities.meta import TransportDatasetSpec, axis, param
+from superconductivity.utilities.meta import (
+    AxisSpec,
+    ParamSpec,
+    TransportDatasetSpec,
+    axis,
+    param,
+)
 
 _SCIPY_AVAILABLE = importlib.util.find_spec("scipy") is not None
 _JAX_AVAILABLE = importlib.util.find_spec("jax") is not None
@@ -312,11 +318,12 @@ def test_sim_bcs_returns_transport_dataset_scalar() -> None:
     assert ds.eV_Delta.values.shape == (V_mV.size,)
     assert ds.eI_DeltaG0.values.shape == (V_mV.size,)
     assert ds.eI_DeltaGN.values.shape == (V_mV.size,)
-    assert ds.Tc_K.values.shape == (V_mV.size,)
-    assert ds.T_Tc.values.shape == (V_mV.size,)
-    assert ds.DeltaT_meV.values.shape == (V_mV.size,)
-    assert ds.DeltaT_Delta.values.shape == (V_mV.size,)
-    assert ds.gamma_Delta.values.shape == (V_mV.size,)
+    assert isinstance(ds.eV_Delta, AxisSpec)
+    assert isinstance(ds.Tc_K, ParamSpec)
+    assert isinstance(ds.T_Tc, ParamSpec)
+    assert isinstance(ds.DeltaT_meV, ParamSpec)
+    assert isinstance(ds.DeltaT_Delta, ParamSpec)
+    assert isinstance(ds.gamma_Delta, ParamSpec)
     axis_labels = {entry.code_label for entry in ds.axes}
     param_labels = {entry.code_label for entry in ds.params}
     data_labels = {entry.code_label for entry in ds.data}
@@ -354,8 +361,10 @@ def test_sim_bcs_returns_transport_dataset_with_sweeps() -> None:
     assert isinstance(ds, TransportDatasetSpec)
     assert ds.I_nA.values.shape == (2, 2, 2, V_mV.size)
     assert ds.dG_GN.values.shape == (2, 2, 2, V_mV.size)
-    assert ds.eA_hnu.values.shape == (2, 2, 2, V_mV.size)
-    assert ds.hnu_Delta.values.shape == (2, 2, 2, V_mV.size)
+    assert isinstance(ds.eA_hnu, AxisSpec)
+    assert ds.eA_hnu.values.shape == (2,)
+    assert ds.eA_hnu.order == 2
+    assert isinstance(ds.hnu_Delta, ParamSpec)
     axis_by_label = {entry.code_label: entry for entry in ds.axes}
     assert axis_by_label["GN_G0"].order == 0
     assert axis_by_label["T_K"].order == 1

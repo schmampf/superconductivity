@@ -58,6 +58,11 @@ LABEL_ROWS = {
         "html_label": "<i>I</i> (nA)",
         "latex_label": r"$I$ (nA)",
     },
+    "y": {
+        "print_label": "y",
+        "html_label": "<i>y</i>",
+        "latex_label": r"$y$",
+    },
     "A_mV": {
         "print_label": "A (mV)",
         "html_label": "<i>A</i> (mV)",

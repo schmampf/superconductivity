@@ -6,7 +6,6 @@ import pytest
 from superconductivity.evaluation import CalibrationSpec, calibrate
 from superconductivity.evaluation.sampling.containers import Sample, Samples
 from superconductivity.evaluation.traces import KeysSpec
-from superconductivity.evaluation.traces.meta import TraceMeta
 from superconductivity.utilities.meta.axis import AxisSpec, axis
 from superconductivity.utilities.meta.label import label
 from superconductivity.utilities.functions.binning import bin
@@ -17,11 +16,6 @@ def _make_samples() -> Samples:
     for index, yvalue in enumerate([0.0, 1.0, 2.0]):
         traces.append(
             {
-                "meta": TraceMeta(
-                    specific_key=f"trace-{index}",
-                    index=index,
-                    yvalue=yvalue,
-                ),
                 "Vbins_mV": np.asarray([0.0, 1.0], dtype=np.float64),
                 "Ibins_nA": np.asarray([0.0, 1.0], dtype=np.float64),
                 "I_nA": np.asarray([10.0 + index, 20.0 + index], dtype=np.float64),

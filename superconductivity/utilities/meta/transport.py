@@ -142,9 +142,11 @@ class TransportDatasetSpec(Dataset):
 
     @property
     def eV_Delta(self) -> DataSpec | ParamSpec:
-        return self._derived_value(
+        return self._derived_binary_value(
             "eV_Delta",
-            self._safe_divide(self._voltage_values, self._Delta_values),
+            "V_mV",
+            "Delta_meV",
+            self._safe_divide,
         )
 
     @property
@@ -216,73 +218,85 @@ class TransportDatasetSpec(Dataset):
 
     @property
     def eA_hnu(self) -> DataSpec | ParamSpec:
-        return self._derived_value(
+        return self._derived_binary_value(
             "eA_hnu",
-            self._safe_divide(self._amplitude_values, self._frequency_values),
+            "A_mV",
+            "nu_GHz",
+            self._safe_divide,
         )
 
     @property
     def eA_Delta(self) -> DataSpec | ParamSpec:
-        return self._derived_value(
+        return self._derived_binary_value(
             "eA_Delta",
-            self._safe_divide(self._amplitude_values, self._Delta_values),
+            "A_mV",
+            "Delta_meV",
+            self._safe_divide,
         )
 
     @property
     def hnu_Delta(self) -> DataSpec | ParamSpec:
-        return self._derived_value(
+        return self._derived_binary_value(
             "hnu_Delta",
-            self._safe_divide(self._frequency_values, self._Delta_values),
+            "nu_GHz",
+            "Delta_meV",
+            self._safe_divide,
         )
 
     @property
     def Tc_K(self) -> DataSpec:
         from ...models.basics import get_Tc_K
 
-        return self._derived_data(
+        return self._derived_entry(
             "Tc_K",
-            np.vectorize(get_Tc_K, otypes=[np.float64])(self._Delta_values),
+            np.vectorize(get_Tc_K, otypes=[np.float64])(
+                np.asarray(self._find_entry("Delta_meV").values, dtype=np.float64)
+            ),
+            self._find_entry("Delta_meV"),
         )
 
     @property
     def T_Tc(self) -> DataSpec | ParamSpec:
-        return self._derived_value(
+        return self._derived_binary_value(
             "T_Tc",
-            self._safe_divide(self._temperature_values, self.Tc_K),
+            "T_K",
+            "Tc_K",
+            self._safe_divide,
         )
 
     @property
     def DeltaT_meV(self) -> DataSpec:
         from ...models.basics import get_DeltaT_meV
 
-        return self._derived_data(
+        return self._derived_binary_value(
             "DeltaT_meV",
-            np.vectorize(get_DeltaT_meV, otypes=[np.float64])(
-                self._Delta_values,
-                self._temperature_values,
-            ),
+            "Delta_meV",
+            "T_K",
+            lambda delta, temperature: np.vectorize(
+                get_DeltaT_meV,
+                otypes=[np.float64],
+            )(delta, temperature),
         )
 
     @property
     def DeltaT_Delta(self) -> DataSpec | ParamSpec:
-        return self._derived_value(
+        return self._derived_binary_value(
             "DeltaT_Delta",
-            self._safe_divide(self.DeltaT_meV, self._Delta_values),
+            "DeltaT_meV",
+            "Delta_meV",
+            self._safe_divide,
         )
 
     @property
     def sigmaV_Delta(self) -> DataSpec | ParamSpec:
         sigma_entry = self._find_entry("sigmaV_mV")
         if sigma_entry is None:
-            raise ValueError(
-                "sigmaV_Delta requires a 'sigmaV_mV' axis or param entry."
-            )
-        return self._derived_value(
+            raise ValueError("sigmaV_Delta requires a 'sigmaV_mV' axis or param entry.")
+        return self._derived_binary_value(
             "sigmaV_Delta",
-            self._safe_divide(
-                self._entry_values_full(sigma_entry),
-                self._Delta_values,
-            ),
+            "sigmaV_mV",
+            "Delta_meV",
+            self._safe_divide,
         )
 
     @property
@@ -290,12 +304,11 @@ class TransportDatasetSpec(Dataset):
         gamma_entry = self._find_entry("gamma_meV")
         if gamma_entry is None:
             raise ValueError("gamma_Delta requires a 'gamma_meV' axis or param entry.")
-        return self._derived_data(
+        return self._derived_binary_value(
             "gamma_Delta",
-            self._safe_divide(
-                self._entry_values_full(gamma_entry),
-                self._Delta_values,
-            ),
+            "gamma_meV",
+            "Delta_meV",
+            self._safe_divide,
         )
 
     @property
@@ -389,22 +402,126 @@ class TransportDatasetSpec(Dataset):
             values=values,
         )
 
+    def _derived_axis(
+        self,
+        code_label: str,
+        values: object,
+        axis_entry: AxisSpec,
+    ) -> AxisSpec:
+        meta = label(code_label)
+        return AxisSpec(
+            code_label=meta.code_label,
+            print_label=meta.print_label,
+            html_label=meta.html_label,
+            latex_label=meta.latex_label,
+            values=values,
+            order=axis_entry.order,
+        )
+
+    def _derived_param(self, code_label: str, values: object) -> ParamSpec:
+        meta = label(code_label)
+        return ParamSpec(
+            code_label=meta.code_label,
+            print_label=meta.print_label,
+            html_label=meta.html_label,
+            latex_label=meta.latex_label,
+            values=values,
+        )
+
+    def _derived_entry(
+        self,
+        code_label: str,
+        values: object,
+        source: AxisSpec | DataSpec | ParamSpec | None = None,
+    ) -> AxisSpec | DataSpec | ParamSpec:
+        array = np.asarray(values, dtype=np.float64)
+        if isinstance(source, AxisSpec):
+            return self._derived_axis(code_label, array.reshape(-1), source)
+        if isinstance(source, ParamSpec) and array.ndim == 0:
+            return self._derived_param(code_label, float(array))
+        if array.ndim == 0:
+            return self._derived_param(code_label, float(array))
+        return self._derived_data(code_label, array)
+
     def _derived_value(
         self,
         code_label: str,
         values: object,
-    ) -> DataSpec | ParamSpec:
+    ) -> AxisSpec | DataSpec | ParamSpec:
         array = np.asarray(values, dtype=np.float64)
         if array.ndim == 0:
-            meta = label(code_label)
-            return ParamSpec(
-                code_label=meta.code_label,
-                print_label=meta.print_label,
-                html_label=meta.html_label,
-                latex_label=meta.latex_label,
-                values=float(array),
-            )
+            return self._derived_param(code_label, float(array))
         return self._derived_data(code_label, array)
+
+    def _derived_binary_value(
+        self,
+        code_label: str,
+        left_label: str,
+        right_label: str,
+        op,
+    ) -> AxisSpec | DataSpec | ParamSpec:
+        left = self._get_entry_or_derived(left_label)
+        right = self._get_entry_or_derived(right_label)
+        if left is None or right is None:
+            raise AttributeError(
+                f"{code_label} requires '{left_label}' and '{right_label}'."
+            )
+        source_axis = self._single_axis_source(left, right)
+        if source_axis is not None:
+            values = op(
+                np.asarray(source_axis.values, dtype=np.float64),
+                self._other_scalar_value(left, right, source_axis),
+            )
+            return self._derived_axis(code_label, values, source_axis)
+        if self._all_scalar_sources(left, right):
+            values = op(
+                np.asarray(left.values, dtype=np.float64),
+                np.asarray(right.values, dtype=np.float64),
+            )
+            return self._derived_param(code_label, float(np.asarray(values)))
+        values = op(
+            self._entry_values_full(left),
+            self._entry_values_full(right),
+        )
+        return self._derived_data(code_label, values)
+
+    def _single_axis_source(
+        self,
+        *entries: AxisSpec | DataSpec | ParamSpec,
+    ) -> AxisSpec | None:
+        if any(
+            isinstance(entry, DataSpec) and not isinstance(entry, (AxisSpec, ParamSpec))
+            for entry in entries
+        ):
+            return None
+        axis_entries = [entry for entry in entries if isinstance(entry, AxisSpec)]
+        if len(axis_entries) != 1:
+            return None
+        if any(
+            isinstance(entry, ParamSpec)
+            and np.asarray(entry.values, dtype=np.float64).ndim != 0
+            for entry in entries
+            if not isinstance(entry, AxisSpec)
+        ):
+            return None
+        return axis_entries[0]
+
+    def _all_scalar_sources(
+        self,
+        *entries: AxisSpec | DataSpec | ParamSpec,
+    ) -> bool:
+        return all(
+            np.asarray(entry.values, dtype=np.float64).ndim == 0 for entry in entries
+        )
+
+    def _other_scalar_value(
+        self,
+        left: AxisSpec | DataSpec | ParamSpec,
+        right: AxisSpec | DataSpec | ParamSpec,
+        axis_entry: AxisSpec,
+    ) -> NDArray64:
+        other = right if left is axis_entry else left
+        return np.asarray(other.values, dtype=np.float64)
 
     def _derived_entries(self) -> dict[str, object]:
         entries: dict[str, object] = {}
@@ -441,6 +558,19 @@ class TransportDatasetSpec(Dataset):
             or self._find_data(code_label)
             or self._find_param(code_label)
         )
+
+    def _get_entry_or_derived(
+        self,
+        code_label: str,
+    ) -> AxisSpec | DataSpec | ParamSpec | None:
+        entry = self._find_entry(code_label)
+        if entry is not None:
+            return entry
+        if code_label in _DERIVED_LABELS:
+            derived = getattr(self, code_label, None)
+            if isinstance(derived, (AxisSpec, DataSpec, ParamSpec)):
+                return derived
+        return None
 
     def _entry_values_full(
         self,
@@ -490,8 +620,6 @@ def validate_reduced_dataset(ds: Dataset) -> None:
     """Validate the reduced transport contract on top of ``Dataset``."""
     _require_entry(ds, "I_nA")
     _require_entry(ds, "V_mV")
-    _require_entry(ds, "Delta_meV")
-    _require_entry(ds, "GN_G0")
 
     i_axis = _has_axis(ds, "I_nA")
     v_axis = _has_axis(ds, "V_mV")

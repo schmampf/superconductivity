@@ -81,9 +81,9 @@ def _validate_axis(
     name: str,
 ) -> NDArray64:
     axis_values = np.asarray(values, dtype=np.float64).reshape(-1)
-    require_min_size(axis_values, 2, name)
+    require_min_size(axis_values, 1, name)
     require_all_finite(axis_values, name)
-    if np.any(np.diff(axis_values) <= 0.0):
+    if axis_values.size > 1 and np.any(np.diff(axis_values) <= 0.0):
         raise ValueError(f"{name} must be strictly increasing.")
     return axis_values
 

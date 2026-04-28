@@ -109,7 +109,7 @@ def test_get_traces_selects_one_trace_by_specific_key(
     """Specific-key selection should return a one-trace collection."""
     _patch_fake_h5(monkeypatch)
 
-    traces = traces_module.get_traces(
+    trace = traces_module.get_traces(
         filespec=FileSpec(h5path="dummy.h5", measurement="test"),
         keysspec=KeysSpec(strip1="dBm"),
         tracespec=traces_module.TraceSpec(
@@ -120,13 +120,8 @@ def test_get_traces_selects_one_trace_by_specific_key(
         ),
         specific_key="nu=1dBm",
     )
-    trace = traces[0]
 
-    assert len(traces) == 1
-    assert isinstance(trace, dict)
-    assert trace["meta"].specific_key == "nu=1dBm"
-    assert trace["meta"].index == 0
-    assert trace["meta"].yvalue == pytest.approx(1.0)
+    assert isinstance(trace, traces_module.Trace)
     assert np.allclose(trace["I_nA"], np.asarray([0.0, 1.0, 3.0]))
     assert np.allclose(trace["V_mV"], np.asarray([0.0, 1.0, 3.0]))
     assert np.allclose(trace["t_s"], np.asarray([0.0, 1.0, 3.0]))
@@ -138,7 +133,7 @@ def test_get_traces_accepts_filespec_with_measurement(
     """FileSpec should provide the measurement implicitly."""
     _patch_fake_h5(monkeypatch)
 
-    traces = traces_module.get_traces(
+    trace = traces_module.get_traces(
         filespec=FileSpec(h5path="dummy.h5", measurement="test"),
         keysspec=KeysSpec(strip1="dBm"),
         tracespec=traces_module.TraceSpec(
@@ -149,10 +144,8 @@ def test_get_traces_accepts_filespec_with_measurement(
         ),
         specific_key="nu=1dBm",
     )
-    trace = traces[0]
 
-    assert trace["meta"].specific_key == "nu=1dBm"
-    assert trace["meta"].yvalue == pytest.approx(1.0)
+    assert np.allclose(trace["V_mV"], np.asarray([0.0, 1.0, 3.0]))
 
 
 def test_get_traces_resolves_one_trace_by_value(
@@ -180,7 +173,7 @@ def test_get_traces_resolves_one_trace_by_value(
         ),
     )
 
-    traces = traces_module.get_traces(
+    trace = traces_module.get_traces(
         filespec=FileSpec(h5path="dummy.h5", measurement="test"),
         tracespec=traces_module.TraceSpec(
             amp_voltage=1.0,
@@ -190,11 +183,8 @@ def test_get_traces_resolves_one_trace_by_value(
         ),
         yvalue=5.0,
     )
-    trace = traces[0]
 
-    assert trace["meta"].specific_key == "nu=5dBm"
-    assert trace["meta"].index == 0
-    assert trace["meta"].yvalue == pytest.approx(5.0)
+    assert np.allclose(trace["V_mV"], np.asarray([0.0, 2.0, 4.0]))
 
 
 def test_get_traces_returns_collection_with_lookup_methods(
@@ -209,7 +199,16 @@ def test_get_traces_returns_collection_with_lookup_methods(
             specific_keys=["nu=1dBm", "nu=5dBm"],
             indices=np.asarray([0, 1], dtype=np.int64),
             yvalues=np.asarray([1.0, 5.0]),
-            spec=KeysSpec(strip0="=", strip1="dBm"),
+            spec=KeysSpec(
+                strip0="=",
+                strip1="dBm",
+                label=LabelSpec(
+                    code_label="nu_GHz",
+                    print_label="nu (GHz)",
+                    html_label="<i>nu</i> (GHz)",
+                    latex_label=r"$\nu$ (GHz)",
+                ),
+            ),
         ),
         tracespec=traces_module.TraceSpec(
             amp_voltage=1.0,
@@ -222,7 +221,21 @@ def test_get_traces_returns_collection_with_lookup_methods(
     assert len(traces) == 2
     assert traces.specific_keys == ["nu=1dBm", "nu=5dBm"]
     assert np.allclose(traces.yvalues, np.asarray([1.0, 5.0]))
-    assert traces[0]["meta"].specific_key == "nu=1dBm"
+    assert traces.y is not None
+    assert traces.y.code_label == "nu_GHz"
+    assert np.allclose(traces.indices, np.asarray([0.0, 1.0]))
+    assert np.allclose(traces.y.values, np.asarray([1.0, 5.0]))
+    assert traces.keys() == (
+        "y",
+        "nu_GHz",
+        "i",
+        "indices",
+        "skeys",
+        "specific_keys",
+        "t_s",
+        "I_nA",
+        "V_mV",
+    )
     assert np.allclose(traces[1]["I_nA"], np.asarray([0.0, 2.0, 4.0]))
     assert len(traces.I_nA) == 2
     assert len(traces.V_mV) == 2
@@ -254,6 +267,7 @@ def test_get_traces_accepts_filespec_keys_and_ivspec(
     assert len(traces) == 2
     assert traces.specific_keys == ["nu=1dBm", "nu=5dBm"]
     assert np.allclose(traces.yvalues, np.asarray([1.0, 5.0]))
+    assert np.allclose(traces.indices, np.asarray([0.0, 1.0]))
 
 
 def test_get_traces_rejects_mismatched_keys_and_yvalues() -> None:
@@ -270,10 +284,10 @@ def test_get_traces_rejects_mismatched_keys_and_yvalues() -> None:
         )
 
 
-def test_get_traces_preserves_non_numeric_yvalue_metadata(
+def test_get_traces_falls_back_to_index_for_non_numeric_yvalues(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Trace metadata should keep raw string y-values when parsing fails."""
+    """Non-numeric y-values should fall back to the positional index axis."""
     _patch_fake_h5(monkeypatch)
 
     traces = traces_module.get_traces(
@@ -292,6 +306,6 @@ def test_get_traces_preserves_non_numeric_yvalue_metadata(
         ),
     )
 
-    assert traces[0]["meta"].yvalue == "alpha"
-    assert traces[1]["meta"].yvalue == "beta"
-    assert np.isnan(traces.yvalues).all()
+    assert np.allclose(traces.yvalues, np.asarray([0.0, 1.0]))
+    assert traces.y is not None
+    assert traces.y.code_label == "y"

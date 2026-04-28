@@ -43,7 +43,6 @@ from .evaluation.traces import (
     Keys,
     KeysSpec,
     Trace,
-    TraceMeta,
     Traces,
     TraceSpec,
     get_keys,

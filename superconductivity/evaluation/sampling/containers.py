@@ -2,122 +2,213 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Iterator, TypedDict
+from dataclasses import dataclass
 
 import numpy as np
-from numpy.typing import NDArray
 
+from ...utilities.meta import TransportDatasetSpec, axis, data
 from ...utilities.types import NDArray64
-from ..traces import TraceMeta
-from ..traces.meta import numeric_yvalue
 
 
-class Sample(TypedDict):
-    """One sampled IV result."""
+@dataclass(frozen=True, slots=True)
+class Sample:
+    """One sampled result split into voltage- and current-bias datasets."""
 
-    meta: TraceMeta
-    Vbins_mV: NDArray64
-    Ibins_nA: NDArray64
-    I_nA: NDArray64
-    V_mV: NDArray64
-    dG_G0: NDArray64
-    dR_R0: NDArray64
+    exp_v: TransportDatasetSpec
+    exp_i: TransportDatasetSpec
+
+    def __getitem__(self, key: str):
+        if key == "exp_v":
+            return self.exp_v
+        if key == "exp_i":
+            return self.exp_i
+        if key == "Vbins_mV":
+            return np.asarray(self.exp_v.V_mV.values, dtype=np.float64)
+        if key == "Ibins_nA":
+            return np.asarray(self.exp_i.I_nA.values, dtype=np.float64)
+        if key == "I_nA":
+            return np.asarray(self.exp_v.I_nA.values, dtype=np.float64)
+        if key == "V_mV":
+            return np.asarray(self.exp_i.V_mV.values, dtype=np.float64)
+        if key == "dG_G0":
+            return np.asarray(self.exp_v.dG_G0.values, dtype=np.float64)
+        if key == "dR_R0":
+            return np.asarray(self.exp_i.dR_R0.values, dtype=np.float64)
+        raise KeyError(key)
+
+    def copy(self) -> dict[str, NDArray64 | TransportDatasetSpec]:
+        """Return a legacy-style copy used by the GUI/tests."""
+        return {
+            "exp_v": self.exp_v,
+            "exp_i": self.exp_i,
+            "Vbins_mV": np.asarray(self["Vbins_mV"], dtype=np.float64).copy(),
+            "Ibins_nA": np.asarray(self["Ibins_nA"], dtype=np.float64).copy(),
+            "I_nA": np.asarray(self["I_nA"], dtype=np.float64).copy(),
+            "V_mV": np.asarray(self["V_mV"], dtype=np.float64).copy(),
+            "dG_G0": np.asarray(self["dG_G0"], dtype=np.float64).copy(),
+            "dR_R0": np.asarray(self["dR_R0"], dtype=np.float64).copy(),
+        }
 
 
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class Samples:
-    """Container for sampled IV results.
+    """Stacked sampled results as two aggregated transport datasets."""
 
-    Parameters
-    ----------
-    traces : list of Sample
-        Sampled traces on shared voltage and current grids.
-    """
+    exp_v: TransportDatasetSpec
+    exp_i: TransportDatasetSpec
+    yvalues: NDArray64
 
-    traces: list[Sample]
-    Vbins_mV: NDArray64 = field(init=False)
-    Ibins_nA: NDArray64 = field(init=False)
-    I_nA: NDArray64 = field(init=False)
-    V_mV: NDArray64 = field(init=False)
-    dG_G0: NDArray64 = field(init=False)
-    dR_R0: NDArray64 = field(init=False)
+    def __init__(
+        self,
+        *,
+        exp_v: TransportDatasetSpec | None = None,
+        exp_i: TransportDatasetSpec | None = None,
+        yvalues: NDArray64 | None = None,
+        traces: list[dict[str, object]] | None = None,
+    ) -> None:
+        if traces is not None:
+            built = _samples_from_traces(traces)
+            object.__setattr__(self, "exp_v", built.exp_v)
+            object.__setattr__(self, "exp_i", built.exp_i)
+            object.__setattr__(self, "yvalues", built.yvalues)
+            return
+        if exp_v is None or exp_i is None or yvalues is None:
+            raise TypeError("Samples requires exp_v, exp_i, and yvalues.")
+        object.__setattr__(self, "exp_v", exp_v)
+        object.__setattr__(self, "exp_i", exp_i)
+        object.__setattr__(
+            self,
+            "yvalues",
+            np.asarray(yvalues, dtype=np.float64).reshape(-1),
+        )
 
-    def __post_init__(self) -> None:
-        """Build stacked arrays from ``traces``."""
-        if len(self.traces) == 0:
-            raise ValueError("traces must not be empty.")
-
-        i_rows: list[NDArray64] = []
-        v_rows: list[NDArray64] = []
-        dg_rows: list[NDArray64] = []
-        dr_rows: list[NDArray64] = []
-
-        vbin_ref = np.asarray(self.traces[0]["Vbins_mV"], dtype=np.float64)
-        ibin_ref = np.asarray(self.traces[0]["Ibins_nA"], dtype=np.float64)
-
-        for trace in self.traces:
-            vbin = np.asarray(trace["Vbins_mV"], dtype=np.float64)
-            ibin = np.asarray(trace["Ibins_nA"], dtype=np.float64)
-            if not np.array_equal(vbin, vbin_ref):
-                raise ValueError("All traces must share the same Vbins_mV grid.")
-            if not np.array_equal(ibin, ibin_ref):
-                raise ValueError("All traces must share the same Ibins_nA grid.")
-
-            i_rows.append(np.asarray(trace["I_nA"], dtype=np.float64))
-            v_rows.append(np.asarray(trace["V_mV"], dtype=np.float64))
-            dg_rows.append(np.asarray(trace["dG_G0"], dtype=np.float64))
-            dr_rows.append(np.asarray(trace["dR_R0"], dtype=np.float64))
-
-        self.Vbins_mV = np.asarray(vbin_ref, dtype=np.float64)
-        self.Ibins_nA = np.asarray(ibin_ref, dtype=np.float64)
-        self.I_nA = np.vstack(i_rows)
-        self.V_mV = np.vstack(v_rows)
-        self.dG_G0 = np.vstack(dg_rows)
-        self.dR_R0 = np.vstack(dr_rows)
+    def __getitem__(self, key: str):
+        if isinstance(key, int):
+            return make_sample(
+                Vbins_mV=np.asarray(self["Vbins_mV"], dtype=np.float64),
+                Ibins_nA=np.asarray(self["Ibins_nA"], dtype=np.float64),
+                I_nA=np.asarray(self["I_nA"], dtype=np.float64)[key],
+                V_mV=np.asarray(self["V_mV"], dtype=np.float64)[key],
+            )
+        if key == "exp_v":
+            return self.exp_v
+        if key == "exp_i":
+            return self.exp_i
+        if key == "yvalues":
+            return np.asarray(self.yvalues, dtype=np.float64)
+        if key == "Vbins_mV":
+            return np.asarray(self.exp_v.V_mV.values, dtype=np.float64)
+        if key == "Ibins_nA":
+            return np.asarray(self.exp_i.I_nA.values, dtype=np.float64)
+        if key == "I_nA":
+            return np.asarray(self.exp_v.I_nA.values, dtype=np.float64)
+        if key == "V_mV":
+            return np.asarray(self.exp_i.V_mV.values, dtype=np.float64)
+        if key == "dG_G0":
+            return np.asarray(self.exp_v.dG_G0.values, dtype=np.float64)
+        if key == "dR_R0":
+            return np.asarray(self.exp_i.dR_R0.values, dtype=np.float64)
+        raise KeyError(key)
 
     def __len__(self) -> int:
-        return len(self.traces)
+        return int(self.yvalues.size)
 
-    def __iter__(self) -> Iterator[Sample]:
-        return iter(self.traces)
-
-    def __getitem__(
-        self,
-        index: int | slice,
-    ) -> Sample | list[Sample]:
-        return self.traces[index]
+    def __iter__(self):
+        return iter(self[index] for index in range(len(self)))
 
     @property
-    def metas(self) -> list[TraceMeta]:
-        """Return ordered per-sample metadata."""
-        return [trace["meta"] for trace in self.traces]
+    def Vbins_mV(self) -> NDArray64:
+        return np.asarray(self["Vbins_mV"], dtype=np.float64)
 
     @property
-    def specific_keys(self) -> list[str]:
-        """Return ordered specific keys."""
-        return [meta.specific_key for meta in self.metas]
+    def Ibins_nA(self) -> NDArray64:
+        return np.asarray(self["Ibins_nA"], dtype=np.float64)
 
     @property
-    def indices(self) -> NDArray[np.int64]:
-        """Return ordered positional indices."""
-        indices: list[int] = []
-        for meta in self.metas:
-            if meta.index is None:
-                raise ValueError("Sample metadata must include indices.")
-            indices.append(int(meta.index))
-        return np.asarray(indices, dtype=np.int64)
+    def I_nA(self) -> NDArray64:
+        return np.asarray(self["I_nA"], dtype=np.float64)
 
     @property
-    def yvalues(self) -> NDArray64:
-        """Return ordered y-values."""
-        values = [
-            np.nan
-            if numeric_yvalue(meta.yvalue) is None
-            else float(numeric_yvalue(meta.yvalue))
-            for meta in self.metas
-        ]
-        return np.asarray(values, dtype=np.float64)
+    def V_mV(self) -> NDArray64:
+        return np.asarray(self["V_mV"], dtype=np.float64)
+
+    @property
+    def dG_G0(self) -> NDArray64:
+        return np.asarray(self["dG_G0"], dtype=np.float64)
+
+    @property
+    def dR_R0(self) -> NDArray64:
+        return np.asarray(self["dR_R0"], dtype=np.float64)
 
 
-__all__ = ["Sample", "Samples"]
+def make_sample(
+    *,
+    Vbins_mV: NDArray64,
+    Ibins_nA: NDArray64,
+    I_nA: NDArray64,
+    V_mV: NDArray64,
+) -> Sample:
+    """Construct one sampled result."""
+    exp_v = TransportDatasetSpec(
+        data=(data("I_nA", np.asarray(I_nA, dtype=np.float64)),),
+        axes=(axis("V_mV", values=np.asarray(Vbins_mV, dtype=np.float64), order=0),),
+        params=(),
+    )
+    exp_i = TransportDatasetSpec(
+        data=(data("V_mV", np.asarray(V_mV, dtype=np.float64)),),
+        axes=(axis("I_nA", values=np.asarray(Ibins_nA, dtype=np.float64), order=0),),
+        params=(),
+    )
+    return Sample(exp_v=exp_v, exp_i=exp_i)
+
+
+def make_samples(
+    *,
+    Vbins_mV: NDArray64,
+    Ibins_nA: NDArray64,
+    I_nA: NDArray64,
+    V_mV: NDArray64,
+    yvalues: NDArray64,
+) -> Samples:
+    """Construct stacked sampled results."""
+    exp_v = TransportDatasetSpec(
+        data=(data("I_nA", np.asarray(I_nA, dtype=np.float64)),),
+        axes=(
+            axis("y", values=np.asarray(yvalues, dtype=np.float64), order=0),
+            axis("V_mV", values=np.asarray(Vbins_mV, dtype=np.float64), order=1),
+        ),
+        params=(),
+    )
+    exp_i = TransportDatasetSpec(
+        data=(data("V_mV", np.asarray(V_mV, dtype=np.float64)),),
+        axes=(
+            axis("y", values=np.asarray(yvalues, dtype=np.float64), order=0),
+            axis("I_nA", values=np.asarray(Ibins_nA, dtype=np.float64), order=1),
+        ),
+        params=(),
+    )
+    return Samples(
+        exp_v=exp_v,
+        exp_i=exp_i,
+        yvalues=np.asarray(yvalues, dtype=np.float64),
+    )
+
+
+def _samples_from_traces(traces: list[dict[str, object]]) -> Samples:
+    if len(traces) == 0:
+        raise ValueError("traces must not be empty.")
+    Vbins_mV = np.asarray(traces[0]["Vbins_mV"], dtype=np.float64)
+    Ibins_nA = np.asarray(traces[0]["Ibins_nA"], dtype=np.float64)
+    I_nA = np.vstack([np.asarray(trace["I_nA"], dtype=np.float64) for trace in traces])
+    V_mV = np.vstack([np.asarray(trace["V_mV"], dtype=np.float64) for trace in traces])
+    yvalues = np.arange(len(traces), dtype=np.float64)
+    return make_samples(
+        Vbins_mV=Vbins_mV,
+        Ibins_nA=Ibins_nA,
+        I_nA=I_nA,
+        V_mV=V_mV,
+        yvalues=yvalues,
+    )
+
+
+__all__ = ["Sample", "Samples", "make_sample", "make_samples"]

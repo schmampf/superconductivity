@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from ...utilities.meta import TransportDatasetSpec
 from ..traces import Trace, Traces
 from .containers import Sample, Samples
 from .specs import SamplingSpec
@@ -18,41 +19,42 @@ from .transforms import (
 )
 
 if TYPE_CHECKING:
-    from ..analysis import OffsetTrace, OffsetTraces
+    from ..analysis import OffsetDataset
 
 
-def _zero_offset_trace() -> dict[str, object]:
-    """Return one zero-valued offset analysis result."""
-    return {
-        "dGerr_G0": np.zeros((0,), dtype=np.float64),
-        "dRerr_R0": np.zeros((0,), dtype=np.float64),
-        "Voff_mV": 0.0,
-        "Ioff_nA": 0.0,
-    }
-
-
-def sample(
+def _sample_result(
     traces: Trace | Traces,
     *,
     samplingspec: SamplingSpec,
-    offsetanalysis: OffsetTrace | OffsetTraces | None = None,
+    offsetanalysis: object | None = None,
     show_progress: bool = True,
 ) -> Sample | Samples:
-    """Run the full sampling pipeline on one trace or one collection."""
+    """Run the full sampling pipeline and return the internal result wrapper."""
     prepared = traces
     if samplingspec.apply_offset_correction:
         if isinstance(traces, Traces):
-            from ..analysis import OffsetTraces
+            from ...utilities.meta import Dataset, data
             resolved_offsetanalysis = (
                 offsetanalysis
                 if offsetanalysis is not None
-                else OffsetTraces(
-                    traces=[_zero_offset_trace() for _ in range(len(traces))]
+                else Dataset(
+                    data=(
+                        data("Voff_mV", np.zeros(len(traces), dtype=np.float64)),
+                        data("Ioff_nA", np.zeros(len(traces), dtype=np.float64)),
+                    ),
                 )
             )
         else:
+            from ...utilities.meta import Dataset, data
             resolved_offsetanalysis = (
-                offsetanalysis if offsetanalysis is not None else _zero_offset_trace()
+                offsetanalysis
+                if offsetanalysis is not None
+                else Dataset(
+                    data=(
+                        data("Voff_mV", np.asarray([0.0], dtype=np.float64)),
+                        data("Ioff_nA", np.asarray([0.0], dtype=np.float64)),
+                    ),
+                )
             )
         prepared = offset_correction(
             prepared,
@@ -82,6 +84,23 @@ def sample(
             show_progress=show_progress,
         )
     return samples
+
+
+def sample(
+    traces: Trace | Traces,
+    *,
+    samplingspec: SamplingSpec,
+    offsetanalysis: object | None = None,
+    show_progress: bool = True,
+) -> tuple[TransportDatasetSpec, TransportDatasetSpec]:
+    """Run the full sampling pipeline and return voltage- and current-bias datasets."""
+    result = _sample_result(
+        traces,
+        samplingspec=samplingspec,
+        offsetanalysis=offsetanalysis,
+        show_progress=show_progress,
+    )
+    return (result.exp_v, result.exp_i)
 
 
 __all__ = ["sample"]

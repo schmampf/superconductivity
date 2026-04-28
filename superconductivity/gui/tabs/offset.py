@@ -13,6 +13,7 @@ from ...evaluation.analysis import (
     offset_analysis,
 )
 from ...evaluation.traces import numeric_yvalue
+from ...utilities.meta import param
 from ..state import _linspace_from_values, _trace_label
 
 _OFFSET_GRID_PARAMETER_LABELS = {

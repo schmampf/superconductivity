@@ -10,9 +10,8 @@ import numpy as np
 from ..utilities.meta.axis import AxisSpec
 from ..utilities.safety import require_all_finite, require_min_size
 from ..utilities.types import NDArray64
-from .sampling.containers import Sample, Samples
+from .sampling.containers import Samples, make_samples
 from .traces.keys import KeysSpec
-from .traces.meta import TraceMeta
 
 CalibrationMode = Literal["function", "lookup"]
 GapFillMode = Literal["nan", "nearest", "interpolate"]
@@ -133,28 +132,14 @@ def _copy_samples_with_calibrated_axis(
 ) -> Samples:
     if len(samples) != calibrated_axis.size:
         raise ValueError("samples and calibrated_axis must have the same length.")
-
-    traces: list[Sample] = []
-    for out_index, src_index in enumerate(order):
-        trace = samples[int(src_index)]
-        yvalue = calibrated_axis[int(out_index)]
-        meta = trace["meta"]
-        traces.append(
-            {
-                "meta": TraceMeta(
-                    specific_key=meta.specific_key,
-                    index=meta.index,
-                    yvalue=float(yvalue),
-                ),
-                "Vbins_mV": np.asarray(trace["Vbins_mV"], dtype=np.float64),
-                "Ibins_nA": np.asarray(trace["Ibins_nA"], dtype=np.float64),
-                "I_nA": np.asarray(trace["I_nA"], dtype=np.float64),
-                "V_mV": np.asarray(trace["V_mV"], dtype=np.float64),
-                "dG_G0": np.asarray(trace["dG_G0"], dtype=np.float64),
-                "dR_R0": np.asarray(trace["dR_R0"], dtype=np.float64),
-            }
-        )
-    return Samples(traces=traces)
+    indices = np.asarray(order, dtype=np.int64)
+    return make_samples(
+        Vbins_mV=np.asarray(samples["Vbins_mV"], dtype=np.float64),
+        Ibins_nA=np.asarray(samples["Ibins_nA"], dtype=np.float64),
+        I_nA=np.asarray(samples["I_nA"], dtype=np.float64)[indices],
+        V_mV=np.asarray(samples["V_mV"], dtype=np.float64)[indices],
+        yvalues=np.asarray(calibrated_axis, dtype=np.float64),
+    )
 
 
 def _fill_axis_gaps(axis_values: NDArray64, gap_fill: GapFillMode) -> NDArray64:

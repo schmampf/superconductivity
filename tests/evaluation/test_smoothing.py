@@ -7,7 +7,7 @@ import pytest
 
 import superconductivity.evaluation.sampling as smoothing
 from superconductivity.evaluation.sampling import Sample, Samples, SamplingSpec
-from superconductivity.evaluation.traces import TraceMeta
+from superconductivity.evaluation.sampling.containers import make_sample, make_samples
 
 
 def _make_sampling_spec(**updates: object) -> SamplingSpec:
@@ -26,6 +26,7 @@ def _make_sampling_trace(
     index: int,
     yvalue: float,
 ) -> Sample:
+    _ = specific_key, index, yvalue
     vbin_mV = np.linspace(-1.0, 1.0, 9, dtype=np.float64)
     ibin_nA = np.linspace(-2.0, 2.0, 11, dtype=np.float64)
     i_nA = np.asarray(
@@ -48,19 +49,12 @@ def _make_sampling_trace(
         ],
         dtype=np.float64,
     )
-    return {
-        "meta": TraceMeta(
-            specific_key=specific_key,
-            index=index,
-            yvalue=yvalue,
-        ),
-        "Vbins_mV": vbin_mV,
-        "Ibins_nA": ibin_nA,
-        "I_nA": i_nA,
-        "V_mV": v_mV,
-        "dG_G0": np.full(vbin_mV.shape, np.nan, dtype=np.float64),
-        "dR_R0": np.full(ibin_nA.shape, np.nan, dtype=np.float64),
-    }
+    return make_sample(
+        Vbins_mV=vbin_mV,
+        Ibins_nA=ibin_nA,
+        I_nA=i_nA,
+        V_mV=v_mV,
+    )
 
 
 def _roughness(y: np.ndarray) -> float:
@@ -78,7 +72,6 @@ def test_smoothing_preserves_nan_edges_and_metadata() -> None:
 
     out = smoothing.smooth(trace, samplingspec=spec)
 
-    assert out["meta"] == trace["meta"]
     assert np.allclose(out["Vbins_mV"], trace["Vbins_mV"])
     assert np.allclose(out["Ibins_nA"], trace["Ibins_nA"])
     assert np.isnan(out["I_nA"][:2]).all()
@@ -102,11 +95,24 @@ def test_smoothing_reduces_curve_roughness() -> None:
 
 def test_smoothing_returns_collection() -> None:
     """Smoothed collection should return stacked sampled results."""
-    samplings = Samples(
-        traces=[
-            _make_sampling_trace("a", 0, 1.0),
-            _make_sampling_trace("b", 1, 5.0),
-        ],
+    sample_a = _make_sampling_trace("a", 0, 1.0)
+    sample_b = _make_sampling_trace("b", 1, 5.0)
+    samplings = make_samples(
+        Vbins_mV=np.asarray(sample_a["Vbins_mV"], dtype=np.float64),
+        Ibins_nA=np.asarray(sample_a["Ibins_nA"], dtype=np.float64),
+        I_nA=np.vstack(
+            [
+                np.asarray(sample_a["I_nA"], dtype=np.float64),
+                np.asarray(sample_b["I_nA"], dtype=np.float64),
+            ]
+        ),
+        V_mV=np.vstack(
+            [
+                np.asarray(sample_a["V_mV"], dtype=np.float64),
+                np.asarray(sample_b["V_mV"], dtype=np.float64),
+            ]
+        ),
+        yvalues=np.asarray([1.0, 5.0], dtype=np.float64),
     )
     spec = _make_sampling_spec(median_bins=3, sigma_bins=1.0)
 
@@ -116,8 +122,6 @@ def test_smoothing_returns_collection() -> None:
         show_progress=False,
     )
 
-    assert out.specific_keys == ["a", "b"]
-    assert np.array_equal(out.indices, np.asarray([0, 1], dtype=np.int64))
     assert np.allclose(out.yvalues, np.asarray([1.0, 5.0]))
     assert out.I_nA.shape == (2, 9)
     assert out.V_mV.shape == (2, 11)
