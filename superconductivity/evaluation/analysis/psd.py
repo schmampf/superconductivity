@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterator, overload
+from typing import Iterator, Sequence, overload
 
 import numpy as np
 
 from ...utilities.meta import AxisSpec, Dataset, DataSpec, ParamSpec, axis, data, param
+from ...utilities.meta.label import LabelSpec
 from ...utilities.safety import (
     require_all_finite,
     require_min_size,
@@ -33,6 +34,63 @@ class PSDSpec:
     def __post_init__(self) -> None:
         """Validate scalar PSD settings."""
         self.detrend = bool(self.detrend)
+
+    def keys(self) -> tuple[str, ...]:
+        """Return public mapping-style keys."""
+        return ("detrend",)
+
+
+def _build_y_axis(
+    values: NDArray64,
+    label_spec: LabelSpec | None,
+) -> AxisSpec | None:
+    numeric = np.asarray(values, dtype=np.float64).reshape(-1)
+    if (
+        numeric.size < 2
+        or np.any(~np.isfinite(numeric))
+        or np.any(np.diff(numeric) <= 0.0)
+    ):
+        return None
+    if label_spec is None:
+        return axis("y", values=numeric, order=0)
+    return AxisSpec(
+        code_label=label_spec.code_label,
+        print_label=label_spec.print_label,
+        html_label=label_spec.html_label,
+        latex_label=label_spec.latex_label,
+        values=numeric,
+        order=0,
+    )
+
+
+def _build_index_axis(values: NDArray64) -> AxisSpec | None:
+    numeric = np.asarray(values, dtype=np.float64).reshape(-1)
+    if numeric.size < 2:
+        return None
+    return axis("index", values=numeric, order=0)
+
+
+def _coerce_numeric_yvalues(
+    indices: Sequence[int] | NDArray[np.int64],
+    yvalues: Sequence[object],
+) -> NDArray64:
+    numeric: list[float] = []
+    valid_numeric = True
+    for value in yvalues:
+        if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(
+            value, bool,
+        ):
+            cast = float(value)
+            if not np.isfinite(cast):
+                valid_numeric = False
+                break
+            numeric.append(cast)
+        else:
+            valid_numeric = False
+            break
+    if valid_numeric:
+        return np.asarray(numeric, dtype=np.float64)
+    return np.asarray(indices, dtype=np.float64).reshape(-1)
 
 
 @dataclass(frozen=True, slots=True, init=False)
@@ -102,12 +160,45 @@ class PSDTraces:
     """Container for multiple PSD results."""
 
     traces: list[PSDTrace]
+    y: AxisSpec | None = field(init=False, default=None)
+    index: AxisSpec | None = field(init=False, default=None)
+    skeys: tuple[str, ...] = field(init=False, default_factory=tuple)
+    _indices: NDArray64 = field(init=False)
 
     def __post_init__(self) -> None:
         if len(self.traces) == 0:
             raise ValueError("traces must not be empty.")
         if not all(isinstance(trace, PSDTrace) for trace in self.traces):
             raise TypeError("traces must contain PSDTrace objects only.")
+        object.__setattr__(self, "_indices", np.arange(len(self.traces), dtype=np.float64))
+        object.__setattr__(self, "index", _build_index_axis(self._indices))
+        object.__setattr__(self, "y", None)
+
+    @classmethod
+    def from_fields(
+        cls,
+        *,
+        traces: list[PSDTrace],
+        specific_keys: Sequence[str],
+        indices: Sequence[int],
+        yvalues: Sequence[object],
+        y_label: LabelSpec | None,
+    ) -> PSDTraces:
+        """Build one PSD trace collection with collection metadata."""
+        collection = cls(traces=traces)
+        object.__setattr__(collection, "skeys", tuple(specific_keys))
+        indices_array = np.asarray(indices, dtype=np.float64).reshape(-1)
+        object.__setattr__(collection, "_indices", indices_array)
+        object.__setattr__(collection, "index", _build_index_axis(indices_array))
+        object.__setattr__(
+            collection,
+            "y",
+            _build_y_axis(
+                values=_coerce_numeric_yvalues(indices=indices, yvalues=yvalues),
+                label_spec=y_label,
+            ),
+        )
+        return collection
 
     def __len__(self) -> int:
         """Return number of traces."""
@@ -124,15 +215,48 @@ class PSDTraces:
         """Return trace(s) by positional index."""
         return self.traces[index]
 
+    def __getattr__(self, name: str):
+        if self.y is not None and name == self.y.code_label:
+            return self.y
+        raise AttributeError(name)
+
     def keys(self) -> tuple[str, ...]:
         """Return public mapping-style keys."""
-        return (
-            "f_Hz",
-            "I_psd_nA2_per_Hz",
-            "V_psd_mV2_per_Hz",
-            "nu_Hz",
-            "nyquist_Hz",
+        keys = ["y", "i", "indices", "skeys", "specific_keys"]
+        if self.y is not None and self.y.code_label != "y":
+            keys.insert(1, self.y.code_label)
+        keys.extend(
+            [
+                "f_Hz",
+                "I_psd_nA2_per_Hz",
+                "V_psd_mV2_per_Hz",
+                "nu_Hz",
+                "nyquist_Hz",
+            ],
         )
+        return tuple(keys)
+
+    @property
+    def specific_keys(self) -> list[str]:
+        """Return ordered specific keys."""
+        return list(self.skeys)
+
+    @property
+    def indices(self) -> NDArray64:
+        """Return ordered positional indices."""
+        return np.asarray(self._indices, dtype=np.float64)
+
+    @property
+    def yvalues(self) -> NDArray64:
+        """Return ordered y-values."""
+        if self.y is None:
+            return np.asarray(self._indices, dtype=np.float64)
+        return np.asarray(self.y.values, dtype=np.float64)
+
+    @property
+    def i(self) -> AxisSpec | None:
+        """Return the positional index axis."""
+        return self.index
 
     @property
     def I_psd_nA2_per_Hz(self) -> list[NDArray64]:
@@ -158,6 +282,11 @@ class PSDTraces:
     def nyquist_Hz(self) -> list[ParamSpec]:
         """Return per-trace Nyquist frequencies."""
         return [trace.nyquist_Hz for trace in self.traces]
+
+    def __getattr__(self, name: str):
+        if self.y is not None and name == self.y.code_label:
+            return self.y
+        raise AttributeError(name)
 
 
 def _get_sample_rate_Hz(t_s: NDArray64, *, name: str) -> float:
@@ -303,8 +432,12 @@ def psd_analysis(
 ) -> PSDTrace | PSDTraces:
     """Return PSD analysis for one trace or one trace collection."""
     if isinstance(traces, Traces):
-        return PSDTraces(
-            traces=[_build_single_psd_result(trace, spec=spec) for trace in traces]
+        return PSDTraces.from_fields(
+            traces=[_build_single_psd_result(trace, spec=spec) for trace in traces],
+            specific_keys=traces.specific_keys,
+            indices=traces.indices,
+            yvalues=traces.yvalues,
+            y_label=traces.y if traces.y is not None else None,
         )
     return _build_single_psd_result(traces, spec=spec)
 
