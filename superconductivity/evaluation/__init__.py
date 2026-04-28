@@ -8,7 +8,8 @@ from .analysis import (
     offset_analysis,
     psd_analysis,
 )
-from .calibration import CalibrationResult, CalibrationSpec, calibrate
+from .calibration import CalibrationSpec, calibrate
+from .reduce import reduce
 from .sampling import (
     SamplingSpec,
     binning,
@@ -65,8 +66,8 @@ __all__ = [
     "psd_analysis",
     "AxisSpec",
     "CalibrationSpec",
-    "CalibrationResult",
     "calibrate",
+    "reduce",
     "SamplingSpec",
     "downsample_trace",
     "downsample_traces",

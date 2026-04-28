@@ -15,6 +15,7 @@ from .transport import (
     reduced_dataset,
     validate_reduced_dataset,
 )
+from .transport_mapping import switch_bias
 
 __all__ = [
     "AxisSpec",
@@ -33,4 +34,5 @@ __all__ = [
     "TransportDatasetSpec",
     "reduced_dataset",
     "validate_reduced_dataset",
+    "switch_bias",
 ]

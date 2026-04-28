@@ -14,8 +14,10 @@ from .meta import (
     label,
     param,
     reduced_dataset,
+    switch_bias,
     validate_reduced_dataset,
 )
+from .mapping import mapping
 
 __all__ = [
     "AxisSpec",
@@ -33,5 +35,7 @@ __all__ = [
     "label",
     "param",
     "reduced_dataset",
+    "switch_bias",
     "validate_reduced_dataset",
+    "mapping",
 ]
