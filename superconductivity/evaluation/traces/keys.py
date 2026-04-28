@@ -9,10 +9,10 @@ from typing import Sequence
 import numpy as np
 from numpy.typing import NDArray
 
+from ...utilities.meta import AxisSpec, axis
 from ...utilities.meta.label import LabelSpec, label as make_label
 from ...utilities.types import NDArray64
 from .file import FileSpec, _require_measurement, list_specific_keys
-from .meta import TraceMeta, YValue, numeric_yvalue
 
 
 @dataclass(slots=True)
@@ -80,7 +80,10 @@ class KeysSpec:
 class Keys:
     """Sorted key metadata with derived labels."""
 
-    metas: list[TraceMeta]
+    y: AxisSpec
+    indices: NDArray64
+    skeys: tuple[str, ...]
+    _yvalues: NDArray64 = field(repr=False, compare=False)
     _spec: KeysSpec = field(repr=False, compare=False)
 
     @classmethod
@@ -89,7 +92,7 @@ class Keys:
         *,
         specific_keys: Sequence[str],
         indices: Sequence[int] | NDArray[np.int64],
-        yvalues: Sequence[YValue] | NDArray[np.object_] | NDArray64,
+        yvalues: Sequence[object] | NDArray[np.object_] | NDArray64,
         spec: KeysSpec,
     ) -> Keys:
         """Build key metadata from aligned field arrays."""
@@ -100,48 +103,33 @@ class Keys:
             raise ValueError("specific_keys and indices must have the same length.")
         if len(keys_list) != len(yvalues_list):
             raise ValueError("specific_keys and yvalues must have the same length.")
-        metas = [
-            TraceMeta(
-                specific_key=key,
-                index=int(index),
-                yvalue=yvalue,
-            )
-            for key, index, yvalue in zip(keys_list, indices_array, yvalues_list)
-        ]
-        return cls(metas=metas, _spec=spec)
+        return cls(
+            y=_build_y_axis(
+                specific_keys=keys_list,
+                indices=indices_array,
+                yvalues=yvalues_list,
+                spec=spec,
+            ),
+            indices=np.asarray(indices_array, dtype=np.float64),
+            skeys=tuple(keys_list),
+            _yvalues=_coerce_numeric_yvalues(indices_array, yvalues_list),
+            _spec=spec,
+        )
 
     @property
     def specific_keys(self) -> list[str]:
         """Return ordered specific keys."""
-        return [meta.specific_key for meta in self.metas]
-
-    @property
-    def indices(self) -> NDArray[np.int64]:
-        """Return ordered positional indices."""
-        indices: list[int] = []
-        for meta in self.metas:
-            if meta.index is None:
-                raise ValueError("Keys metadata must include indices.")
-            indices.append(int(meta.index))
-        return np.asarray(indices, dtype=np.int64)
+        return list(self.skeys)
 
     @property
     def yvalues(self) -> NDArray64:
         """Return ordered parsed y-values."""
-        values = [
-            (
-                np.nan
-                if numeric_yvalue(meta.yvalue) is None
-                else float(numeric_yvalue(meta.yvalue))
-            )
-            for meta in self.metas
-        ]
-        return np.asarray(values, dtype=np.float64)
+        return np.asarray(self._yvalues, dtype=np.float64)
 
     @property
-    def yitems(self) -> list[YValue]:
-        """Return ordered raw y-value metadata."""
-        return [meta.yvalue for meta in self.metas]
+    def i(self) -> NDArray64:
+        """Return ordered positional indices."""
+        return np.asarray(self.indices, dtype=np.float64)
 
     @property
     def label(self) -> str:
@@ -151,9 +139,27 @@ class Keys:
             spec=self._spec,
         )[0]
 
+    def __getattr__(self, name: str):
+        if name == self.y.code_label:
+            return self.y
+        raise AttributeError(name)
+
     def __getitem__(self, key: str) -> object:
         """Provide mapping-style access for compatibility."""
+        if key == "y":
+            return self.y
+        if key in {"i", "indices", "skeys", "specific_keys"}:
+            return getattr(self, key)
+        if key == self.y.code_label:
+            return self.y
         return getattr(self, key)
+
+    def keys(self) -> tuple[str, ...]:
+        """Return public mapping-style keys."""
+        keys = ["y", "i", "indices", "skeys", "specific_keys"]
+        if self.y.code_label != "y":
+            keys.insert(1, self.y.code_label)
+        return tuple(keys)
 
 
 def _extract_value_token_from_specific_key(
@@ -213,7 +219,7 @@ def _extract_yvalue_from_specific_key(
     specific_key: str,
     strip0: str = "=",
     strip1: str | None = None,
-) -> YValue:
+) -> float | None:
     """Extract one parsed y-value from a specific key string.
 
     Parameters
@@ -228,9 +234,8 @@ def _extract_yvalue_from_specific_key(
 
     Returns
     -------
-    float | str | None
-        Parsed finite float when available, else the raw extracted token. If
-        no token can be extracted, return ``None``.
+    float | None
+        Parsed finite float when available, else ``None``.
     """
     try:
         token = _extract_value_token_from_specific_key(
@@ -244,7 +249,7 @@ def _extract_yvalue_from_specific_key(
     try:
         value = float(token)
     except ValueError:
-        return token
+        return None
     if not np.isfinite(value):
         return None
     return value
@@ -469,16 +474,21 @@ def _infer_keys_labels(
 
 def _build_keys_output(
     specific_keys: list[str],
-    yvalues: Sequence[YValue],
+    yvalues: Sequence[object],
     *,
     spec: KeysSpec,
 ) -> Keys:
     """Build one key-metadata object."""
-    values: list[YValue] = []
+    values: list[object] = []
     for value in yvalues:
-        numeric = numeric_yvalue(value)
-        if spec.norm is not None and numeric is not None:
-            values.append(float(numeric) / spec.norm)
+        if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(
+            value, bool,
+        ):
+            numeric = float(value)
+            if np.isfinite(numeric) and spec.norm is not None:
+                values.append(numeric / spec.norm)
+            else:
+                values.append(numeric)
         else:
             values.append(value)
     return Keys.from_fields(
@@ -487,6 +497,77 @@ def _build_keys_output(
         yvalues=values,
         spec=spec,
     )
+
+
+def _build_y_axis(
+    *,
+    specific_keys: Sequence[str],
+    indices: Sequence[int] | NDArray[np.int64],
+    yvalues: Sequence[object],
+    spec: KeysSpec,
+) -> AxisSpec:
+    numeric: list[float] = []
+    valid_numeric = True
+    for value in yvalues:
+        if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(
+            value, bool,
+        ):
+            cast = float(value)
+            if not np.isfinite(cast):
+                valid_numeric = False
+                break
+            numeric.append(cast)
+        else:
+            valid_numeric = False
+            break
+    if valid_numeric and len(numeric) >= 2 and np.all(np.diff(np.asarray(numeric)) > 0.0):
+        values = np.asarray(numeric, dtype=np.float64)
+    else:
+        values = np.asarray(indices, dtype=np.float64).reshape(-1)
+    if values.size == 1:
+        values = np.asarray([values[0], values[0] + 1.0], dtype=np.float64)
+    return _make_y_axis(values=values, specific_keys=specific_keys, spec=spec)
+
+
+def _coerce_numeric_yvalues(
+    indices: Sequence[int] | NDArray[np.int64],
+    yvalues: Sequence[object],
+) -> NDArray64:
+    numeric: list[float] = []
+    valid_numeric = True
+    for value in yvalues:
+        if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(
+            value, bool,
+        ):
+            cast = float(value)
+            if not np.isfinite(cast):
+                valid_numeric = False
+                break
+            numeric.append(cast)
+        else:
+            valid_numeric = False
+            break
+    if valid_numeric:
+        return np.asarray(numeric, dtype=np.float64)
+    return np.asarray(indices, dtype=np.float64).reshape(-1)
+
+
+def _make_y_axis(
+    *,
+    values: NDArray64,
+    specific_keys: Sequence[str],
+    spec: KeysSpec,
+) -> AxisSpec:
+    if spec.label is not None:
+        return AxisSpec(
+            code_label=spec.label.code_label,
+            print_label=spec.label.print_label,
+            html_label=spec.label.html_label,
+            latex_label=spec.label.latex_label,
+            values=values,
+            order=0,
+        )
+    return axis("y", values=values, order=0)
 
 
 def _is_int_like(value: object) -> bool:
@@ -712,7 +793,7 @@ def get_keys(
     if len(removed_keys) > 0:
         keys = [key for key in keys if key not in removed_keys]
     parsed_entries: list[tuple[str, float]] = []
-    fallback_entries: list[tuple[str, YValue]] = []
+    fallback_entries: list[tuple[str, object]] = []
     for key in keys:
         value = _extract_yvalue_from_specific_key(
             specific_key=key,
@@ -722,9 +803,7 @@ def get_keys(
         if isinstance(value, float):
             parsed_entries.append((key, value))
         elif value is None:
-            fallback_entries.append((key, key))
-        else:
-            fallback_entries.append((key, value))
+            fallback_entries.append((key, None))
 
     additions = list(resolved.add_key)
     for key, value in additions:
@@ -739,7 +818,7 @@ def get_keys(
         parsed_entries.sort(key=lambda item: item[1])
 
     keys_sorted = [key for key, _ in parsed_entries]
-    values_sorted: list[YValue] = [value for _, value in parsed_entries]
+    values_sorted: list[object] = [value for _, value in parsed_entries]
     keys_sorted.extend(key for key, _ in fallback_entries)
     values_sorted.extend(value for _, value in fallback_entries)
 
