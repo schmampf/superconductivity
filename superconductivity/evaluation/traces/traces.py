@@ -3,29 +3,55 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterator, Sequence, TypedDict
+from typing import Iterator, Sequence
 
 import numpy as np
 
+from ...utilities.meta import AxisSpec, Dataset, DataSpec, axis, data
+from ...utilities.meta.label import LabelSpec
 from ...utilities.safety import require_all_finite
 from ...utilities.types import NDArray64
 from .file import FileSpec, _import_h5py, _require_measurement, _to_measurement_path
-from .keys import (
-    Keys,
-    KeysSpec,
-    _extract_yvalue_from_specific_key,
-    get_keys,
-)
-from .meta import TraceMeta, YValue, numeric_yvalue
+from .keys import Keys, KeysSpec, _coerce_numeric_yvalues, get_keys
 
 
-class Trace(TypedDict):
-    """One trace with metadata and time axis."""
+@dataclass(frozen=True, slots=True, init=False)
+class Trace(Dataset):
+    """One trace stored as a dataset."""
 
-    meta: TraceMeta
-    I_nA: NDArray64
-    V_mV: NDArray64
-    t_s: NDArray64
+    def __init__(
+        self,
+        *,
+        I_nA: NDArray64,
+        V_mV: NDArray64,
+        t_s: NDArray64,
+    ) -> None:
+        trace_ds = Dataset(
+            data=(
+                data("I_nA", I_nA),
+                data("V_mV", V_mV),
+            ),
+            axes=(axis("t_s", values=t_s, order=0),),
+        )
+        object.__setattr__(self, "data", trace_ds.data)
+        object.__setattr__(self, "axes", trace_ds.axes)
+        object.__setattr__(self, "params", trace_ds.params)
+        object.__setattr__(self, "_lookup", trace_ds._lookup)
+
+    def __getitem__(self, key: str):
+        return Dataset.__getitem__(self, key)
+
+    @property
+    def t_s(self) -> AxisSpec:
+        return Dataset.__getitem__(self, "t_s")
+
+    @property
+    def I_nA(self) -> DataSpec:
+        return Dataset.__getitem__(self, "I_nA")
+
+    @property
+    def V_mV(self) -> DataSpec:
+        return Dataset.__getitem__(self, "V_mV")
 
 
 @dataclass(slots=True)
@@ -46,20 +72,57 @@ class Traces:
     """Container for multiple traces."""
 
     traces: list[Trace]
-    I_nA: list[NDArray64] = field(init=False)
-    V_mV: list[NDArray64] = field(init=False)
-    t_s: list[NDArray64] = field(init=False)
+    y: AxisSpec | None = field(init=False, default=None)
+    index: AxisSpec | None = field(init=False, default=None)
+    skeys: tuple[str, ...] = field(init=False, default_factory=tuple)
+    _indices: NDArray64 = field(init=False)
 
     def __post_init__(self) -> None:
         """Build list views from ``traces``."""
-        self.I_nA = []
-        self.V_mV = []
-        self.t_s = []
-
         for trace in self.traces:
-            self.I_nA.append(trace["I_nA"])
-            self.V_mV.append(trace["V_mV"])
-            self.t_s.append(trace["t_s"])
+            if not isinstance(trace, Trace):
+                raise TypeError("Traces accepts Trace objects only.")
+
+        object.__setattr__(self, "skeys", tuple())
+        object.__setattr__(
+            self,
+            "_indices",
+            np.arange(len(self.traces), dtype=np.float64),
+        )
+        object.__setattr__(self, "index", _build_index_axis(self._indices))
+        object.__setattr__(self, "y", None)
+
+    @classmethod
+    def from_fields(
+        cls,
+        *,
+        traces: list[Trace],
+        specific_keys: Sequence[str],
+        indices: Sequence[int],
+        yvalues: Sequence[object],
+        y_label: LabelSpec | None,
+    ) -> Traces:
+        collection = cls(traces=traces)
+        object.__setattr__(collection, "skeys", tuple(specific_keys))
+        object.__setattr__(
+            collection,
+            "_indices",
+            np.asarray(indices, dtype=np.float64).reshape(-1),
+        )
+        object.__setattr__(
+            collection,
+            "index",
+            _build_index_axis(np.asarray(indices, dtype=np.float64).reshape(-1)),
+        )
+        object.__setattr__(
+            collection,
+            "y",
+            _build_y_axis(
+                values=_coerce_numeric_yvalues(indices=indices, yvalues=yvalues),
+                label_spec=y_label,
+            ),
+        )
+        return collection
 
     def __len__(self) -> int:
         """Return number of traces."""
@@ -76,26 +139,54 @@ class Traces:
         """Return trace(s) by positional index."""
         return self.traces[index]
 
+    def keys(self) -> tuple[str, ...]:
+        """Return public mapping-style keys."""
+        keys = ["y", "i", "indices", "skeys", "specific_keys", "t_s", "I_nA", "V_mV"]
+        if self.y is not None and self.y.code_label != "y":
+            keys.insert(1, self.y.code_label)
+        return tuple(keys)
+
     @property
     def specific_keys(self) -> list[str]:
         """Return ordered specific keys."""
-        return [meta.specific_key for meta in self.metas]
+        return list(self.skeys)
 
     @property
-    def metas(self) -> list[TraceMeta]:
-        """Return ordered per-trace metadata."""
-        return [trace["meta"] for trace in self.traces]
+    def indices(self) -> NDArray64:
+        """Return ordered positional indices."""
+        return np.asarray(self._indices, dtype=np.float64)
 
     @property
     def yvalues(self) -> NDArray64:
         """Return ordered y-values."""
-        values = [
-            np.nan
-            if numeric_yvalue(meta.yvalue) is None
-            else float(numeric_yvalue(meta.yvalue))
-            for meta in self.metas
-        ]
-        return np.asarray(values, dtype=np.float64)
+        if self.y is None:
+            return np.asarray(self._indices, dtype=np.float64)
+        return np.asarray(self.y.values, dtype=np.float64)
+
+    @property
+    def I_nA(self) -> list[DataSpec]:
+        """Return per-trace current arrays as data specs."""
+        return [trace.I_nA for trace in self.traces]
+
+    @property
+    def V_mV(self) -> list[DataSpec]:
+        """Return per-trace voltage arrays as data specs."""
+        return [trace.V_mV for trace in self.traces]
+
+    @property
+    def t_s(self) -> list[AxisSpec]:
+        """Return per-trace time axes."""
+        return [trace.t_s for trace in self.traces]
+
+    @property
+    def i(self) -> AxisSpec | None:
+        """Return the positional index axis."""
+        return self.index
+
+    def __getattr__(self, name: str):
+        if self.y is not None and name == self.y.code_label:
+            return self.y
+        raise AttributeError(name)
 
 
 def _normalize_skip(
@@ -123,8 +214,8 @@ def _normalize_skip(
 
 def _normalize_keys_and_yvalues(
     keys: Sequence[str],
-    yvalues: Sequence[YValue] | np.ndarray,
-) -> tuple[list[str], list[YValue]]:
+    yvalues: Sequence[object] | np.ndarray,
+) -> tuple[list[str], list[object]]:
     """Normalize and validate collection metadata."""
     keys_list = list(keys)
     if len(keys_list) == 0:
@@ -179,7 +270,7 @@ def _resolve_trace_reference(
     specific_key: str | None = None,
     yvalue: float | None = None,
     index: int | None = None,
-) -> tuple[str, int | None, YValue]:
+) -> tuple[str, int | None, float]:
     """Resolve selectors into ``(specific_key, index, yvalue)``."""
     if specific_key is None and yvalue is None and index is None:
         raise ValueError(
@@ -187,12 +278,11 @@ def _resolve_trace_reference(
         )
 
     keys_sorted = list(keys.specific_keys)
-    metas = keys.metas
     yvalues_sorted = np.asarray(keys.yvalues, dtype=np.float64)
 
     resolved_key = specific_key
     resolved_index: int | None = None
-    resolved_value: YValue = None
+    resolved_value: float | None = None
 
     if index is not None:
         assert keys_sorted is not None
@@ -204,7 +294,7 @@ def _resolve_trace_reference(
                 "specific_key and index refer to different traces.",
             )
         resolved_key = key_from_index
-        resolved_value = metas[resolved_index].yvalue
+        resolved_value = float(yvalues_sorted[resolved_index])
 
     if yvalue is not None:
         value = float(yvalue)
@@ -227,7 +317,7 @@ def _resolve_trace_reference(
 
         resolved_key = key_from_value
         resolved_index = index_from_value
-        resolved_value = metas[index_from_value].yvalue
+        resolved_value = float(yvalues_sorted[index_from_value])
 
     if resolved_key is None:
         raise ValueError(
@@ -238,15 +328,9 @@ def _resolve_trace_reference(
         try:
             key_index = keys_sorted.index(specific_key)
         except ValueError:
-            resolved_value = _extract_yvalue_from_specific_key(
-                specific_key=specific_key,
-                strip0=keys._spec.strip0,
-                strip1=keys._spec.strip1,
-            )
-            if resolved_value is None:
-                resolved_value = specific_key
+            resolved_value = float(_normalize_index(0, 1))
         else:
-            resolved_value = metas[key_index].yvalue
+            resolved_value = float(yvalues_sorted[key_index])
 
     return resolved_key, resolved_index, resolved_value
 
@@ -254,9 +338,6 @@ def _resolve_trace_reference(
 def _load_trace_from_file(
     file: object,
     full_path: str,
-    specific_key: str,
-    index: int | None,
-    yvalue: YValue,
     amp_voltage: float,
     amp_current: float,
     r_ref_ohm: float,
@@ -319,23 +400,46 @@ def _load_trace_from_file(
     if time_relative and t_s.size > 0:
         t_s = t_s - t_s[0]
 
-    return {
-        "meta": TraceMeta(
-            specific_key=specific_key,
-            index=index,
-            yvalue=yvalue,
-        ),
-        "I_nA": np.asarray(I_nA, dtype=np.float64),
-        "V_mV": np.asarray(V_mV, dtype=np.float64),
-        "t_s": np.asarray(t_s, dtype=np.float64),
-    }
+    return Trace(
+        I_nA=np.asarray(I_nA, dtype=np.float64),
+        V_mV=np.asarray(V_mV, dtype=np.float64),
+        t_s=np.asarray(t_s, dtype=np.float64),
+    )
+
+
+def _build_y_axis(
+    values: NDArray64,
+    label_spec: LabelSpec | None,
+) -> AxisSpec | None:
+    numeric = np.asarray(values, dtype=np.float64).reshape(-1)
+    if (
+        numeric.size < 2
+        or np.any(~np.isfinite(numeric))
+        or np.any(np.diff(numeric) <= 0.0)
+    ):
+        return None
+    if label_spec is None:
+        return axis("y", values=numeric, order=0)
+    return AxisSpec(
+        code_label=label_spec.code_label,
+        print_label=label_spec.print_label,
+        html_label=label_spec.html_label,
+        latex_label=label_spec.latex_label,
+        values=numeric,
+        order=0,
+    )
+
+
+def _build_index_axis(values: NDArray64) -> AxisSpec | None:
+    if np.asarray(values, dtype=np.float64).size < 2:
+        return None
+    return axis("index", values=np.asarray(values, dtype=np.float64), order=0)
 
 
 def _load_traces_from_keys(
     *,
     filespec: FileSpec,
-    keys: Sequence[str],
-    yvalues: Sequence[YValue] | np.ndarray,
+    keys: Keys,
     tracespec: TraceSpec,
 ) -> Traces:
     """Load traces for one measurement in the provided order."""
@@ -351,8 +455,8 @@ def _load_traces_from_keys(
     )
     skip_pair = _normalize_skip(tracespec.skip)
     keys_list, yvalues_list = _normalize_keys_and_yvalues(
-        keys=keys,
-        yvalues=yvalues,
+        keys=keys.specific_keys,
+        yvalues=keys.yvalues,
     )
 
     h5py = _import_h5py()
@@ -368,9 +472,6 @@ def _load_traces_from_keys(
             trace = _load_trace_from_file(
                 file=file,
                 full_path=full_path,
-                specific_key=specific_key,
-                index=index,
-                yvalue=value,
                 amp_voltage=tracespec.amp_voltage,
                 amp_current=tracespec.amp_current,
                 r_ref_ohm=tracespec.r_ref_ohm,
@@ -381,7 +482,13 @@ def _load_traces_from_keys(
             )
             traces.append(trace)
 
-    return Traces(traces=traces)
+    return Traces.from_fields(
+        traces=traces,
+        specific_keys=keys.specific_keys,
+        indices=np.asarray(keys.indices, dtype=np.int64).tolist(),
+        yvalues=keys.yvalues,
+        y_label=keys._spec.label,
+    )
 
 
 def get_traces(
@@ -393,7 +500,7 @@ def get_traces(
     specific_key: str | None = None,
     yvalue: float | None = None,
     index: int | None = None,
-) -> Traces:
+) -> Trace | Traces:
     """Load traces from file, key, and trace specifications."""
     resolved_tracespec = TraceSpec() if tracespec is None else tracespec
     has_selector = specific_key is not None or yvalue is not None or index is not None
@@ -424,12 +531,14 @@ def get_traces(
             spec=resolved_keys._spec,
         )
 
-    return _load_traces_from_keys(
+    traces = _load_traces_from_keys(
         filespec=filespec,
-        keys=resolved_keys.specific_keys,
-        yvalues=resolved_keys.yitems,
+        keys=resolved_keys,
         tracespec=resolved_tracespec,
     )
+    if len(traces) == 1:
+        return traces[0]
+    return traces
 
 
 __all__ = ["TraceSpec", "Trace", "Traces", "get_traces"]
