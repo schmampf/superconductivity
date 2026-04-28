@@ -7,7 +7,8 @@ from typing import Callable, Sequence
 
 import numpy as np
 
-from ..utilities.meta import AxisSpec, LabelSpec, TransportDatasetSpec, axis
+from ..utilities.meta import AxisSpec, LabelSpec, axis
+from ..utilities.transport import TransportDatasetSpec
 from ..utilities.meta.label import label as make_label
 from ..utilities.types import NDArray64
 

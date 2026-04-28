@@ -7,11 +7,11 @@ import numpy as np
 from ...utilities.meta import (
     AxisSpec,
     ParamSpec,
-    TransportDatasetSpec,
     axis,
     dataset,
     param,
 )
+from ...utilities.transport import TransportDatasetSpec
 from ...utilities.types import NDArray64
 from .backend import Backend, Kernel
 from .bcs import (

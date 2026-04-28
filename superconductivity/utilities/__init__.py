@@ -8,7 +8,6 @@ from .meta import (
     LABELS,
     LabelSpec,
     ParamSpec,
-    TransportDatasetSpec,
     axis,
     data,
     label,

@@ -7,7 +7,8 @@ from typing import Iterator
 import numpy as np
 
 from ...utilities.constants import G0_muS
-from ...utilities.meta import Dataset, TransportDatasetSpec, axis, data
+from ...utilities.meta import Dataset, axis, data
+from ...utilities.transport import TransportDatasetSpec
 from ...utilities.functions.binning import bin
 from ...utilities.functions.fill_nans import fill as fill_nans
 from ...utilities.safety import (

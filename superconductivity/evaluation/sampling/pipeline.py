@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ...utilities.meta import TransportDatasetSpec
+from ...utilities.transport import TransportDatasetSpec
 from ..traces import Trace, Traces
 from .specs import SamplingSpec
 from .transforms import (
