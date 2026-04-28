@@ -4,27 +4,41 @@ import numpy as np
 import pytest
 
 from superconductivity.evaluation import CalibrationSpec, calibrate
-from superconductivity.evaluation.sampling.containers import Sample, Samples
 from superconductivity.evaluation.traces import KeysSpec
-from superconductivity.utilities.meta.axis import AxisSpec, axis
+from superconductivity.utilities.meta import Dataset, axis, data
+from superconductivity.utilities.meta.axis import AxisSpec
 from superconductivity.utilities.meta.label import label
 from superconductivity.utilities.functions.binning import bin
 
 
-def _make_samples() -> Samples:
-    traces: list[Sample] = []
-    for index, yvalue in enumerate([0.0, 1.0, 2.0]):
-        traces.append(
-            {
-                "Vbins_mV": np.asarray([0.0, 1.0], dtype=np.float64),
-                "Ibins_nA": np.asarray([0.0, 1.0], dtype=np.float64),
-                "I_nA": np.asarray([10.0 + index, 20.0 + index], dtype=np.float64),
-                "V_mV": np.asarray([30.0 + index, 40.0 + index], dtype=np.float64),
-                "dG_G0": np.asarray([1.0, 2.0], dtype=np.float64),
-                "dR_R0": np.asarray([3.0, 4.0], dtype=np.float64),
-            }
-        )
-    return Samples(traces=traces)
+def _make_samples() -> Dataset:
+    return Dataset(
+        data=(
+            data(
+                "I_nA",
+                np.asarray(
+                    [
+                        [10.0, 20.0],
+                        [11.0, 21.0],
+                        [12.0, 22.0],
+                    ],
+                    dtype=np.float64,
+                ),
+            ),
+            data(
+                "V_mV",
+                np.asarray(
+                    [
+                        [30.0, 40.0],
+                        [31.0, 41.0],
+                        [32.0, 42.0],
+                    ],
+                    dtype=np.float64,
+                ),
+            ),
+        ),
+        axes=(axis("y", values=np.asarray([0.0, 1.0, 2.0], dtype=np.float64), order=0),),
+    )
 
 
 def _make_keysspec() -> KeysSpec:
@@ -58,7 +72,7 @@ def test_function_calibration_updates_trace_metadata() -> None:
     np.testing.assert_allclose(result.source_axis, [0.0, 1.0, 2.0])
     np.testing.assert_allclose(result.mapped_axis, [0.0, 2.0, 4.0])
     np.testing.assert_allclose(result.calibrated_axis, [0.0, 2.0, 4.0])
-    np.testing.assert_allclose(result.samples.yvalues, [0.0, 2.0, 4.0])
+    np.testing.assert_allclose(result.samples["y"].values, [0.0, 2.0, 4.0])
     assert result.axisspec.code_label == "A_mV"
     assert result.axisspec.print_label == "A (mV)"
 
@@ -108,7 +122,7 @@ def test_lookup_calibration_uses_table_mapping() -> None:
     )
 
     np.testing.assert_allclose(result.mapped_axis, [0.0, 5.0, 10.0])
-    np.testing.assert_allclose(result.samples.yvalues, [0.0, 10.0, 20.0])
+    np.testing.assert_allclose(result.samples["y"].values, [0.0, 10.0, 20.0])
 
 
 def test_gap_fill_nearest_fills_missing_values() -> None:

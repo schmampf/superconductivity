@@ -11,12 +11,12 @@ import superconductivity.api as api_module
 import superconductivity.evaluation as evaluation_module
 import superconductivity.evaluation.sampling as sampling
 from superconductivity.utilities.meta import Dataset, data
-from superconductivity.evaluation.sampling.containers import make_sample
 from superconductivity.evaluation.traces import Trace, Traces
 from superconductivity.utilities.constants import G0_muS
 from superconductivity.utilities.functions.binning import bin
 from superconductivity.utilities.functions.upsampling import upsample as upsample_xy
 from superconductivity.utilities.meta import TransportDatasetSpec
+from superconductivity.utilities.meta.label import label
 
 pipeline_mod = importlib.import_module(
     "superconductivity.evaluation.sampling.pipeline",
@@ -159,13 +159,13 @@ def test_binning_matches_manual_flow_for_upsampled_trace() -> None:
     spec = _make_spec()
     prepared = sampling.upsampling(trace, samplingspec=spec)
 
-    out = sampling.binning(prepared, samplingspec=spec)
+    exp_v, exp_i = sampling.binning(prepared, samplingspec=spec)
     i_exp_nA, v_exp_mV, dG_exp_G0, dR_exp_R0 = _manual_binning(prepared, spec)
 
-    assert np.allclose(out["I_nA"], i_exp_nA, equal_nan=True)
-    assert np.allclose(out["V_mV"], v_exp_mV, equal_nan=True)
-    assert np.allclose(out["dG_G0"], dG_exp_G0, equal_nan=True)
-    assert np.allclose(out["dR_R0"], dR_exp_R0, equal_nan=True)
+    assert np.allclose(exp_v.I_nA.values, i_exp_nA, equal_nan=True)
+    assert np.allclose(exp_i.V_mV.values, v_exp_mV, equal_nan=True)
+    assert np.allclose(exp_v.dG_G0.values, dG_exp_G0, equal_nan=True)
+    assert np.allclose(exp_i.dR_R0.values, dR_exp_R0, equal_nan=True)
 
 
 def test_binning_of_upsampled_trace_matches_previous_hidden_upsample() -> None:
@@ -173,7 +173,7 @@ def test_binning_of_upsampled_trace_matches_previous_hidden_upsample() -> None:
     trace = _make_iv_trace("a", 0, 1.0, v_shift_mV=0.0, i_shift_nA=0.0)
     spec = _make_spec()
 
-    out = sampling.binning(
+    exp_v, exp_i = sampling.binning(
         sampling.upsampling(trace, samplingspec=spec),
         samplingspec=spec,
     )
@@ -182,10 +182,10 @@ def test_binning_of_upsampled_trace_matches_previous_hidden_upsample() -> None:
         spec,
     )
 
-    assert np.allclose(out["I_nA"], i_exp_nA, equal_nan=True)
-    assert np.allclose(out["V_mV"], v_exp_mV, equal_nan=True)
-    assert np.allclose(out["dG_G0"], dG_exp_G0, equal_nan=True)
-    assert np.allclose(out["dR_R0"], dR_exp_R0, equal_nan=True)
+    assert np.allclose(exp_v.I_nA.values, i_exp_nA, equal_nan=True)
+    assert np.allclose(exp_i.V_mV.values, v_exp_mV, equal_nan=True)
+    assert np.allclose(exp_v.dG_G0.values, dG_exp_G0, equal_nan=True)
+    assert np.allclose(exp_i.dR_R0.values, dR_exp_R0, equal_nan=True)
 
 
 def test_sampling_matches_manual_pipeline_with_offsets() -> None:
@@ -243,11 +243,11 @@ def test_sample_calls_stages_in_explicit_order(monkeypatch: pytest.MonkeyPatch) 
     calls: list[str] = []
     trace = _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3)
     spec = _make_spec(apply_smoothing=True, median_bins=3, sigma_bins=1.0)
-    sample_out = make_sample(
-        Vbins_mV=np.asarray(spec.Vbins_mV, dtype=np.float64),
-        Ibins_nA=np.asarray(spec.Ibins_nA, dtype=np.float64),
-        I_nA=np.zeros_like(spec.Vbins_mV),
-        V_mV=np.zeros_like(spec.Ibins_nA),
+    sample_out = (
+        sampling.binning(
+            sampling.upsampling(trace, samplingspec=spec),
+            samplingspec=spec,
+        )
     )
 
     def _offset(traces, *, samplingspec):
@@ -279,7 +279,7 @@ def test_sample_calls_stages_in_explicit_order(monkeypatch: pytest.MonkeyPatch) 
 
     out = sampling.sample(trace, samplingspec=spec)
 
-    assert out == (sample_out.exp_v, sample_out.exp_i)
+    assert out == sample_out
     assert calls == ["offset", "downsample", "upsample", "binning", "smooth"]
 
 
@@ -319,11 +319,11 @@ def test_sampling_skips_disabled_stages(
     """Disabled stages should behave as true no-ops in the pipeline."""
     calls: list[str] = []
     trace = _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3)
-    sample_out = make_sample(
-        Vbins_mV=np.asarray(spec.Vbins_mV, dtype=np.float64),
-        Ibins_nA=np.asarray(spec.Ibins_nA, dtype=np.float64),
-        I_nA=np.zeros_like(spec.Vbins_mV),
-        V_mV=np.zeros_like(spec.Ibins_nA),
+    sample_out = (
+        sampling.binning(
+            sampling.upsampling(trace, samplingspec=spec),
+            samplingspec=spec,
+        )
     )
 
     monkeypatch.setattr(
@@ -390,10 +390,37 @@ def test_sampling_returns_collection() -> None:
     assert np.allclose(exp_i.I_nA.values, spec.Ibins_nA)
     assert np.allclose(exp_v.y.values, np.asarray([1.0, 5.0]))
     assert np.allclose(exp_i.y.values, np.asarray([1.0, 5.0]))
+    assert exp_v.y.code_label == "y"
+    assert exp_i.y.code_label == "y"
     assert exp_v.I_nA.values.shape == (2, spec.Vbins_mV.size)
     assert exp_i.V_mV.values.shape == (2, spec.Ibins_nA.size)
     assert exp_v.dG_G0.values.shape == (2, spec.Vbins_mV.size)
     assert exp_i.dR_R0.values.shape == (2, spec.Ibins_nA.size)
+
+
+def test_sampling_uses_trace_label_for_collection_axis() -> None:
+    """The sampled collection axis should inherit the trace label."""
+    traces = Traces.from_fields(
+        traces=[
+            _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3),
+            _make_iv_trace("b", 1, 5.0, v_shift_mV=0.2, i_shift_nA=0.1),
+        ],
+        specific_keys=["nu=1dBm", "nu=5dBm"],
+        indices=[0, 1],
+        yvalues=[1.0, 5.0],
+        y_label=label("Aout_mV"),
+    )
+    spec = _make_spec(
+        Voff_mV=data("Voff_mV", np.asarray([0.4, 0.2], dtype=np.float64)),
+        Ioff_nA=data("Ioff_nA", np.asarray([0.3, 0.1], dtype=np.float64)),
+    )
+
+    exp_v, exp_i = sampling.sample(traces, samplingspec=spec, show_progress=False)
+
+    assert exp_v.Aout_mV.values.shape == (2,)
+    assert exp_i.Aout_mV.values.shape == (2,)
+    assert np.allclose(exp_v.Aout_mV.values, np.asarray([1.0, 5.0]))
+    assert np.allclose(exp_i.Aout_mV.values, np.asarray([1.0, 5.0]))
 
 
 def test_sampling_with_smoothing_returns_collection() -> None:

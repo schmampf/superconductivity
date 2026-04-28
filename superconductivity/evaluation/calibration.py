@@ -7,10 +7,10 @@ from typing import Callable, Literal, Sequence
 
 import numpy as np
 
+from ..utilities.meta import Dataset, axis, data
 from ..utilities.meta.axis import AxisSpec
 from ..utilities.safety import require_all_finite, require_min_size
 from ..utilities.types import NDArray64
-from .sampling.containers import Samples, make_samples
 from .traces.keys import KeysSpec
 
 CalibrationMode = Literal["function", "lookup"]
@@ -55,7 +55,7 @@ class CalibrationSpec:
 class CalibrationResult:
     """Calibrated samples and resolved axis metadata."""
 
-    samples: Samples
+    samples: Dataset
     axisspec: AxisSpec
     source_axis: NDArray64
     mapped_axis: NDArray64
@@ -64,18 +64,18 @@ class CalibrationResult:
 
 def calibrate(
     *,
-    samples: Samples,
+    samples: Dataset,
     axisspec: AxisSpec,
     keysspec: KeysSpec,
     calibrationspec: CalibrationSpec,
 ) -> CalibrationResult:
-    """Calibrate a sampled trace collection onto one physical axis grid."""
+    """Calibrate a stacked trace collection onto one physical axis grid."""
     del keysspec  # Reserved for future label and parsing integration.
 
-    source_axis = np.asarray(samples.yvalues, dtype=np.float64)
+    source_axis = np.asarray(samples["y"].values, dtype=np.float64)
     target_axis = np.asarray(axisspec.axis, dtype=np.float64)
-    require_min_size(source_axis, 2, "samples.yvalues")
-    require_all_finite(source_axis, "samples.yvalues")
+    require_min_size(source_axis, 2, "samples.y")
+    require_all_finite(source_axis, "samples.y")
     require_min_size(target_axis, 2, "axisspec.axis")
     require_all_finite(target_axis, "axisspec.axis")
     if np.any(np.diff(target_axis) <= 0.0):
@@ -125,20 +125,22 @@ def _apply_calibration(
 
 
 def _copy_samples_with_calibrated_axis(
-    samples: Samples,
+    samples: Dataset,
     calibrated_axis: NDArray64,
     *,
     order: NDArray64,
-) -> Samples:
+) -> Dataset:
     if len(samples) != calibrated_axis.size:
         raise ValueError("samples and calibrated_axis must have the same length.")
     indices = np.asarray(order, dtype=np.int64)
-    return make_samples(
-        Vbins_mV=np.asarray(samples["Vbins_mV"], dtype=np.float64),
-        Ibins_nA=np.asarray(samples["Ibins_nA"], dtype=np.float64),
-        I_nA=np.asarray(samples["I_nA"], dtype=np.float64)[indices],
-        V_mV=np.asarray(samples["V_mV"], dtype=np.float64)[indices],
-        yvalues=np.asarray(calibrated_axis, dtype=np.float64),
+    return Dataset(
+        data=(
+            data("I_nA", np.asarray(samples["I_nA"].values, dtype=np.float64)[indices]),
+            data("V_mV", np.asarray(samples["V_mV"].values, dtype=np.float64)[indices]),
+        ),
+        axes=(
+            axis("y", values=np.asarray(calibrated_axis, dtype=np.float64), order=0),
+        ),
     )
 
 

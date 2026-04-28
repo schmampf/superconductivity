@@ -131,6 +131,7 @@ class Traces:
             "y",
             _build_y_axis(
                 values=_coerce_numeric_yvalues(indices=indices, yvalues=yvalues),
+                specific_keys=specific_keys,
                 label_spec=y_label,
             ),
         )
@@ -421,6 +422,7 @@ def _load_trace_from_file(
 
 def _build_y_axis(
     values: NDArray64,
+    specific_keys: Sequence[str],
     label_spec: LabelSpec | None,
 ) -> AxisSpec | None:
     numeric = np.asarray(values, dtype=np.float64).reshape(-1)
@@ -431,7 +433,7 @@ def _build_y_axis(
     ):
         return None
     if label_spec is None:
-        return axis("y", values=numeric, order=0)
+        return axis(_infer_code_label(specific_keys), values=numeric, order=0)
     return AxisSpec(
         code_label=label_spec.code_label,
         print_label=label_spec.print_label,
@@ -446,6 +448,16 @@ def _build_index_axis(values: NDArray64) -> AxisSpec | None:
     if np.asarray(values, dtype=np.float64).size < 2:
         return None
     return axis("index", values=np.asarray(values, dtype=np.float64), order=0)
+
+
+def _infer_code_label(specific_keys: Sequence[str]) -> str:
+    """Infer one code label from the specific-key prefix."""
+    for specific_key in specific_keys:
+        if "=" in specific_key:
+            candidate = specific_key.split("=", 1)[0].strip()
+            if candidate != "":
+                return candidate
+    return "y"
 
 
 def _load_traces_from_keys(

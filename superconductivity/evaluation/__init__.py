@@ -10,8 +10,6 @@ from .analysis import (
 )
 from .calibration import CalibrationResult, CalibrationSpec, calibrate
 from .sampling import (
-    Sample,
-    Samples,
     SamplingSpec,
     binning,
     downsample_trace,
@@ -69,8 +67,6 @@ __all__ = [
     "CalibrationSpec",
     "CalibrationResult",
     "calibrate",
-    "Sample",
-    "Samples",
     "SamplingSpec",
     "downsample_trace",
     "downsample_traces",

@@ -594,7 +594,25 @@ def _make_y_axis(
             values=values,
             order=0,
         )
-    return axis("y", values=values, order=0)
+    return axis(_infer_code_label(specific_keys, spec), values=values, order=0)
+
+
+def _infer_code_label(
+    specific_keys: Sequence[str],
+    spec: KeysSpec,
+) -> str:
+    """Infer one code label from the specific-key prefix."""
+    if spec.label is not None:
+        return spec.label.code_label
+    for specific_key in specific_keys:
+        if spec.strip0 is None:
+            break
+        start_idx = specific_key.find(spec.strip0)
+        if start_idx > 0:
+            candidate = specific_key[:start_idx].strip()
+            if candidate != "":
+                return candidate
+    return "y"
 
 
 def _is_int_like(value: object) -> bool:

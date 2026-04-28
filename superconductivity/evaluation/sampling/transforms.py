@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterator
+from typing import Iterator
 
 import numpy as np
 
 from ...utilities.constants import G0_muS
-from ...utilities.meta import data
+from ...utilities.meta import Dataset, TransportDatasetSpec, axis, data
 from ...utilities.functions.binning import bin
 from ...utilities.functions.fill_nans import fill as fill_nans
 from ...utilities.safety import (
@@ -18,8 +18,15 @@ from ...utilities.safety import (
 )
 from ...utilities.types import NDArray64
 from ..traces import Trace, Traces
-from .containers import Sample, Samples, make_sample, make_samples
 from .specs import SamplingSpec, _validate_downsample_rate_Hz
+
+
+def _trace_axis_entry(sample: TransportDatasetSpec):
+    """Return the collection axis entry for one sampled transport dataset."""
+    for axis_entry in sample.axes:
+        if axis_entry.code_label not in {"V_mV", "I_nA"}:
+            return axis_entry
+    raise AttributeError("sample is missing its trace axis.")
 
 def _import_tqdm():
     """Import tqdm lazily."""
@@ -119,20 +126,70 @@ def _copy_trace_with_arrays(
     )
 
 
-def _copy_sample(
-    sample: Sample,
-    **updates: object,
-) -> Sample:
-    """Copy one sampled trace and normalize numeric arrays."""
-    vbins_mV = np.asarray(updates.get("Vbins_mV", sample["Vbins_mV"]), dtype=np.float64)
-    ibins_nA = np.asarray(updates.get("Ibins_nA", sample["Ibins_nA"]), dtype=np.float64)
-    i_nA = np.asarray(updates.get("I_nA", sample["I_nA"]), dtype=np.float64)
-    v_mV = np.asarray(updates.get("V_mV", sample["V_mV"]), dtype=np.float64)
-    return make_sample(
-        Vbins_mV=vbins_mV,
-        Ibins_nA=ibins_nA,
-        I_nA=i_nA,
-        V_mV=v_mV,
+def _build_transport_sample_pair(
+    *,
+    Vbins_mV: NDArray64,
+    Ibins_nA: NDArray64,
+    I_nA: NDArray64,
+    V_mV: NDArray64,
+    yvalues: NDArray64 | None = None,
+    y_label: str | None = None,
+) -> tuple[TransportDatasetSpec, TransportDatasetSpec]:
+    """Build one or many transport datasets from sampled arrays."""
+    Vbins_mV = np.asarray(Vbins_mV, dtype=np.float64)
+    Ibins_nA = np.asarray(Ibins_nA, dtype=np.float64)
+    I_nA = np.asarray(I_nA, dtype=np.float64)
+    V_mV = np.asarray(V_mV, dtype=np.float64)
+
+    if yvalues is None:
+        exp_v = TransportDatasetSpec(
+            data=(data("I_nA", I_nA),),
+            axes=(axis("V_mV", values=Vbins_mV, order=0),),
+        )
+        exp_i = TransportDatasetSpec(
+            data=(data("V_mV", V_mV),),
+            axes=(axis("I_nA", values=Ibins_nA, order=0),),
+        )
+        return exp_v, exp_i
+
+    yvalues = np.asarray(yvalues, dtype=np.float64).reshape(-1)
+    trace_axis_label = "y" if y_label is None else str(y_label)
+    exp_v = TransportDatasetSpec(
+        data=(data("I_nA", I_nA),),
+        axes=(
+            axis(trace_axis_label, values=yvalues, order=0),
+            axis("V_mV", values=Vbins_mV, order=1),
+        ),
+    )
+    exp_i = TransportDatasetSpec(
+        data=(data("V_mV", V_mV),),
+        axes=(
+            axis(trace_axis_label, values=yvalues, order=0),
+            axis("I_nA", values=Ibins_nA, order=1),
+        ),
+    )
+    return exp_v, exp_i
+
+
+def _stack_transport_samples(
+    exp_v_list: list[TransportDatasetSpec],
+    exp_i_list: list[TransportDatasetSpec],
+    *,
+    yvalues: NDArray64,
+    y_label: str | None,
+) -> tuple[TransportDatasetSpec, TransportDatasetSpec]:
+    """Stack one list of sampled transport datasets along one trace axis."""
+    if len(exp_v_list) == 0 or len(exp_i_list) == 0:
+        raise ValueError("sample lists must not be empty.")
+    v_bins = np.asarray(exp_v_list[0]["V_mV"].values, dtype=np.float64)
+    i_bins = np.asarray(exp_i_list[0]["I_nA"].values, dtype=np.float64)
+    return _build_transport_sample_pair(
+        Vbins_mV=v_bins,
+        Ibins_nA=i_bins,
+        I_nA=np.vstack([np.asarray(item["I_nA"].values, dtype=np.float64) for item in exp_v_list]),
+        V_mV=np.vstack([np.asarray(item["V_mV"].values, dtype=np.float64) for item in exp_i_list]),
+        yvalues=yvalues,
+        y_label=y_label,
     )
 
 
@@ -182,7 +239,9 @@ def _prepare_trace_for_sampling(trace: Trace) -> tuple[NDArray64, NDArray64]:
 def _sample_trace(
     trace: Trace,
     samplingspec: SamplingSpec,
-) -> Sample:
+    *,
+    y_label: str | None = None,
+) -> tuple[TransportDatasetSpec, TransportDatasetSpec]:
     """Sample one prepared IV trace onto fixed V/I grids."""
     v_trace_mV, i_trace_nA = _prepare_trace_for_sampling(trace=trace)
 
@@ -197,15 +256,12 @@ def _sample_trace(
         xbins=samplingspec.Vbins_mV,
     )
 
-    dG_G0 = np.gradient(i_sampled_nA, samplingspec.Vbins_mV) / G0_muS
-    dR_R0 = np.gradient(v_sampled_mV, samplingspec.Ibins_nA) * G0_muS
-
-    _ = dG_G0, dR_R0, trace
-    return make_sample(
+    return _build_transport_sample_pair(
         Vbins_mV=np.asarray(samplingspec.Vbins_mV, dtype=np.float64),
         Ibins_nA=np.asarray(samplingspec.Ibins_nA, dtype=np.float64),
         I_nA=np.asarray(i_sampled_nA, dtype=np.float64),
         V_mV=np.asarray(v_sampled_mV, dtype=np.float64),
+        y_label=y_label,
     )
 
 
@@ -213,7 +269,7 @@ def _sample_traces(
     traces: Traces,
     samplingspec: SamplingSpec,
     show_progress: bool = True,
-) -> Samples:
+) -> tuple[TransportDatasetSpec, TransportDatasetSpec]:
     """Sample one collection of prepared IV traces."""
     iterable: Iterator[Trace] | Traces = traces
     if show_progress:
@@ -225,13 +281,21 @@ def _sample_traces(
             unit="trace",
         )
 
-    sampled = [_sample_trace(trace=trace, samplingspec=samplingspec) for trace in iterable]
-    return make_samples(
-        Vbins_mV=np.asarray(samplingspec.Vbins_mV, dtype=np.float64),
-        Ibins_nA=np.asarray(samplingspec.Ibins_nA, dtype=np.float64),
-        I_nA=np.vstack([np.asarray(sample["I_nA"], dtype=np.float64) for sample in sampled]),
-        V_mV=np.vstack([np.asarray(sample["V_mV"], dtype=np.float64) for sample in sampled]),
+    sampled = [
+        _sample_trace(
+            trace=trace,
+            samplingspec=samplingspec,
+            y_label=None if traces.y is None else traces.y.code_label,
+        )
+        for trace in iterable
+    ]
+    exp_v_list = [sample[0] for sample in sampled]
+    exp_i_list = [sample[1] for sample in sampled]
+    return _stack_transport_samples(
+        exp_v_list,
+        exp_i_list,
         yvalues=np.asarray(traces.yvalues, dtype=np.float64),
+        y_label=None if traces.y is None else traces.y.code_label,
     )
 
 
@@ -268,65 +332,70 @@ def _smooth_supported_segment(
 
 
 def _smooth_sample(
-    sample: Sample,
+    sample: TransportDatasetSpec,
     spec: SamplingSpec,
-) -> Sample:
+    *,
+    Vbins_mV: NDArray64,
+    Ibins_nA: NDArray64,
+) -> tuple[TransportDatasetSpec, TransportDatasetSpec]:
     """Smooth one sampled IV trace and recompute derivatives."""
     if spec.median_bins <= 1 and spec.sigma_bins <= 0.0:
-        return _copy_sample(sample)
+        return _build_transport_sample_pair(
+            Vbins_mV=Vbins_mV,
+            Ibins_nA=Ibins_nA,
+            I_nA=np.asarray(sample["I_nA"].values, dtype=np.float64),
+            V_mV=np.asarray(sample["V_mV"].values, dtype=np.float64),
+        )
 
-    vbin_mV = np.asarray(sample["Vbins_mV"], dtype=np.float64)
-    ibin_nA = np.asarray(sample["Ibins_nA"], dtype=np.float64)
-    i_smooth_nA = _smooth_supported_segment(sample["I_nA"], spec=spec)
-    v_smooth_mV = _smooth_supported_segment(sample["V_mV"], spec=spec)
-    dG_G0 = np.gradient(i_smooth_nA, vbin_mV) / G0_muS
-    dR_R0 = np.gradient(v_smooth_mV, ibin_nA) * G0_muS
+    i_smooth_nA = _smooth_supported_segment(sample["I_nA"].values, spec=spec)
+    v_smooth_mV = _smooth_supported_segment(sample["V_mV"].values, spec=spec)
 
-    return _copy_sample(
-        sample,
-        Vbins_mV=np.asarray(vbin_mV, dtype=np.float64),
-        Ibins_nA=np.asarray(ibin_nA, dtype=np.float64),
+    return _build_transport_sample_pair(
+        Vbins_mV=Vbins_mV,
+        Ibins_nA=Ibins_nA,
         I_nA=np.asarray(i_smooth_nA, dtype=np.float64),
         V_mV=np.asarray(v_smooth_mV, dtype=np.float64),
-        dG_G0=np.asarray(dG_G0, dtype=np.float64),
-        dR_R0=np.asarray(dR_R0, dtype=np.float64),
     )
 
 
 def _smooth_samples(
-    samples: Samples,
+    samples: tuple[TransportDatasetSpec, TransportDatasetSpec],
     spec: SamplingSpec,
     show_progress: bool = False,
-) -> Samples:
+) -> tuple[TransportDatasetSpec, TransportDatasetSpec]:
     """Smooth one collection of sampled IV traces."""
-    iterable = range(len(samples))
+    exp_v, exp_i = samples
+    iterable = range(np.asarray(exp_v["I_nA"].values, dtype=np.float64).shape[0])
     if show_progress:
         tqdm = _import_tqdm()
         iterable = tqdm(
             iterable,
-            total=len(samples),
+            total=np.asarray(exp_v["I_nA"].values, dtype=np.float64).shape[0],
             desc="smoothing",
             unit="trace",
         )
 
     traces = [
         _smooth_sample(
-            sample=make_sample(
-                Vbins_mV=np.asarray(samples["Vbins_mV"], dtype=np.float64),
-                Ibins_nA=np.asarray(samples["Ibins_nA"], dtype=np.float64),
-                I_nA=np.asarray(samples["I_nA"], dtype=np.float64)[index],
-                V_mV=np.asarray(samples["V_mV"], dtype=np.float64)[index],
+            sample=Dataset(
+                data=(
+                    data("I_nA", np.asarray(exp_v["I_nA"].values, dtype=np.float64)[index]),
+                    data("V_mV", np.asarray(exp_i["V_mV"].values, dtype=np.float64)[index]),
+                ),
             ),
             spec=spec,
+            Vbins_mV=np.asarray(exp_v["V_mV"].values, dtype=np.float64),
+            Ibins_nA=np.asarray(exp_i["I_nA"].values, dtype=np.float64),
         )
         for index in iterable
     ]
-    return make_samples(
-        Vbins_mV=np.asarray(samples["Vbins_mV"], dtype=np.float64),
-        Ibins_nA=np.asarray(samples["Ibins_nA"], dtype=np.float64),
-        I_nA=np.vstack([np.asarray(trace["I_nA"], dtype=np.float64) for trace in traces]),
-        V_mV=np.vstack([np.asarray(trace["V_mV"], dtype=np.float64) for trace in traces]),
-        yvalues=np.asarray(samples.yvalues, dtype=np.float64),
+    exp_v_list = [trace[0] for trace in traces]
+    exp_i_list = [trace[1] for trace in traces]
+    return _stack_transport_samples(
+        exp_v_list,
+        exp_i_list,
+        yvalues=np.asarray(_trace_axis_entry(exp_v).values, dtype=np.float64),
+        y_label=_trace_axis_entry(exp_v).code_label,
     )
 
 
@@ -492,7 +561,7 @@ def binning(
     *,
     samplingspec: SamplingSpec,
     show_progress: bool = False,
-) -> Sample | Samples:
+) -> tuple[TransportDatasetSpec, TransportDatasetSpec]:
     """Bin already corrected traces onto the sampling grids."""
     if isinstance(traces, Traces):
         return _sample_traces(
@@ -504,19 +573,21 @@ def binning(
 
 
 def smooth(
-    samples: Sample | Samples,
+    samples: tuple[TransportDatasetSpec, TransportDatasetSpec],
     *,
     samplingspec: SamplingSpec,
     show_progress: bool = False,
-) -> Sample | Samples:
+) -> tuple[TransportDatasetSpec, TransportDatasetSpec]:
     """Smooth one sampled trace or one sampled-trace collection."""
-    if isinstance(samples, Samples):
-        return _smooth_samples(
-            samples=samples,
+    exp_v, exp_i = samples
+    if np.asarray(exp_v["I_nA"].values, dtype=np.float64).ndim == 1:
+        return _smooth_sample(
+            exp_v,
             spec=samplingspec,
-            show_progress=show_progress,
+            Vbins_mV=np.asarray(exp_v["V_mV"].values, dtype=np.float64),
+            Ibins_nA=np.asarray(exp_i["I_nA"].values, dtype=np.float64),
         )
-    return _smooth_sample(samples, spec=samplingspec)
+    return _smooth_samples(samples, spec=samplingspec, show_progress=show_progress)
 
 
 __all__ = [

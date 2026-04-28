@@ -6,7 +6,8 @@ import numpy as np
 import pytest
 
 import superconductivity.evaluation.sampling as smoothing
-from superconductivity.evaluation.sampling import Sample, Samples, SamplingSpec
+from superconductivity.evaluation.sampling.containers import Sample, Samples
+from superconductivity.evaluation.sampling import SamplingSpec
 from superconductivity.evaluation.sampling.containers import make_sample, make_samples
 
 

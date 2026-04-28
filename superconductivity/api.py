@@ -26,8 +26,6 @@ from .evaluation.analysis import (
     psd_analysis,
 )
 from .evaluation.sampling import (
-    Sample,
-    Samples,
     SamplingSpec,
     binning,
     downsample_trace,

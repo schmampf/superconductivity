@@ -6,7 +6,6 @@ import numpy as np
 
 from ...utilities.meta import TransportDatasetSpec
 from ..traces import Trace, Traces
-from .containers import Sample, Samples
 from .specs import SamplingSpec
 from .transforms import (
     binning,
@@ -22,8 +21,8 @@ def _sample_result(
     *,
     samplingspec: SamplingSpec,
     show_progress: bool = True,
-) -> Sample | Samples:
-    """Run the full sampling pipeline and return the internal result wrapper."""
+) -> object:
+    """Run the full sampling pipeline and return the two transport datasets."""
     prepared = traces
     if samplingspec.apply_offset_correction:
         prepared = offset_correction(
@@ -63,12 +62,12 @@ def sample(
     show_progress: bool = True,
 ) -> tuple[TransportDatasetSpec, TransportDatasetSpec]:
     """Run the full sampling pipeline and return voltage- and current-bias datasets."""
-    result = _sample_result(
+    exp_v, exp_i = _sample_result(
         traces,
         samplingspec=samplingspec,
         show_progress=show_progress,
     )
-    return (result.exp_v, result.exp_i)
+    return exp_v, exp_i
 
 
 __all__ = ["sample"]

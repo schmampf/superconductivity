@@ -43,7 +43,7 @@ def test_get_keys_forwards_remove_and_add_keys(
     assert out["specific_keys"] == ["no_irradiation", "nu=3dBm"]
     assert np.allclose(out["yvalues"], np.asarray([0.0, 3.0]))
     assert np.array_equal(out["indices"], np.asarray([0, 1]))
-    assert out.keys() == ("y", "i", "indices", "skeys", "specific_keys")
+    assert out.keys() == ("y", "nu", "i", "indices", "skeys", "specific_keys")
     assert out.label == "nu (dBm)"
     assert out._spec.label is None
 
@@ -225,7 +225,7 @@ def test_get_keys_falls_back_to_index_when_value_is_non_numeric(
 
     assert out.specific_keys == ["mode=alpha", "mode=beta"]
     assert np.allclose(out.yvalues, np.asarray([0.0, 1.0]))
-    assert out.y.code_label == "y"
+    assert out.y.code_label == "mode"
 
 
 def test_get_keys_supports_strip0_none(

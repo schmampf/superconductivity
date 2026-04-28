@@ -308,4 +308,4 @@ def test_get_traces_falls_back_to_index_for_non_numeric_yvalues(
 
     assert np.allclose(traces.yvalues, np.asarray([0.0, 1.0]))
     assert traces.y is not None
-    assert traces.y.code_label == "y"
+    assert traces.y.code_label == "nu"
