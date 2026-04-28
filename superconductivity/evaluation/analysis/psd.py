@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterator, TypedDict, overload
+from typing import Iterator, overload
 
 import numpy as np
 
+from ...utilities.meta import AxisSpec, Dataset, DataSpec, ParamSpec, axis, data, param
 from ...utilities.safety import (
     require_all_finite,
     require_min_size,
@@ -34,14 +35,66 @@ class PSDSpec:
         self.detrend = bool(self.detrend)
 
 
-class PSDTrace(TypedDict):
-    """One PSD result."""
+@dataclass(frozen=True, slots=True, init=False)
+class PSDTrace(Dataset):
+    """One PSD result stored as a dataset."""
 
-    f_Hz: NDArray64
-    I_psd_nA2_per_Hz: NDArray64
-    V_psd_mV2_per_Hz: NDArray64
-    nu_Hz: float
-    nyquist_Hz: float
+    def __init__(
+        self,
+        *,
+        f_Hz: NDArray64,
+        I_psd_nA2_per_Hz: NDArray64,
+        V_psd_mV2_per_Hz: NDArray64,
+        nu_Hz: float,
+        nyquist_Hz: float,
+    ) -> None:
+        psd_ds = Dataset(
+            data=(
+                data("I_psd_nA2_per_Hz", I_psd_nA2_per_Hz),
+                data("V_psd_mV2_per_Hz", V_psd_mV2_per_Hz),
+            ),
+            axes=(axis("f_Hz", values=f_Hz, order=0),),
+            params=(
+                param("nu_Hz", nu_Hz),
+                param("nyquist_Hz", nyquist_Hz),
+            ),
+        )
+        object.__setattr__(self, "data", psd_ds.data)
+        object.__setattr__(self, "axes", psd_ds.axes)
+        object.__setattr__(self, "params", psd_ds.params)
+        object.__setattr__(self, "_lookup", psd_ds._lookup)
+
+    def __getitem__(self, key: str):
+        if key in {"f_Hz", "I_psd_nA2_per_Hz", "V_psd_mV2_per_Hz"}:
+            return np.asarray(Dataset.__getitem__(self, key).values, dtype=np.float64)
+        if key in {"nu_Hz", "nyquist_Hz"}:
+            return float(Dataset.__getitem__(self, key).values)
+        return Dataset.__getitem__(self, key)
+
+    @property
+    def f_Hz(self) -> AxisSpec:
+        """Return the PSD frequency axis."""
+        return Dataset.__getitem__(self, "f_Hz")
+
+    @property
+    def I_psd_nA2_per_Hz(self) -> DataSpec:
+        """Return the current PSD payload."""
+        return Dataset.__getitem__(self, "I_psd_nA2_per_Hz")
+
+    @property
+    def V_psd_mV2_per_Hz(self) -> DataSpec:
+        """Return the voltage PSD payload."""
+        return Dataset.__getitem__(self, "V_psd_mV2_per_Hz")
+
+    @property
+    def nu_Hz(self) -> ParamSpec:
+        """Return the sampling-rate parameter."""
+        return Dataset.__getitem__(self, "nu_Hz")
+
+    @property
+    def nyquist_Hz(self) -> ParamSpec:
+        """Return the Nyquist-frequency parameter."""
+        return Dataset.__getitem__(self, "nyquist_Hz")
 
 
 @dataclass(slots=True)
@@ -49,31 +102,12 @@ class PSDTraces:
     """Container for multiple PSD results."""
 
     traces: list[PSDTrace]
-    I_psd_nA2_per_Hz: list[NDArray64] = field(init=False)
-    V_psd_mV2_per_Hz: list[NDArray64] = field(init=False)
-    f_Hz: list[NDArray64] = field(init=False)
-    nu_Hz: NDArray64 = field(init=False)
-    nyquist_Hz: NDArray64 = field(init=False)
 
     def __post_init__(self) -> None:
-        """Build list and stacked-array views from ``traces``."""
         if len(self.traces) == 0:
             raise ValueError("traces must not be empty.")
-
-        self.I_psd_nA2_per_Hz = []
-        self.V_psd_mV2_per_Hz = []
-        self.f_Hz = []
-        nu_Hz: list[float] = []
-        nyquist_Hz: list[float] = []
-
-        for trace in self.traces:
-            self.I_psd_nA2_per_Hz.append(trace["I_psd_nA2_per_Hz"])
-            self.V_psd_mV2_per_Hz.append(trace["V_psd_mV2_per_Hz"])
-            self.f_Hz.append(trace["f_Hz"])
-            nu_Hz.append(float(trace["nu_Hz"]))
-            nyquist_Hz.append(float(trace["nyquist_Hz"]))
-        self.nu_Hz = np.asarray(nu_Hz, dtype=np.float64)
-        self.nyquist_Hz = np.asarray(nyquist_Hz, dtype=np.float64)
+        if not all(isinstance(trace, PSDTrace) for trace in self.traces):
+            raise TypeError("traces must contain PSDTrace objects only.")
 
     def __len__(self) -> int:
         """Return number of traces."""
@@ -89,6 +123,41 @@ class PSDTraces:
     ) -> PSDTrace | list[PSDTrace]:
         """Return trace(s) by positional index."""
         return self.traces[index]
+
+    def keys(self) -> tuple[str, ...]:
+        """Return public mapping-style keys."""
+        return (
+            "f_Hz",
+            "I_psd_nA2_per_Hz",
+            "V_psd_mV2_per_Hz",
+            "nu_Hz",
+            "nyquist_Hz",
+        )
+
+    @property
+    def I_psd_nA2_per_Hz(self) -> list[NDArray64]:
+        """Return per-trace current PSD arrays."""
+        return [trace.I_psd_nA2_per_Hz for trace in self.traces]
+
+    @property
+    def V_psd_mV2_per_Hz(self) -> list[NDArray64]:
+        """Return per-trace voltage PSD arrays."""
+        return [trace.V_psd_mV2_per_Hz for trace in self.traces]
+
+    @property
+    def f_Hz(self) -> list[AxisSpec]:
+        """Return per-trace frequency axes."""
+        return [trace.f_Hz for trace in self.traces]
+
+    @property
+    def nu_Hz(self) -> list[ParamSpec]:
+        """Return per-trace sampling frequencies."""
+        return [trace.nu_Hz for trace in self.traces]
+
+    @property
+    def nyquist_Hz(self) -> list[ParamSpec]:
+        """Return per-trace Nyquist frequencies."""
+        return [trace.nyquist_Hz for trace in self.traces]
 
 
 def _get_sample_rate_Hz(t_s: NDArray64, *, name: str) -> float:
@@ -203,15 +272,13 @@ def _build_single_psd_result(
     nu_Hz = _get_sample_rate_Hz(trace["t_s"], name="t_s")
     nyquist_Hz = nu_Hz / 2.0
 
-    psd: PSDTrace = {
-        "f_Hz": f_Hz,
-        "I_psd_nA2_per_Hz": I_psd,
-        "V_psd_mV2_per_Hz": V_psd,
-        "nu_Hz": nu_Hz,
-        "nyquist_Hz": nyquist_Hz,
-    }
-    return psd
-
+    return PSDTrace(
+        f_Hz=f_Hz,
+        I_psd_nA2_per_Hz=I_psd,
+        V_psd_mV2_per_Hz=V_psd,
+        nu_Hz=nu_Hz,
+        nyquist_Hz=nyquist_Hz,
+    )
 
 @overload
 def psd_analysis(
