@@ -7,15 +7,17 @@ from superconductivity.utilities.constants import G0_muS, kB_meV_K
 from superconductivity.utilities.meta import (
     DataSpec,
     Dataset,
-    TransportDatasetSpec,
     ParamSpec,
     axis,
     data,
     dataset,
     gridded_dataset,
     param,
-    reduced_dataset,
     validate_gridded_dataset,
+)
+from superconductivity.utilities.transport import (
+    TransportDatasetSpec,
+    reduced_dataset,
 )
 
 

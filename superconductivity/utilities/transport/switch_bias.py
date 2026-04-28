@@ -2,81 +2,95 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 import numpy as np
 
 from ..types import NDArray64
 from ..meta.axis import AxisSpec, axis
 from ..meta.data import DataSpec
 from ..meta.param import ParamSpec
+from ._inputs import normalize_samples, restore_samples
 from .dataset import TransportDatasetSpec
 from .mapping import mapping
 
 
 def switch_bias(
-    sample: TransportDatasetSpec,
+    sample_or_samples: TransportDatasetSpec | Sequence[TransportDatasetSpec],
     *,
     I_nA: AxisSpec | NDArray64 | None = None,
     V_mV: AxisSpec | NDArray64 | None = None,
     N_up: int | None = None,
     fill: str | None = None,
     fill_value: float = 0.0,
-) -> TransportDatasetSpec:
-    """Switch one transport dataset between voltage- and current-bias views."""
+) -> TransportDatasetSpec | Sequence[TransportDatasetSpec]:
+    """Switch one or many transport datasets between bias views."""
     if (I_nA is None) == (V_mV is None):
         raise ValueError("Exactly one of I_nA or V_mV must be provided.")
+    samples, was_sequence, sequence_type = normalize_samples(sample_or_samples)
+    switched_samples: list[TransportDatasetSpec] = []
 
-    if I_nA is not None:
-        source_axis_label = "V_mV"
-        source_data_label = "I_nA"
-        target_axis = _coerce_target_axis(
-            "I_nA",
-            I_nA,
-            order=_require_axis(sample, "V_mV").order,
-        )
-    else:
-        source_axis_label = "I_nA"
-        source_data_label = "V_mV"
-        target_axis = _coerce_target_axis(
-            "V_mV",
-            V_mV,
-            order=_require_axis(sample, "I_nA").order,
-        )
+    for sample in samples:
+        if I_nA is not None:
+            source_axis_label = "V_mV"
+            source_data_label = "I_nA"
+            target_axis = _coerce_target_axis(
+                "I_nA",
+                I_nA,
+                order=_require_axis(sample, "V_mV").order,
+            )
+        else:
+            source_axis_label = "I_nA"
+            source_data_label = "V_mV"
+            target_axis = _coerce_target_axis(
+                "V_mV",
+                V_mV,
+                order=_require_axis(sample, "I_nA").order,
+            )
 
-    _require_canonical_source(
-        sample,
-        source_axis_label=source_axis_label,
-        source_data_label=source_data_label,
-    )
-
-    prepared = sample
-    if fill is not None:
-        prepared = mapping(
-            prepared,
-            axis=source_axis_label,
-            fill=fill,
-            fill_value=fill_value,
-        )
-    if N_up is not None:
-        prepared = mapping(
-            prepared,
-            axis=source_axis_label,
-            N_up=N_up,
+        _require_canonical_source(
+            sample,
+            source_axis_label=source_axis_label,
+            source_data_label=source_data_label,
         )
 
-    source_axis = _require_axis(prepared, source_axis_label)
-    source_data = _require_data(prepared, source_data_label)
-    source_transport = np.asarray(source_data.values, dtype=np.float64)
-    _require_monotonic_transport(
-        source_transport,
-        axis=source_axis.order,
-        code_label=source_data_label,
-    )
+        prepared = sample
+        if fill is not None:
+            prepared = mapping(
+                prepared,
+                axis=source_axis_label,
+                fill=fill,
+                fill_value=fill_value,
+            )
+        if N_up is not None:
+            prepared = mapping(
+                prepared,
+                axis=source_axis_label,
+                N_up=N_up,
+            )
 
-    return _switch_transport_dataset(
-        prepared,
-        source_axis=source_axis,
-        source_transport=source_transport,
-        target_axis=target_axis,
+        source_axis = _require_axis(prepared, source_axis_label)
+        source_data = _require_data(prepared, source_data_label)
+        source_transport = np.asarray(source_data.values, dtype=np.float64)
+        _require_monotonic_transport(
+            source_transport,
+            axis=source_axis.order,
+            code_label=source_data_label,
+        )
+
+        switched_samples.append(
+            _switch_transport_dataset(
+                prepared,
+                source_axis=source_axis,
+                source_transport=source_transport,
+                target_axis=target_axis,
+            )
+        )
+
+    return restore_samples(
+        tuple(switched_samples),
+        was_sequence=was_sequence,
+        sequence_type=sequence_type,
     )
 
 

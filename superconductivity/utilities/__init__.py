@@ -16,7 +16,7 @@ from .meta import (
 from .transport import (
     TransportDatasetSpec,
     mapping,
-    reduce,
+    reduced_units,
     reduced_dataset,
     switch_bias,
     validate_reduced_dataset,
@@ -37,7 +37,7 @@ __all__ = [
     "data",
     "label",
     "param",
-    "reduce",
+    "reduced_units",
     "reduced_dataset",
     "switch_bias",
     "validate_reduced_dataset",

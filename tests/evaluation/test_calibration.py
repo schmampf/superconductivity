@@ -6,7 +6,8 @@ import pytest
 from superconductivity.evaluation import CalibrationSpec, calibrate, sample
 from superconductivity.evaluation.sampling import SamplingSpec
 from superconductivity.evaluation.traces import Trace, Traces
-from superconductivity.utilities.meta import TransportDatasetSpec, axis, data
+from superconductivity.utilities.meta import axis, data
+from superconductivity.utilities.transport import TransportDatasetSpec
 
 
 def _make_samples() -> tuple[TransportDatasetSpec, TransportDatasetSpec]:

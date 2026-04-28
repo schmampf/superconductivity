@@ -3,14 +3,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from superconductivity.evaluation import reduce, sample
+from superconductivity.evaluation import sample
 from superconductivity.evaluation.sampling import SamplingSpec
 from superconductivity.evaluation.traces import Trace, Traces
-from superconductivity.utilities.meta import (
+from superconductivity.utilities.meta import axis, data, label
+from superconductivity.utilities.transport import (
     TransportDatasetSpec,
-    axis,
-    data,
-    label,
+    reduced_units,
     switch_bias,
 )
 
@@ -119,6 +118,18 @@ def test_switch_bias_passes_through_upsampling_and_fill() -> None:
     assert np.isfinite(exp_i.V_mV.values).any()
 
 
+def test_switch_bias_accepts_sequences_of_samples() -> None:
+    exp_v = _make_exp_v()
+
+    switched_v, switched_i = switch_bias(
+        (exp_v, exp_v),
+        I_nA=np.linspace(-2.0, 2.0, 5),
+    )
+
+    assert switched_v.V_mV.values.shape == (2, 5)
+    assert switched_i.V_mV.values.shape == (2, 5)
+
+
 def test_switch_bias_rejects_both_or_neither_targets() -> None:
     exp_v = _make_exp_v()
 
@@ -183,7 +194,7 @@ def test_switch_bias_integrates_with_sampled_transport_dataset() -> None:
     )
 
     exp_v, exp_i = sample(traces, samplingspec=spec, show_progress=False)
-    exp_v, _ = reduce(exp_v, exp_i, Delta_meV=np.asarray([1.0, 1.2], dtype=np.float64))
+    exp_v, _ = reduced_units((exp_v, exp_i), Delta_meV=np.asarray([1.0, 1.2], dtype=np.float64))
     switched = switch_bias(exp_v, I_nA=np.linspace(-3.0, 3.0, 121))
 
     assert switched.I_nA.order == 1

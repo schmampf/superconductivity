@@ -26,7 +26,6 @@ from .evaluation.analysis import (
     psd_analysis,
 )
 from .evaluation.calibration import CalibrationSpec, calibrate
-from .evaluation.reduce import reduce
 from .evaluation.sampling import (
     SamplingSpec,
     binning,
@@ -38,6 +37,7 @@ from .evaluation.sampling import (
     smooth,
     upsampling,
 )
+from .utilities.transport import reduced_units
 from .evaluation.traces import (
     FileSpec,
     Keys,

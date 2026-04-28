@@ -6,7 +6,7 @@ from .dataset import (
     validate_reduced_dataset,
 )
 from .mapping import mapping
-from .reduce import reduce
+from .reduced_units import reduced_units
 from .switch_bias import switch_bias
 
 __all__ = [
@@ -14,6 +14,6 @@ __all__ = [
     "reduced_dataset",
     "validate_reduced_dataset",
     "mapping",
-    "reduce",
+    "reduced_units",
     "switch_bias",
 ]

@@ -16,10 +16,10 @@ from superconductivity.models.bcs.bcs import get_Ibcs_nA
 from superconductivity.utilities.meta import (
     AxisSpec,
     ParamSpec,
-    TransportDatasetSpec,
     axis,
     param,
 )
+from superconductivity.utilities.transport import TransportDatasetSpec
 
 _SCIPY_AVAILABLE = importlib.util.find_spec("scipy") is not None
 _JAX_AVAILABLE = importlib.util.find_spec("jax") is not None

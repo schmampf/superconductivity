@@ -15,8 +15,8 @@ from superconductivity.evaluation.traces import Trace, Traces
 from superconductivity.utilities.constants import G0_muS
 from superconductivity.utilities.functions.binning import bin
 from superconductivity.utilities.functions.upsampling import upsample as upsample_xy
-from superconductivity.utilities.meta import TransportDatasetSpec
 from superconductivity.utilities.meta.label import label
+from superconductivity.utilities.transport import TransportDatasetSpec
 
 pipeline_mod = importlib.import_module(
     "superconductivity.evaluation.sampling.pipeline",

@@ -3,11 +3,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from superconductivity.evaluation import reduce, sample
+from superconductivity.evaluation import sample
 from superconductivity.evaluation.sampling import SamplingSpec
 from superconductivity.evaluation.traces import Trace, Traces
 from superconductivity.utilities import mapping
-from superconductivity.utilities.meta import TransportDatasetSpec, axis, data, label, param
+from superconductivity.utilities.meta import axis, data, label, param
+from superconductivity.utilities.transport import TransportDatasetSpec, reduced_units
 
 
 def _make_transport_sample() -> TransportDatasetSpec:
@@ -112,6 +113,19 @@ def test_mapping_combined_pipeline_has_fixed_order() -> None:
     assert np.allclose(mapped.Delta_meV.values, [1.0, 1.5, 2.0])
 
 
+def test_mapping_accepts_sequences_of_samples() -> None:
+    sample_in = _make_transport_sample()
+
+    mapped_v, mapped_i = mapping(
+        (sample_in, sample_in),
+        axis="Aout_mV",
+        N_up=2,
+    )
+
+    assert mapped_v.I_nA.values.shape == (4, 3)
+    assert mapped_i.I_nA.values.shape == (4, 3)
+
+
 def test_mapping_rejects_missing_axis_label() -> None:
     with pytest.raises(ValueError, match="missing axis"):
         mapping(_make_transport_sample(), axis="nu_GHz", N_up=2)
@@ -191,7 +205,7 @@ def test_mapping_integrates_with_sampled_transport_dataset() -> None:
         Ioff_nA=data("Ioff_nA", np.asarray([0.3, 0.1], dtype=np.float64)),
     )
     exp_v, exp_i = sample(traces, samplingspec=spec, show_progress=False)
-    exp_v, _ = reduce(exp_v, exp_i, Delta_meV=np.asarray([1.0, 1.2], dtype=np.float64))
+    exp_v, _ = reduced_units((exp_v, exp_i), Delta_meV=np.asarray([1.0, 1.2], dtype=np.float64))
     mapped = mapping(
         exp_v,
         axis="Aout_mV",

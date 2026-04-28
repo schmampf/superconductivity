@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import replace
 
 import numpy as np
@@ -11,41 +12,56 @@ from ..functions.upsampling import upsample
 from ..meta.axis import AxisSpec, axis
 from ..meta.data import DataSpec
 from ..meta.param import ParamSpec
+from ._inputs import normalize_samples, restore_samples
 from .dataset import TransportDatasetSpec
 
 
 def mapping(
-    sample: TransportDatasetSpec,
+    sample_or_samples: TransportDatasetSpec | Sequence[TransportDatasetSpec],
     *,
     axis: str,
     N_up: int | None = None,
     xbins: np.ndarray | None = None,
     fill: str | None = None,
     fill_value: float = 0.0,
-) -> TransportDatasetSpec:
-    """Apply axis-aware mapping steps to one transport dataset."""
+) -> TransportDatasetSpec | Sequence[TransportDatasetSpec]:
+    """Apply axis-aware mapping steps to one or many transport datasets."""
     if N_up is None and xbins is None and fill is None:
         raise ValueError("mapping requires at least one operation.")
 
-    target_axis = _require_axis(sample, axis)
-    target_values = np.asarray(target_axis.values, dtype=np.float64)
-    if np.any(~np.isfinite(target_values)):
-        raise ValueError("selected axis must contain only finite values.")
+    samples, was_sequence, sequence_type = normalize_samples(sample_or_samples)
+    mapped_samples: list[TransportDatasetSpec] = []
 
-    result = sample
-    current_axis = target_axis
-    if N_up is not None:
-        result, current_axis = _linear_upsample(result, current_axis, int(N_up))
-    if xbins is not None:
-        result, current_axis = _map_on_axis(result, current_axis, xbins)
-    if fill is not None:
-        result = _fill_nan(
-            result,
-            current_axis,
-            method=str(fill),
-            value=float(fill_value),
-        )
-    return result
+    for sample in samples:
+        target_axis = _require_axis(sample, axis)
+        target_values = np.asarray(target_axis.values, dtype=np.float64)
+        if np.any(~np.isfinite(target_values)):
+            raise ValueError("selected axis must contain only finite values.")
+
+        result = sample
+        current_axis = target_axis
+        if N_up is not None:
+            result, current_axis = _linear_upsample(
+                result,
+                current_axis,
+                int(N_up),
+            )
+        if xbins is not None:
+            result, current_axis = _map_on_axis(result, current_axis, xbins)
+        if fill is not None:
+            result = _fill_nan(
+                result,
+                current_axis,
+                method=str(fill),
+                value=float(fill_value),
+            )
+        mapped_samples.append(result)
+
+    return restore_samples(
+        tuple(mapped_samples),
+        was_sequence=was_sequence,
+        sequence_type=sequence_type,
+    )
 
 
 def _linear_upsample(
