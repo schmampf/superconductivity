@@ -25,6 +25,8 @@ from .evaluation.analysis import (
     offset_analysis,
     psd_analysis,
 )
+from .evaluation.calibration import CalibrationSpec, calibrate
+from .evaluation.reduce import reduce
 from .evaluation.sampling import (
     SamplingSpec,
     binning,

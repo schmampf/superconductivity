@@ -10,12 +10,6 @@ from .dataset import (
 )
 from .label import LABELS, LabelSpec, label
 from .param import ParamSpec, param
-from .transport import (
-    TransportDatasetSpec,
-    reduced_dataset,
-    validate_reduced_dataset,
-)
-from .transport_mapping import switch_bias
 
 __all__ = [
     "AxisSpec",
@@ -31,8 +25,4 @@ __all__ = [
     "label",
     "ParamSpec",
     "param",
-    "TransportDatasetSpec",
-    "reduced_dataset",
-    "validate_reduced_dataset",
-    "switch_bias",
 ]
