@@ -56,6 +56,10 @@ class FileSpec:
             location=self.location,
         )
 
+    def keys(self) -> tuple[str, ...]:
+        """Return public mapping-style keys."""
+        return ("h5path", "location", "measurement")
+
     def mkeys(self) -> list[str]:
         """Return measurement keys from the configured file."""
         return list_measurement_keys(self)
