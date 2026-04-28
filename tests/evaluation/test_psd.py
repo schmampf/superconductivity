@@ -68,6 +68,21 @@ def test_psd_analysis_returns_collection() -> None:
     )
 
     assert len(out) == 2
+    assert out.keys() == (
+        "y",
+        "i",
+        "indices",
+        "skeys",
+        "specific_keys",
+        "f_Hz",
+        "I_psd_nA2_per_Hz",
+        "V_psd_mV2_per_Hz",
+        "nu_Hz",
+        "nyquist_Hz",
+    )
+    assert out.specific_keys == traces.specific_keys
+    assert np.allclose(out.indices, traces.indices)
+    assert np.allclose(out.yvalues, traces.yvalues)
     assert len(out.I_psd_nA2_per_Hz) == 2
     assert len(out.V_psd_mV2_per_Hz) == 2
     assert len(out.f_Hz) == 2
@@ -76,6 +91,7 @@ def test_psd_analysis_returns_collection() -> None:
     assert isinstance(out.V_psd_mV2_per_Hz[0], DataSpec)
     assert isinstance(out.nu_Hz[0], ParamSpec)
     assert isinstance(out.nyquist_Hz[0], ParamSpec)
+    assert out.i == out.index
 
 
 def test_downsample_trace_uses_nu_hz_as_sample_rate() -> None:
@@ -116,6 +132,11 @@ def test_psdtraces_support_positional_access_only() -> None:
     assert traces[0]["nyquist_Hz"] == pytest.approx(0.5)
     assert traces[1]["nu_Hz"] == pytest.approx(1.0)
     assert traces.keys() == (
+        "y",
+        "i",
+        "indices",
+        "skeys",
+        "specific_keys",
         "f_Hz",
         "I_psd_nA2_per_Hz",
         "V_psd_mV2_per_Hz",
