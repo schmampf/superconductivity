@@ -5,7 +5,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from functools import lru_cache, partial
-from typing import Iterator, Sequence, TypedDict, overload
+from typing import Iterator, Sequence, overload
 
 import numpy as np
 
@@ -13,6 +13,7 @@ from ...utilities.constants import G0_muS
 from ...utilities.functions.binning import bin
 from ...utilities.functions.fill_nans import fill as fill_nans
 from ...utilities.functions.upsampling import upsample as upsample_xy
+from ...utilities.meta import Dataset, axis, data, param
 from ...utilities.meta.axis import AxisSpec
 from ...utilities.meta.param import ParamSpec
 from ...utilities.safety import require_all_finite, require_min_size, to_1d_float64
@@ -81,8 +82,8 @@ class OffsetSpec:
 
     Vbins_mV: AxisSpec | Sequence[float] | NDArray64
     Ibins_nA: AxisSpec | Sequence[float] | NDArray64
-    Voff_mV: AxisSpec | Sequence[float] | NDArray64
-    Ioff_nA: AxisSpec | Sequence[float] | NDArray64
+    Voffscan_mV: AxisSpec | Sequence[float] | NDArray64
+    Ioffscan_nA: AxisSpec | Sequence[float] | NDArray64
     nu_Hz: ParamSpec | float
     N_up: ParamSpec | int = 10
 
@@ -90,8 +91,8 @@ class OffsetSpec:
         """Normalize grids and validate scalar settings."""
         self.Vbins_mV = self._coerce_axis_spec("Vbins_mV", self.Vbins_mV)
         self.Ibins_nA = self._coerce_axis_spec("Ibins_nA", self.Ibins_nA)
-        self.Voff_mV = self._coerce_axis_spec("Voff_mV", self.Voff_mV)
-        self.Ioff_nA = self._coerce_axis_spec("Ioff_nA", self.Ioff_nA)
+        self.Voffscan_mV = self._coerce_axis_spec("Voffscan_mV", self.Voffscan_mV)
+        self.Ioffscan_nA = self._coerce_axis_spec("Ioffscan_nA", self.Ioffscan_nA)
 
         self.nu_Hz = self._coerce_param_spec("nu_Hz", self.nu_Hz)
         self.N_up = self._coerce_param_spec("N_up", self.N_up)
@@ -172,60 +173,93 @@ class OffsetSpec:
         )
 
 
-class OffsetTrace(TypedDict):
-    """One offset-analysis result."""
+@dataclass(frozen=True, slots=True, init=False)
+class OffsetDataset(Dataset):
+    """Stacked offset-analysis result as a dataset."""
 
-    dGerr_G0: NDArray64
-    dRerr_R0: NDArray64
-    Voff_mV: float
-    Ioff_nA: float
+    y: AxisSpec | None = field(init=False, default=None)
+    index: AxisSpec | None = field(init=False, default=None)
+    skeys: tuple[str, ...] = field(init=False, default_factory=tuple)
 
-
-@dataclass(slots=True)
-class OffsetTraces:
-    """Container for multiple offset-analysis results."""
-
-    traces: list[OffsetTrace]
-    dGerr_G0: NDArray64 = field(init=False)
-    dRerr_R0: NDArray64 = field(init=False)
-    Voff_mV: NDArray64 = field(init=False)
-    Ioff_nA: NDArray64 = field(init=False)
-
-    def __post_init__(self) -> None:
-        """Build stacked arrays from ``traces``."""
-        if len(self.traces) == 0:
-            raise ValueError("traces must not be empty.")
-
-        voffs_mV: list[float] = []
-        ioffs_nA: list[float] = []
-        dg_rows: list[NDArray64] = []
-        dr_rows: list[NDArray64] = []
-
-        for trace in self.traces:
-            voffs_mV.append(float(trace["Voff_mV"]))
-            ioffs_nA.append(float(trace["Ioff_nA"]))
-            dg_rows.append(np.asarray(trace["dGerr_G0"], dtype=np.float64))
-            dr_rows.append(np.asarray(trace["dRerr_R0"], dtype=np.float64))
-
-        self.Voff_mV = np.asarray(voffs_mV, dtype=np.float64)
-        self.Ioff_nA = np.asarray(ioffs_nA, dtype=np.float64)
-        self.dGerr_G0 = np.vstack(dg_rows)
-        self.dRerr_R0 = np.vstack(dr_rows)
-
-    def __len__(self) -> int:
-        """Return number of traces."""
-        return len(self.traces)
-
-    def __iter__(self) -> Iterator[OffsetTrace]:
-        """Iterate over traces."""
-        return iter(self.traces)
-
-    def __getitem__(
+    def __init__(
         self,
-        index: int | slice,
-    ) -> OffsetTrace | list[OffsetTrace]:
-        """Return trace(s) by positional index."""
-        return self.traces[index]
+        *,
+        y: AxisSpec,
+        index: AxisSpec,
+        skeys: tuple[str, ...],
+        dGerr_G0: NDArray64,
+        dRerr_R0: NDArray64,
+        Voff_mV: NDArray64,
+        Ioff_nA: NDArray64,
+        Voffscan_mV: NDArray64,
+        Ioffscan_nA: NDArray64,
+    ) -> None:
+        offset_ds = Dataset(
+            data=(
+                data("dGerr_G0", dGerr_G0),
+                data("dRerr_R0", dRerr_R0),
+                data("Voff_mV", Voff_mV),
+                data("Ioff_nA", Ioff_nA),
+            ),
+            axes=(
+                y,
+                index,
+                axis("Voffscan_mV", values=Voffscan_mV, order=1),
+                axis("Ioffscan_nA", values=Ioffscan_nA, order=1),
+            ),
+        )
+        object.__setattr__(self, "data", offset_ds.data)
+        object.__setattr__(self, "axes", offset_ds.axes)
+        object.__setattr__(self, "params", offset_ds.params)
+        object.__setattr__(self, "_lookup", offset_ds._lookup)
+        object.__setattr__(self, "y", y)
+        object.__setattr__(self, "index", index)
+        object.__setattr__(self, "skeys", tuple(skeys))
+
+    @property
+    def i(self) -> AxisSpec:
+        return self.index
+
+    @property
+    def indices(self) -> AxisSpec:
+        return self.index
+
+    @property
+    def Voffscan_mV(self) -> AxisSpec:
+        return Dataset.__getitem__(self, "Voffscan_mV")
+
+    @property
+    def Ioffscan_nA(self) -> AxisSpec:
+        return Dataset.__getitem__(self, "Ioffscan_nA")
+
+    @property
+    def specific_keys(self) -> tuple[str, ...]:
+        return self.skeys
+
+    def keys(self) -> tuple[str, ...]:
+        keys = ["y"]
+        if self.y.code_label != "y":
+            keys.append(self.y.code_label)
+        keys.extend(
+            [
+                "i",
+                "indices",
+                "skeys",
+                "specific_keys",
+                "Voffscan_mV",
+                "Ioffscan_nA",
+                "dGerr_G0",
+                "dRerr_R0",
+                "Voff_mV",
+                "Ioff_nA",
+            ]
+        )
+        return tuple(keys)
+
+    def __getattr__(self, name: str):
+        if name == self.y.code_label:
+            return self.y
+        return Dataset.__getattr__(self, name)
 
 
 def _bin_y_over_x_offsets(
@@ -313,7 +347,7 @@ def _compute_offset_errors_numpy(
         x=v_mV,
         y=i_nA,
         x_bins=spec.Vbins_mV.values,
-        x_off=spec.Voff_mV.values,
+        x_off=spec.Voffscan_mV.values,
     )
     g_uS = np.gradient(i_vs_v, spec.Vbins_mV.values, axis=0)
     g_G0 = g_uS / G0_muS
@@ -325,7 +359,7 @@ def _compute_offset_errors_numpy(
         x=i_nA,
         y=v_mV,
         x_bins=spec.Ibins_nA.values,
-        x_off=spec.Ioff_nA.values,
+        x_off=spec.Ioffscan_nA.values,
     )
     r_MOhm = np.gradient(v_vs_i, spec.Ibins_nA.values, axis=0)
     r_R0 = r_MOhm * G0_muS
@@ -350,14 +384,14 @@ def _compute_offset_errors_jax(
         x=v_mV,
         y=i_nA,
         x_bins=spec.Vbins_mV.values,
-        x_off=spec.Voff_mV.values,
+        x_off=spec.Voffscan_mV.values,
         scale=float(G0_muS),
     )
     r_err_R0 = metric_from_offsets(
         x=i_nA,
         y=v_mV,
         x_bins=spec.Ibins_nA.values,
-        x_off=spec.Ioff_nA.values,
+        x_off=spec.Ioffscan_nA.values,
         scale=1.0 / float(G0_muS),
     )
     g_err_G0_np = fill_nans(
@@ -378,7 +412,7 @@ def _offset_analysis_one(
     trace: Trace,
     spec: OffsetSpec,
     backend: str = "numpy",
-) -> OffsetTrace:
+) -> tuple[NDArray64, NDArray64, float, float]:
     """Find one per-trace offset via symmetry of ``G(V)`` and ``R(I)``.
 
     Notes
@@ -403,13 +437,12 @@ def _offset_analysis_one(
         )
     j_v = _nanargmin_finite(g_err_G0)
     j_i = _nanargmin_finite(r_err_R0)
-    return {
-        "dGerr_G0": np.asarray(g_err_G0, dtype=np.float64),
-        "dRerr_R0": np.asarray(r_err_R0, dtype=np.float64),
-        "Voff_mV": float(spec.Voff_mV.values[j_v]),
-        "Ioff_nA": float(spec.Ioff_nA.values[j_i]),
-    }
-
+    return (
+        np.asarray(g_err_G0, dtype=np.float64),
+        np.asarray(r_err_R0, dtype=np.float64),
+        float(spec.Voffscan_mV.values[j_v]),
+        float(spec.Ioffscan_nA.values[j_i]),
+    )
 
 @overload
 def offset_analysis(
@@ -418,7 +451,7 @@ def offset_analysis(
     show_progress: bool = True,
     backend: str = "jax",
     workers: int = 1,
-) -> OffsetTraces: ...
+) -> OffsetDataset: ...
 
 
 @overload
@@ -428,7 +461,7 @@ def offset_analysis(
     show_progress: bool = True,
     backend: str = "jax",
     workers: int = 1,
-) -> OffsetTrace: ...
+) -> OffsetDataset: ...
 
 
 def offset_analysis(
@@ -437,7 +470,7 @@ def offset_analysis(
     show_progress: bool = True,
     backend: str = "jax",
     workers: int = 1,
-) -> OffsetTrace | OffsetTraces:
+) -> OffsetDataset:
     """Run offset analysis for one trace or one collection.
 
     Notes
@@ -448,7 +481,22 @@ def offset_analysis(
     """
     if not isinstance(traces, Traces):
         _ = show_progress, workers
-        return _offset_analysis_one(traces, spec=spec, backend=backend)
+        g_err_G0, r_err_R0, voff_mV, ioff_nA = _offset_analysis_one(
+            traces,
+            spec=spec,
+            backend=backend,
+        )
+        return OffsetDataset(
+            y=axis("y", values=np.asarray([0.0], dtype=np.float64), order=0),
+            index=axis("index", values=np.asarray([0.0], dtype=np.float64), order=0),
+            skeys=("trace_0",),
+            dGerr_G0=np.asarray(g_err_G0[np.newaxis, :], dtype=np.float64),
+            dRerr_R0=np.asarray(r_err_R0[np.newaxis, :], dtype=np.float64),
+            Voff_mV=np.asarray([voff_mV], dtype=np.float64),
+            Ioff_nA=np.asarray([ioff_nA], dtype=np.float64),
+            Voffscan_mV=np.asarray(spec.Voffscan_mV.values, dtype=np.float64),
+            Ioffscan_nA=np.asarray(spec.Ioffscan_nA.values, dtype=np.float64),
+        )
 
     worker_count = int(workers)
     if worker_count <= 0:
@@ -467,20 +515,35 @@ def offset_analysis(
         )
 
     compute_one = partial(_offset_analysis_one, spec=spec, backend=backend_key)
-    if worker_count == 1:
-        out_traces = [compute_one(trace) for trace in trace_iterable]
-    else:
+    out_rows = [compute_one(trace) for trace in trace_iterable] if worker_count == 1 else None
+    if worker_count != 1:
         with ThreadPoolExecutor(max_workers=worker_count) as executor:
-            out_traces = list(executor.map(compute_one, trace_iterable))
+            out_rows = list(executor.map(compute_one, trace_iterable))
 
-    return OffsetTraces(
-        traces=out_traces,
+    assert out_rows is not None
+    g_rows, r_rows, voffs, ioffs = zip(*out_rows, strict=True)
+    yvalues = traces.yvalues
+    y_axis = traces.y if traces.y is not None else axis("y", values=traces.indices, order=0)
+    index_axis = traces.index if traces.index is not None else axis("index", values=traces.indices, order=0)
+    return OffsetDataset(
+        y=y_axis,
+        index=index_axis,
+        skeys=traces.skeys,
+        dGerr_G0=np.vstack(g_rows),
+        dRerr_R0=np.vstack(r_rows),
+        Voff_mV=np.asarray(voffs, dtype=np.float64),
+        Ioff_nA=np.asarray(ioffs, dtype=np.float64),
+        Voffscan_mV=np.asarray(spec.Voffscan_mV.values, dtype=np.float64),
+        Ioffscan_nA=np.asarray(spec.Ioffscan_nA.values, dtype=np.float64),
     )
 
 
 __all__ = [
     "OffsetSpec",
-    "OffsetTrace",
-    "OffsetTraces",
+    "OffsetDataset",
     "offset_analysis",
 ]
+
+# Temporary compatibility aliases for downstream imports still expecting the old names.
+OffsetTrace = OffsetDataset
+OffsetTraces = OffsetDataset
