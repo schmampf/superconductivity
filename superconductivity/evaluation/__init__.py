@@ -1,7 +1,6 @@
 from .analysis import (
     OffsetSpec,
-    OffsetTrace,
-    OffsetTraces,
+    OffsetDataset,
     PSDSpec,
     PSDTrace,
     PSDTraces,
@@ -56,8 +55,7 @@ __all__ = [
     "Traces",
     "get_traces",
     "OffsetSpec",
-    "OffsetTrace",
-    "OffsetTraces",
+    "OffsetDataset",
     "offset_analysis",
     "PSDSpec",
     "PSDTrace",

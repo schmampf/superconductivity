@@ -46,7 +46,18 @@ def _import_jax_offset_kernels():
             "'pip install jax jaxlib'.",
         ) from exc
 
-    from ...utilities.legacy.functions_jax import jbin_y_over_x
+    @jax.jit
+    def _jbin_y_over_x(
+        x: NDArray64,
+        y: NDArray64,
+        x_bins: NDArray64,
+    ) -> NDArray64:
+        x_edges = jnp.append(x_bins, 2.0 * x_bins[-1] - x_bins[-2])
+        x_edges = x_edges - (x_edges[1] - x_edges[0]) / 2.0
+        count, _ = jnp.histogram(x, bins=x_edges)
+        count = jnp.where(count == 0, jnp.nan, count)
+        total, _ = jnp.histogram(x, bins=x_edges, weights=y)
+        return total / count
 
     @jax.jit
     def _bin_offsets(
@@ -56,7 +67,7 @@ def _import_jax_offset_kernels():
         x_off: NDArray64,
     ) -> NDArray64:
         stacked = jax.vmap(
-            lambda off: jbin_y_over_x(x - off, y, x_bins),
+            lambda off: _jbin_y_over_x(x - off, y, x_bins),
         )(x_off)
         return jnp.swapaxes(stacked, 0, 1)
 
@@ -455,6 +466,7 @@ def _offset_analysis_one(
         float(spec.Ioffscan_nA.values[j_i]),
     )
 
+
 @overload
 def offset_analysis(
     traces: Traces,
@@ -526,16 +538,23 @@ def offset_analysis(
         )
 
     compute_one = partial(_offset_analysis_one, spec=spec, backend=backend_key)
-    out_rows = [compute_one(trace) for trace in trace_iterable] if worker_count == 1 else None
+    out_rows = (
+        [compute_one(trace) for trace in trace_iterable] if worker_count == 1 else None
+    )
     if worker_count != 1:
         with ThreadPoolExecutor(max_workers=worker_count) as executor:
             out_rows = list(executor.map(compute_one, trace_iterable))
 
     assert out_rows is not None
     g_rows, r_rows, voffs, ioffs = zip(*out_rows, strict=True)
-    yvalues = traces.yvalues
-    y_axis = traces.y if traces.y is not None else axis("y", values=traces.indices, order=0)
-    index_axis = traces.index if traces.index is not None else axis("index", values=traces.indices, order=0)
+    y_axis = (
+        traces.y if traces.y is not None else axis("y", values=traces.indices, order=0)
+    )
+    index_axis = (
+        traces.index
+        if traces.index is not None
+        else axis("index", values=traces.indices, order=0)
+    )
     return OffsetDataset(
         y=y_axis,
         index=index_axis,
@@ -554,7 +573,3 @@ __all__ = [
     "OffsetDataset",
     "offset_analysis",
 ]
-
-# Temporary compatibility aliases for downstream imports still expecting the old names.
-OffsetTrace = OffsetDataset
-OffsetTraces = OffsetDataset

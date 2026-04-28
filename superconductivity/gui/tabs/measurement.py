@@ -64,17 +64,13 @@ _TRACE_PARAMETER_LABELS = {
 }
 _MEASUREMENT_PAIR_TABLE_WIDTH = 360
 _MEASUREMENT_PAIR_GAP_WIDTH = 10
-_MEASUREMENT_ROW_WIDTH = (
-    2 * _MEASUREMENT_PAIR_TABLE_WIDTH + _MEASUREMENT_PAIR_GAP_WIDTH
-)
+_MEASUREMENT_ROW_WIDTH = 2 * _MEASUREMENT_PAIR_TABLE_WIDTH + _MEASUREMENT_PAIR_GAP_WIDTH
 _MEASUREMENT_SECTION_GAP_HEIGHT = 24
 _MEASUREMENT_ERROR_GAP_HEIGHT = 12
 _FILESPEC_BUTTON_STACK_WIDTH = 110
 _FILESPEC_ROW_GAP_WIDTH = _MEASUREMENT_PAIR_GAP_WIDTH
 _FILESPEC_TABLE_WIDTH = (
-    _MEASUREMENT_ROW_WIDTH
-    - _FILESPEC_BUTTON_STACK_WIDTH
-    - _FILESPEC_ROW_GAP_WIDTH
+    _MEASUREMENT_ROW_WIDTH - _FILESPEC_BUTTON_STACK_WIDTH - _FILESPEC_ROW_GAP_WIDTH
 )
 
 
@@ -182,8 +178,8 @@ class GUIMeasurementTabMixin:
             return None
         try:
             return get_keys(
-                filespec=self._filespec,
-                keysspec=self._effective_keysspec(),
+                h5path=self._filespec,
+                spec=self._effective_keysspec(),
             )
         except Exception:
             return None
@@ -549,9 +545,11 @@ class GUIMeasurementTabMixin:
                     "key": "label",
                     "parameter": _KEYS_PARAMETER_LABELS["label"],
                     "value": _trace_table_value(
-                        None if spec is None
-                        else None if spec.label is None
-                        else spec.label.print_label,
+                        (
+                            None
+                            if spec is None
+                            else None if spec.label is None else spec.label.print_label
+                        ),
                     ),
                 },
                 {
@@ -614,11 +612,15 @@ class GUIMeasurementTabMixin:
             if key == "strip0":
                 values[key] = "" if parsed is None else str(parsed)
             elif key == "label":
-                values[key] = None if parsed is None else LabelSpec(
-                    code_label=str(parsed),
-                    print_label=str(parsed),
-                    html_label=str(parsed),
-                    latex_label=str(parsed),
+                values[key] = (
+                    None
+                    if parsed is None
+                    else LabelSpec(
+                        code_label=str(parsed),
+                        print_label=str(parsed),
+                        html_label=str(parsed),
+                        latex_label=str(parsed),
+                    )
                 )
             elif key == "strip1":
                 values[key] = None if parsed is None else str(parsed)
@@ -915,8 +917,8 @@ class GUIMeasurementTabMixin:
             return
 
         loaded_keys = get_keys(
-            filespec=self._filespec,
-            keysspec=self._keysspec,
+            h5path=self._filespec,
+            spec=self._keysspec,
         )
         self._keys = loaded_keys
         loaded_traces = get_traces(

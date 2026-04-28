@@ -535,9 +535,7 @@ def get_traces(
             "Provide either keys or trace selectors, not both.",
         )
 
-    resolved_keys = (
-        get_keys(filespec=filespec, keysspec=keysspec) if keys is None else keys
-    )
+    resolved_keys = get_keys(h5path=filespec, spec=keysspec) if keys is None else keys
     if has_selector:
         resolved_key, resolved_index, resolved_value = _resolve_trace_reference(
             resolved_keys,

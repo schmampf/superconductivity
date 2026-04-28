@@ -7,9 +7,8 @@ import pandas as pd
 from panel.io.model import JSCode
 
 from ...evaluation.analysis import (
+    OffsetDataset,
     OffsetSpec,
-    OffsetTrace,
-    OffsetTraces,
     offset_analysis,
 )
 from ...evaluation.traces import numeric_yvalue
@@ -89,7 +88,7 @@ def _run_offset_batch(
 class GUIOffsetTabMixin:
     def _init_offset_batch_state(self) -> None:
         self._offset_batch_spec: OffsetSpec | None = None
-        self._offset_batch_results: list[OffsetTrace | None] = [
+        self._offset_batch_results: list[OffsetDataset | None] = [
             None for _ in range(len(self.traces))
         ]
         self._offset_batch_status: list[str] = ["idle" for _ in range(len(self.traces))]
@@ -127,7 +126,7 @@ class GUIOffsetTabMixin:
     def _stage_offset_result(
         self,
         index: int,
-        offset: OffsetTrace,
+        offset: OffsetDataset,
         *,
         select: bool = True,
     ) -> None:
@@ -150,7 +149,7 @@ class GUIOffsetTabMixin:
             return int(self._offset_display_selector.value)
         return int(self.active_index)
 
-    def _get_offset_result_for_index(self, index: int) -> OffsetTrace | None:
+    def _get_offset_result_for_index(self, index: int) -> OffsetDataset | None:
         cached = self._get_cached_offset_batch_result(int(index))
         if cached is not None:
             return cached
@@ -187,7 +186,7 @@ class GUIOffsetTabMixin:
         self._set_offset_display_index(int(new_index), refresh_views=False)
 
     @staticmethod
-    def _copy_offset_trace(offset: OffsetTrace) -> OffsetTrace:
+    def _copy_offset_dataset(offset: OffsetDataset) -> dict[str, object]:
         return {
             "dGerr_G0": np.asarray(offset["dGerr_G0"], dtype=np.float64).copy(),
             "dRerr_R0": np.asarray(offset["dRerr_R0"], dtype=np.float64).copy(),
@@ -197,13 +196,13 @@ class GUIOffsetTabMixin:
 
     def _load_offset_analysis_preset(
         self,
-        offset_analysis: OffsetTrace | OffsetTraces,
+        offset_analysis: OffsetDataset,
     ) -> None:
         copied = self._copy_stage_preset_entries(
             offset_analysis,
-            collection_type=OffsetTraces,
-            single_name="OffsetTrace",
-            copy_fn=self._copy_offset_trace,
+            collection_type=OffsetDataset,
+            single_name="OffsetDataset",
+            copy_fn=self._copy_offset_dataset,
         )
         self._offset_batch_spec = self._offset_spec
         self._offset_batch_results = [None for _ in range(len(self.traces))]
@@ -540,7 +539,7 @@ class GUIOffsetTabMixin:
             dtype=object,
         )
 
-    def _offset_display_result(self) -> OffsetTrace | None:
+    def _offset_display_result(self) -> OffsetDataset | None:
         return self._get_offset_result_for_index(self._selected_offset_index())
 
     def _build_offset_spec_from_table(self) -> OffsetSpec:
@@ -645,11 +644,7 @@ class GUIOffsetTabMixin:
                 {
                     "index": int(index),
                     "specific_key": str(meta.specific_key),
-                    "yvalue": (
-                        meta.yvalue
-                        if yvalue is None
-                        else float(yvalue)
-                    ),
+                    "yvalue": (meta.yvalue if yvalue is None else float(yvalue)),
                     "status": self._offset_batch_status[index],
                     "Voff_mV": (
                         np.nan
@@ -698,7 +693,7 @@ class GUIOffsetTabMixin:
     def _get_cached_offset_batch_result(
         self,
         index: int,
-    ) -> OffsetTrace | None:
+    ) -> OffsetDataset | None:
         if self._offset_batch_spec is None:
             return None
         if index < 0 or index >= len(self._offset_batch_results):
@@ -740,9 +735,7 @@ class GUIOffsetTabMixin:
             if index not in run_order:
                 run_order.append(int(index))
         run_order.extend(
-            index
-            for index in range(len(self.traces))
-            if index not in run_order
+            index for index in range(len(self.traces)) if index not in run_order
         )
         self._offset_batch_future = self._executor.submit(
             _run_offset_batch,

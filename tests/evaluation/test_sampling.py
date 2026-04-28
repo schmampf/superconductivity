@@ -23,19 +23,16 @@ pipeline_mod = importlib.import_module(
 )
 
 
-def test_sampling_exports_expose_upsampling_and_drop_smoothing_spec() -> None:
-    """Public exports should expose upsampling and remove SmoothingSpec."""
+def test_sampling_exports_expose_upsampling() -> None:
+    """Public exports should expose the explicit upsampling stage."""
     assert hasattr(sampling, "SamplingSpec")
     assert hasattr(sampling, "upsampling")
-    assert not hasattr(sampling, "SmoothingSpec")
 
     assert hasattr(evaluation_module, "SamplingSpec")
     assert hasattr(evaluation_module, "upsampling")
-    assert not hasattr(evaluation_module, "SmoothingSpec")
 
     assert hasattr(api_module, "SamplingSpec")
     assert hasattr(api_module, "upsampling")
-    assert not hasattr(api_module, "SmoothingSpec")
 
 
 def _make_iv_trace(
@@ -67,7 +64,6 @@ def _make_spec(**updates: object) -> sampling.SamplingSpec:
     return sampling.SamplingSpec(**defaults)
 
 
-
 def _manual_binning(
     trace: Trace,
     spec: sampling.SamplingSpec,
@@ -81,7 +77,7 @@ def _manual_binning(
     return i_sampled_nA, v_sampled_mV, dG_G0, dR_R0
 
 
-def _legacy_hidden_upsample_binning(
+def _explicit_upsample_then_bin(
     trace: Trace,
     spec: sampling.SamplingSpec,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -124,9 +120,15 @@ def test_upsampling_densifies_trace_and_preserves_axes() -> None:
 
     upsampled = sampling.upsampling(trace, samplingspec=spec)
 
-    assert np.asarray(upsampled["t_s"]).size == np.asarray(trace["t_s"]).size * spec.N_up
-    assert np.asarray(upsampled["V_mV"]).size == np.asarray(trace["V_mV"]).size * spec.N_up
-    assert np.asarray(upsampled["I_nA"]).size == np.asarray(trace["I_nA"]).size * spec.N_up
+    assert (
+        np.asarray(upsampled["t_s"]).size == np.asarray(trace["t_s"]).size * spec.N_up
+    )
+    assert (
+        np.asarray(upsampled["V_mV"]).size == np.asarray(trace["V_mV"]).size * spec.N_up
+    )
+    assert (
+        np.asarray(upsampled["I_nA"]).size == np.asarray(trace["I_nA"]).size * spec.N_up
+    )
     assert upsampled["t_s"][0] == pytest.approx(trace["t_s"][0])
     assert upsampled["t_s"][-1] == pytest.approx(trace["t_s"][-1])
 
@@ -168,8 +170,8 @@ def test_binning_matches_manual_flow_for_upsampled_trace() -> None:
     assert np.allclose(exp_i.dR_R0.values, dR_exp_R0, equal_nan=True)
 
 
-def test_binning_of_upsampled_trace_matches_previous_hidden_upsample() -> None:
-    """Explicit upsampling should preserve the old hidden binning behavior."""
+def test_binning_of_upsampled_trace_matches_direct_reference() -> None:
+    """Explicit upsampling should match the direct upsample-then-bin reference."""
     trace = _make_iv_trace("a", 0, 1.0, v_shift_mV=0.0, i_shift_nA=0.0)
     spec = _make_spec()
 
@@ -177,7 +179,7 @@ def test_binning_of_upsampled_trace_matches_previous_hidden_upsample() -> None:
         sampling.upsampling(trace, samplingspec=spec),
         samplingspec=spec,
     )
-    i_exp_nA, v_exp_mV, dG_exp_G0, dR_exp_R0 = _legacy_hidden_upsample_binning(
+    i_exp_nA, v_exp_mV, dG_exp_G0, dR_exp_R0 = _explicit_upsample_then_bin(
         trace,
         spec,
     )
@@ -243,11 +245,9 @@ def test_sample_calls_stages_in_explicit_order(monkeypatch: pytest.MonkeyPatch) 
     calls: list[str] = []
     trace = _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3)
     spec = _make_spec(apply_smoothing=True, median_bins=3, sigma_bins=1.0)
-    sample_out = (
-        sampling.binning(
-            sampling.upsampling(trace, samplingspec=spec),
-            samplingspec=spec,
-        )
+    sample_out = sampling.binning(
+        sampling.upsampling(trace, samplingspec=spec),
+        samplingspec=spec,
     )
 
     def _offset(traces, *, samplingspec):
@@ -319,11 +319,9 @@ def test_sampling_skips_disabled_stages(
     """Disabled stages should behave as true no-ops in the pipeline."""
     calls: list[str] = []
     trace = _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3)
-    sample_out = (
-        sampling.binning(
-            sampling.upsampling(trace, samplingspec=spec),
-            samplingspec=spec,
-        )
+    sample_out = sampling.binning(
+        sampling.upsampling(trace, samplingspec=spec),
+        samplingspec=spec,
     )
 
     monkeypatch.setattr(

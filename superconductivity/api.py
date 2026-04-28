@@ -17,8 +17,7 @@ to this module.
 
 from .evaluation.analysis import (
     OffsetSpec,
-    OffsetTrace,
-    OffsetTraces,
+    OffsetDataset,
     PSDSpec,
     PSDTrace,
     PSDTraces,

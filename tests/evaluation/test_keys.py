@@ -48,7 +48,7 @@ def test_get_keys_forwards_remove_and_add_keys(
     assert out._spec.label is None
 
 
-def test_get_keys_accepts_filespec_and_keysspec(
+def test_get_keys_accepts_filespec_and_spec(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The convenience API should accept the spec objects directly."""
@@ -67,11 +67,11 @@ def test_get_keys_accepts_filespec_and_keysspec(
     )
 
     out = get_keys(
-        filespec=FileSpec(
+        h5path=FileSpec(
             h5path="dummy.h5",
             measurement="frequency_at_15GHz",
         ),
-        keysspec=KeysSpec(
+        spec=KeysSpec(
             strip0="=",
             strip1="dBm",
             remove_key=["off", "no_irradiation"],
@@ -174,7 +174,7 @@ def test_get_keys_rejects_invalid_norm() -> None:
     """KeysSpec.norm must be finite and positive."""
     with pytest.raises(ValueError, match="norm must be finite and > 0"):
         get_keys(
-            filespec=FileSpec(
+            h5path=FileSpec(
                 h5path="dummy.h5",
                 measurement="frequency_at_15GHz",
             ),
@@ -187,10 +187,10 @@ def test_get_keys_rejects_invalid_norm() -> None:
 
 
 def test_get_keys_rejects_spec_plus_explicit_args() -> None:
-    """KeysSpec must not be mixed with the legacy explicit arguments."""
+    """KeysSpec must not be mixed with individual key arguments."""
     with pytest.raises(ValueError, match="either spec or individual"):
         get_keys(
-            filespec=FileSpec(
+            h5path=FileSpec(
                 h5path="dummy.h5",
                 measurement="frequency_at_15GHz",
             ),

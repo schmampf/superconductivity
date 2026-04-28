@@ -9,9 +9,8 @@ import numpy as np
 
 from ..evaluation.traces import FileSpec, Keys, KeysSpec, Trace, TraceSpec, Traces
 from ..evaluation.analysis import (
+    OffsetDataset,
     OffsetSpec,
-    OffsetTrace,
-    OffsetTraces,
     PSDTraces,
     offset_analysis,
 )
@@ -72,7 +71,7 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
         psdspec: Optional[PSDSpec] = None,
         psdanalysis: Optional[PSDTrace | PSDTraces] = None,
         offsetspec: Optional[OffsetSpec] = None,
-        offsetanalysis: Optional[OffsetTrace | OffsetTraces] = None,
+        offsetanalysis: Optional[OffsetDataset] = None,
         samples: Optional[Sample | Samples] = None,
         samplingspec: Optional[SamplingSpec] = None,
         on_state_changed: Optional[Callable[[GUIStateDict], None]] = None,
@@ -117,7 +116,7 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
 
         self._psd: PSDTrace | None = None
         self._downsampled_psd: PSDTrace | None = None
-        self._offset: OffsetTrace | None = None
+        self._offset: OffsetDataset | None = None
         self._offset_corrected_trace: Trace | None = None
         self._upsampled_trace: Trace | None = None
         self._sampling: Sample | None = None
@@ -382,7 +381,7 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
         self,
         *,
         offsetspec: Optional[OffsetSpec],
-        offsetanalysis: Optional[OffsetTrace | OffsetTraces],
+        offsetanalysis: Optional[OffsetDataset],
     ) -> OffsetSpec:
         if offsetanalysis is not None and offsetspec is None:
             raise ValueError(
@@ -568,13 +567,13 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
         self._sampling_override_Voff_mV[self.active_index] = float(Voff_mV)
         self._sampling_override_Ioff_nA[self.active_index] = float(Ioff_nA)
 
-    def _active_sampling_offsetanalysis(self) -> OffsetTrace | None:
+    def _active_sampling_offsetanalysis(self) -> OffsetDataset | None:
         return self._sampling_offsetanalysis_for_index(self.active_index)
 
     def _sampling_offsetanalysis_for_index(
         self,
         index: int,
-    ) -> OffsetTrace | None:
+    ) -> OffsetDataset | None:
         index = int(index)
         if not self._sampling_spec.apply_offset_correction:
             return None
@@ -640,7 +639,7 @@ class GUIPanel(GUILeftMixin, GUITabsMixin):
             raise RuntimeError("Downsampled PSD state is not available.")
         return self._downsampled_psd
 
-    def _require_offset(self) -> OffsetTrace:
+    def _require_offset(self) -> OffsetDataset:
         if self._offset is None:
             raise RuntimeError("Offset state is not available.")
         return self._offset
@@ -871,7 +870,7 @@ def gui_app(
     psdspec: Optional[PSDSpec] = None,
     psdanalysis: Optional[PSDTrace | PSDTraces] = None,
     offsetspec: Optional[OffsetSpec] = None,
-    offsetanalysis: Optional[OffsetTrace | OffsetTraces] = None,
+    offsetanalysis: Optional[OffsetDataset] = None,
     samples: Optional[Sample | Samples] = None,
     samplingspec: Optional[SamplingSpec] = None,
     on_state_changed: Optional[Callable[[GUIStateDict], None]] = None,
@@ -905,7 +904,7 @@ def serve_gui(
     psdspec: Optional[PSDSpec] = None,
     psdanalysis: Optional[PSDTrace | PSDTraces] = None,
     offsetspec: Optional[OffsetSpec] = None,
-    offsetanalysis: Optional[OffsetTrace | OffsetTraces] = None,
+    offsetanalysis: Optional[OffsetDataset] = None,
     samples: Optional[Sample | Samples] = None,
     samplingspec: Optional[SamplingSpec] = None,
     port: int = 0,
@@ -962,7 +961,7 @@ def run_gui(
     psdspec: Optional[PSDSpec] = None,
     psdanalysis: Optional[PSDTrace | PSDTraces] = None,
     offsetspec: Optional[OffsetSpec] = None,
-    offsetanalysis: Optional[OffsetTrace | OffsetTraces] = None,
+    offsetanalysis: Optional[OffsetDataset] = None,
     samples: Optional[Sample | Samples] = None,
     samplingspec: Optional[SamplingSpec] = None,
     port: int = 0,
@@ -1017,7 +1016,7 @@ def gui(
     psdspec: Optional[PSDSpec] = None,
     psdanalysis: Optional[PSDTrace | PSDTraces] = None,
     offsetspec: Optional[OffsetSpec] = None,
-    offsetanalysis: Optional[OffsetTrace | OffsetTraces] = None,
+    offsetanalysis: Optional[OffsetDataset] = None,
     samples: Optional[Sample | Samples] = None,
     samplingspec: Optional[SamplingSpec] = None,
     port: int = 0,

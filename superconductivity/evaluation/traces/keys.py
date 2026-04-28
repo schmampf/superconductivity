@@ -18,7 +18,8 @@ from .file import FileSpec, _require_measurement, list_specific_keys
 def numeric_yvalue(value: object) -> float | None:
     """Return one numeric y-value when possible."""
     if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(
-        value, bool,
+        value,
+        bool,
     ):
         numeric = float(value)
         if np.isfinite(numeric):
@@ -447,27 +448,11 @@ def _resolve_get_keys_args(
     *,
     h5path: str | Path | FileSpec | None,
     measurement: str | None,
-    filespec: FileSpec | None,
     spec: KeysSpec | None,
-    keysspec: KeysSpec | None,
 ) -> tuple[str | Path | FileSpec, str | None, KeysSpec | None]:
-    """Resolve keyword aliases for ``get_keys``."""
-    if filespec is not None:
-        if h5path is not None:
-            raise ValueError(
-                "Provide either h5path or filespec, not both.",
-            )
-        h5path = filespec
-
-    if keysspec is not None:
-        if spec is not None:
-            raise ValueError(
-                "Provide either spec or keysspec, not both.",
-            )
-        spec = keysspec
-
+    """Resolve required ``get_keys`` arguments."""
     if h5path is None:
-        raise ValueError("Provide h5path or filespec.")
+        raise ValueError("Provide h5path.")
 
     return h5path, measurement, spec
 
@@ -509,7 +494,8 @@ def _build_keys_output(
     values: list[object] = []
     for value in yvalues:
         if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(
-            value, bool,
+            value,
+            bool,
         ):
             numeric = float(value)
             if np.isfinite(numeric) and spec.norm is not None:
@@ -537,7 +523,8 @@ def _build_y_axis(
     valid_numeric = True
     for value in yvalues:
         if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(
-            value, bool,
+            value,
+            bool,
         ):
             cast = float(value)
             if not np.isfinite(cast):
@@ -547,7 +534,11 @@ def _build_y_axis(
         else:
             valid_numeric = False
             break
-    if valid_numeric and len(numeric) >= 2 and np.all(np.diff(np.asarray(numeric)) > 0.0):
+    if (
+        valid_numeric
+        and len(numeric) >= 2
+        and np.all(np.diff(np.asarray(numeric)) > 0.0)
+    ):
         values = np.asarray(numeric, dtype=np.float64)
     else:
         values = np.asarray(indices, dtype=np.float64).reshape(-1)
@@ -564,7 +555,8 @@ def _coerce_numeric_yvalues(
     valid_numeric = True
     for value in yvalues:
         if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(
-            value, bool,
+            value,
+            bool,
         ):
             cast = float(value)
             if not np.isfinite(cast):
@@ -761,8 +753,6 @@ def get_keys(
     h5path: str | Path | FileSpec | None = None,
     measurement: str | None = None,
     *,
-    filespec: FileSpec | None = None,
-    keysspec: KeysSpec | None = None,
     strip0: str | None = "=",
     strip1: str | None = None,
     remove_key: str | Sequence[str] | None = None,
@@ -785,10 +775,6 @@ def get_keys(
     measurement : str | None, default=None
         Measurement name, e.g. ``"frequency_at_15GHz"``. Optional when
         provided by ``FileSpec``.
-    filespec : FileSpec | None, optional
-        Keyword alias for ``h5path`` when using one file specification.
-    keysspec : KeysSpec | None, optional
-        Keyword alias for ``spec``.
     strip0 : str | None, default="="
         Start delimiter for value parsing from each key. ``None`` means the
         value token starts at the beginning of the key.
@@ -814,9 +800,7 @@ def get_keys(
     h5path, measurement, spec = _resolve_get_keys_args(
         h5path=h5path,
         measurement=measurement,
-        filespec=filespec,
         spec=spec,
-        keysspec=keysspec,
     )
     resolved = _resolve_keys_spec(
         spec=spec,

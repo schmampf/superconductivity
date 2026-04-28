@@ -5,7 +5,7 @@ from typing import Optional, TypedDict
 import numpy as np
 
 from ..evaluation.traces import Trace, numeric_yvalue
-from ..evaluation.analysis import OffsetSpec, OffsetTrace
+from ..evaluation.analysis import OffsetDataset, OffsetSpec
 from ..evaluation.analysis import PSDTrace
 from ..evaluation.sampling import Sample, SamplingSpec
 from ..optimizers.bcs import (
@@ -29,7 +29,7 @@ class GUIStateDict(TypedDict):
     active_index: int
     trace: Trace
     psd: PSDTrace
-    offset: OffsetTrace
+    offset: OffsetDataset
     sampling: Sample
     fit: Optional[SolutionDict]
 
