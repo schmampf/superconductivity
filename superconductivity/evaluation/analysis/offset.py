@@ -172,6 +172,17 @@ class OffsetSpec:
             fixed=True,
         )
 
+    def keys(self) -> tuple[str, ...]:
+        """Return public mapping-style keys."""
+        return (
+            "Vbins_mV",
+            "Ibins_nA",
+            "Voffscan_mV",
+            "Ioffscan_nA",
+            "nu_Hz",
+            "N_up",
+        )
+
 
 @dataclass(frozen=True, slots=True, init=False)
 class OffsetDataset(Dataset):
