@@ -226,3 +226,32 @@ def test_get_keys_falls_back_to_index_when_value_is_non_numeric(
     assert out.specific_keys == ["mode=alpha", "mode=beta"]
     assert np.allclose(out.yvalues, np.asarray([0.0, 1.0]))
     assert out.y.code_label == "y"
+
+
+def test_get_keys_supports_strip0_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Parsing should start at the beginning when strip0 is None."""
+
+    def fake_list_specific_keys(
+        h5path: str,
+        measurement: str,
+    ) -> list[str]:
+        assert h5path == "dummy.h5"
+        assert measurement == "frequency_at_15GHz"
+        return ["0.5", "1.5", "2.5"]
+
+    monkeypatch.setattr(
+        "superconductivity.evaluation.traces.keys.list_specific_keys",
+        fake_list_specific_keys,
+    )
+
+    out = get_keys(
+        "dummy.h5",
+        "frequency_at_15GHz",
+        strip0=None,
+    )
+
+    assert out.specific_keys == ["0.5", "1.5", "2.5"]
+    assert np.allclose(out.yvalues, np.asarray([0.5, 1.5, 2.5]))
+    assert out.y.code_label == "y"

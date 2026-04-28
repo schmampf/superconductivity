@@ -15,14 +15,26 @@ from ...utilities.types import NDArray64
 from .file import FileSpec, _require_measurement, list_specific_keys
 
 
+def numeric_yvalue(value: object) -> float | None:
+    """Return one numeric y-value when possible."""
+    if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(
+        value, bool,
+    ):
+        numeric = float(value)
+        if np.isfinite(numeric):
+            return numeric
+    return None
+
+
 @dataclass(slots=True)
 class KeysSpec:
     """Configuration for parsing and selecting specific keys.
 
     Parameters
     ----------
-    strip0 : str, default="="
-        Start delimiter for value parsing.
+    strip0 : str | None, default="="
+        Start delimiter for value parsing. ``None`` means parsing starts at
+        the beginning of each specific key.
     strip1 : str | None, default=None
         Optional end delimiter for value parsing.
     remove_key : str or sequence of str, optional
@@ -39,7 +51,7 @@ class KeysSpec:
         Optional selection applied after sorting.
     """
 
-    strip0: str = "="
+    strip0: str | None = "="
     strip1: str | None = None
     remove_key: str | Sequence[str] | None = None
     add_key: tuple[str, float] | Sequence[tuple[str, float]] | None = None
@@ -49,8 +61,8 @@ class KeysSpec:
 
     def __post_init__(self) -> None:
         """Normalize and validate key-parsing settings."""
-        if not isinstance(self.strip0, str):
-            raise ValueError("strip0 must be a string.")
+        if self.strip0 is not None and not isinstance(self.strip0, str):
+            raise ValueError("strip0 must be a string or None.")
         if self.strip1 is not None and not isinstance(self.strip1, str):
             raise ValueError("strip1 must be a string or None.")
         if self.norm is not None:
@@ -74,6 +86,18 @@ class KeysSpec:
                     "limits lists must contain exactly two entries.",
                 )
             self.limits = (self.limits[0], self.limits[1])
+
+    def keys(self) -> tuple[str, ...]:
+        """Return public mapping-style keys."""
+        return (
+            "strip0",
+            "strip1",
+            "remove_key",
+            "add_key",
+            "norm",
+            "label",
+            "limits",
+        )
 
 
 @dataclass(slots=True, eq=False)
@@ -164,7 +188,7 @@ class Keys:
 
 def _extract_value_token_from_specific_key(
     specific_key: str,
-    strip0: str = "=",
+    strip0: str | None = "=",
     strip1: str | None = None,
 ) -> str:
     """Extract one raw value token from a specific key string.
@@ -173,8 +197,9 @@ def _extract_value_token_from_specific_key(
     ----------
     specific_key : str
         Key string such as ``"nu=-31.0dBm"``.
-    strip0 : str, default="="
+    strip0 : str | None, default="="
         Start delimiter. Parsing begins right after its first occurrence.
+        ``None`` means parsing begins at the start of ``specific_key``.
     strip1 : str | None, default=None
         Optional end delimiter. If ``None`` (or not found), parsing continues
         to the end of the key.
@@ -189,7 +214,7 @@ def _extract_value_token_from_specific_key(
     ValueError
         If delimiters are invalid or no token can be extracted.
     """
-    if strip0 == "":
+    if strip0 is None or strip0 == "":
         start_idx = 0
     else:
         start_idx = specific_key.find(strip0)
@@ -217,7 +242,7 @@ def _extract_value_token_from_specific_key(
 
 def _extract_yvalue_from_specific_key(
     specific_key: str,
-    strip0: str = "=",
+    strip0: str | None = "=",
     strip1: str | None = None,
 ) -> float | None:
     """Extract one parsed y-value from a specific key string.
@@ -257,7 +282,7 @@ def _extract_yvalue_from_specific_key(
 
 def _extract_value_from_specific_key(
     specific_key: str,
-    strip0: str = "=",
+    strip0: str | None = "=",
     strip1: str | None = None,
 ) -> float:
     """Parse one numeric value from a specific key string.
@@ -383,7 +408,7 @@ def _normalize_added_specific_keys(
 def _resolve_keys_spec(
     *,
     spec: KeysSpec | None,
-    strip0: str,
+    strip0: str | None,
     strip1: str | None,
     remove_key: str | Sequence[str] | None,
     add_key: tuple[str, float] | Sequence[tuple[str, float]] | None,
@@ -459,6 +484,8 @@ def _infer_keys_labels(
     else:
         prefix = "y"
         for specific_key in specific_keys:
+            if spec.strip0 is None:
+                break
             start_idx = specific_key.find(spec.strip0)
             if start_idx > 0:
                 candidate = specific_key[:start_idx].strip()
@@ -718,7 +745,7 @@ def get_keys(
     *,
     filespec: FileSpec | None = None,
     keysspec: KeysSpec | None = None,
-    strip0: str = "=",
+    strip0: str | None = "=",
     strip1: str | None = None,
     remove_key: str | Sequence[str] | None = None,
     add_key: tuple[str, float] | Sequence[tuple[str, float]] | None = None,
@@ -744,8 +771,9 @@ def get_keys(
         Keyword alias for ``h5path`` when using one file specification.
     keysspec : KeysSpec | None, optional
         Keyword alias for ``spec``.
-    strip0 : str, default="="
-        Start delimiter for value parsing from each key.
+    strip0 : str | None, default="="
+        Start delimiter for value parsing from each key. ``None`` means the
+        value token starts at the beginning of the key.
     strip1 : str | None, default=None
         End delimiter for value parsing. If ``None``, parse to key end.
     remove_key : str or sequence of str, optional

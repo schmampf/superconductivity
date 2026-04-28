@@ -15,6 +15,31 @@ from .file import FileSpec, _import_h5py, _require_measurement, _to_measurement_
 from .keys import Keys, KeysSpec, _coerce_numeric_yvalues, get_keys
 
 
+@dataclass(slots=True)
+class TraceSpec:
+    """Configuration for loading traces from one measurement."""
+
+    amp_voltage: float = 1.0
+    amp_current: float = 1.0
+    r_ref_ohm: float = 51.689e3
+    trigger_values: int | Sequence[int] | None = 1
+    skip: int | tuple[int, int] = 0
+    subtract_offset: bool = True
+    time_relative: bool = True
+
+    def keys(self) -> tuple[str, ...]:
+        """Return public mapping-style keys."""
+        return (
+            "amp_voltage",
+            "amp_current",
+            "r_ref_ohm",
+            "trigger_values",
+            "skip",
+            "subtract_offset",
+            "time_relative",
+        )
+
+
 @dataclass(frozen=True, slots=True, init=False)
 class Trace(Dataset):
     """One trace stored as a dataset."""
@@ -52,19 +77,6 @@ class Trace(Dataset):
     @property
     def V_mV(self) -> DataSpec:
         return Dataset.__getitem__(self, "V_mV")
-
-
-@dataclass(slots=True)
-class TraceSpec:
-    """Configuration for loading traces from one measurement."""
-
-    amp_voltage: float = 1.0
-    amp_current: float = 1.0
-    r_ref_ohm: float = 51.689e3
-    trigger_values: int | Sequence[int] | None = 1
-    skip: int | tuple[int, int] = 0
-    subtract_offset: bool = True
-    time_relative: bool = True
 
 
 @dataclass(slots=True)

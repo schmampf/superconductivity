@@ -90,3 +90,14 @@ def test_filespec_specific_keys_use_embedded_measurement(
     )
 
     assert spec.skeys() == ["nu=1dBm", "nu=5dBm"]
+
+
+def test_filespec_keys_expose_structural_fields() -> None:
+    """FileSpec.keys should expose only structural metadata fields."""
+    spec = FileSpec(
+        h5path="data.h5",
+        location="/tmp/root",
+        measurement="test",
+    )
+
+    assert spec.keys() == ("h5path", "location", "measurement")
