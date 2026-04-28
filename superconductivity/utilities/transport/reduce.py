@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..utilities.meta import AxisSpec, ParamSpec, TransportDatasetSpec, axis, param
+from ..meta.axis import AxisSpec, axis
+from ..meta.param import ParamSpec, param
+from .dataset import TransportDatasetSpec
 
 
 def reduce(

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..mapping import mapping
 from ..types import NDArray64
-from .axis import AxisSpec, axis
-from .data import DataSpec
-from .param import ParamSpec
-from .transport import TransportDatasetSpec
+from ..meta.axis import AxisSpec, axis
+from ..meta.data import DataSpec
+from ..meta.param import ParamSpec
+from .dataset import TransportDatasetSpec
+from .mapping import mapping
 
 
 def switch_bias(

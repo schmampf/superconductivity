@@ -6,12 +6,12 @@ from dataclasses import replace
 
 import numpy as np
 
-from .functions.fill_nans import fill as fill_nans
-from .functions.upsampling import upsample
-from .meta.axis import AxisSpec, axis
-from .meta.data import DataSpec
-from .meta.param import ParamSpec
-from .meta.transport import TransportDatasetSpec
+from ..functions.fill_nans import fill as fill_nans
+from ..functions.upsampling import upsample
+from ..meta.axis import AxisSpec, axis
+from ..meta.data import DataSpec
+from ..meta.param import ParamSpec
+from .dataset import TransportDatasetSpec
 
 
 def mapping(

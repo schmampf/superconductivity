@@ -6,11 +6,11 @@ import numpy as np
 
 from ..constants import G0_muS
 from ..types import NDArray64
-from .axis import AxisSpec
-from .data import DataSpec
-from .dataset import Dataset, dataset, validate_gridded_dataset
-from .label import label
-from .param import ParamSpec
+from ..meta.axis import AxisSpec
+from ..meta.data import DataSpec
+from ..meta.dataset import Dataset, dataset, validate_gridded_dataset
+from ..meta.label import label
+from ..meta.param import ParamSpec
 
 _G0_uS = float(G0_muS)
 _DERIVED_LABELS = (
