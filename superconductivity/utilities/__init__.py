@@ -13,11 +13,15 @@ from .meta import (
     data,
     label,
     param,
+)
+from .transport import (
+    TransportDatasetSpec,
+    mapping,
+    reduce,
     reduced_dataset,
     switch_bias,
     validate_reduced_dataset,
 )
-from .mapping import mapping
 
 __all__ = [
     "AxisSpec",
@@ -34,6 +38,7 @@ __all__ = [
     "data",
     "label",
     "param",
+    "reduce",
     "reduced_dataset",
     "switch_bias",
     "validate_reduced_dataset",
