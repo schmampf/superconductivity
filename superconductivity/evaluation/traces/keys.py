@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Sequence
 
 import numpy as np
@@ -11,20 +10,9 @@ from numpy.typing import NDArray
 
 from ...utilities.meta import AxisSpec, axis
 from ...utilities.meta.label import LabelSpec, label as make_label
+from ...utilities.safety import is_float_like, is_int_like
 from ...utilities.types import NDArray64
-from .file import FileSpec, _require_measurement, list_specific_keys
-
-
-def numeric_yvalue(value: object) -> float | None:
-    """Return one numeric y-value when possible."""
-    if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(
-        value,
-        bool,
-    ):
-        numeric = float(value)
-        if np.isfinite(numeric):
-            return numeric
-    return None
+from .file import FileSpec, list_specific_keys
 
 
 @dataclass(slots=True)
@@ -105,11 +93,9 @@ class KeysSpec:
 class Keys:
     """Sorted key metadata with derived labels."""
 
-    y: AxisSpec
+    yaxis: AxisSpec
     indices: NDArray64
     skeys: tuple[str, ...]
-    _yvalues: NDArray64 = field(repr=False, compare=False)
-    _spec: KeysSpec = field(repr=False, compare=False)
 
     @classmethod
     def from_fields(
@@ -118,7 +104,7 @@ class Keys:
         specific_keys: Sequence[str],
         indices: Sequence[int] | NDArray[np.int64],
         yvalues: Sequence[object] | NDArray[np.object_] | NDArray64,
-        spec: KeysSpec,
+        y: AxisSpec,
     ) -> Keys:
         """Build key metadata from aligned field arrays."""
         keys_list = list(specific_keys)
@@ -128,28 +114,20 @@ class Keys:
             raise ValueError("specific_keys and indices must have the same length.")
         if len(keys_list) != len(yvalues_list):
             raise ValueError("specific_keys and yvalues must have the same length.")
+        if not isinstance(y, AxisSpec):
+            raise TypeError("y must be an AxisSpec.")
+        if len(keys_list) != int(np.asarray(y.values).reshape(-1).size):
+            raise ValueError("specific_keys and y must have the same length.")
         return cls(
-            y=_build_y_axis(
-                specific_keys=keys_list,
-                indices=indices_array,
-                yvalues=yvalues_list,
-                spec=spec,
-            ),
+            yaxis=y,
             indices=np.asarray(indices_array, dtype=np.float64),
             skeys=tuple(keys_list),
-            _yvalues=_coerce_numeric_yvalues(indices_array, yvalues_list),
-            _spec=spec,
         )
 
     @property
     def specific_keys(self) -> list[str]:
         """Return ordered specific keys."""
         return list(self.skeys)
-
-    @property
-    def yvalues(self) -> NDArray64:
-        """Return ordered parsed y-values."""
-        return np.asarray(self._yvalues, dtype=np.float64)
 
     @property
     def i(self) -> NDArray64:
@@ -159,86 +137,36 @@ class Keys:
     @property
     def label(self) -> str:
         """Return plain-text label for the y-values."""
-        return _infer_keys_labels(
-            specific_keys=self.specific_keys,
-            spec=self._spec,
-        )[0]
+        return self.yaxis.print_label
+
+    @property
+    def y(self) -> AxisSpec:
+        """Return the y-axis metadata."""
+        return self.yaxis
 
     def __getattr__(self, name: str):
-        if name == self.y.code_label:
-            return self.y
+        if name == self.yaxis.code_label:
+            return self.yaxis
         raise AttributeError(name)
 
     def __getitem__(self, key: str) -> object:
         """Provide mapping-style access for compatibility."""
         if key == "y":
-            return self.y
+            return self.yaxis
+        if key == "yaxis":
+            return self.yaxis
         if key in {"i", "indices", "skeys", "specific_keys"}:
             return getattr(self, key)
-        if key == self.y.code_label:
-            return self.y
+        if key == self.yaxis.code_label:
+            return self.yaxis
         return getattr(self, key)
 
     def keys(self) -> tuple[str, ...]:
         """Return public mapping-style keys."""
         keys = ["y", "i", "indices", "skeys", "specific_keys"]
-        if self.y.code_label != "y":
-            keys.insert(1, self.y.code_label)
+        if self.yaxis.code_label != "y":
+            keys.insert(1, self.yaxis.code_label)
         return tuple(keys)
-
-
-def _extract_value_token_from_specific_key(
-    specific_key: str,
-    strip0: str | None = "=",
-    strip1: str | None = None,
-) -> str:
-    """Extract one raw value token from a specific key string.
-
-    Parameters
-    ----------
-    specific_key : str
-        Key string such as ``"nu=-31.0dBm"``.
-    strip0 : str | None, default="="
-        Start delimiter. Parsing begins right after its first occurrence.
-        ``None`` means parsing begins at the start of ``specific_key``.
-    strip1 : str | None, default=None
-        Optional end delimiter. If ``None`` (or not found), parsing continues
-        to the end of the key.
-
-    Returns
-    -------
-    str
-        Extracted value token.
-
-    Raises
-    ------
-    ValueError
-        If delimiters are invalid or no token can be extracted.
-    """
-    if strip0 is None or strip0 == "":
-        start_idx = 0
-    else:
-        start_idx = specific_key.find(strip0)
-        if start_idx < 0:
-            raise ValueError(
-                f"strip0 '{strip0}' not found in specific_key '{specific_key}'.",
-            )
-        start_idx += len(strip0)
-
-    if strip1 is None:
-        token = specific_key[start_idx:]
-    else:
-        end_idx = specific_key.find(strip1, start_idx)
-        token = (
-            specific_key[start_idx:] if end_idx < 0 else specific_key[start_idx:end_idx]
-        )
-
-    token = token.strip()
-    if token == "":
-        raise ValueError(
-            f"No value found in specific_key '{specific_key}'.",
-        )
-    return token
 
 
 def _extract_yvalue_from_specific_key(
@@ -263,13 +191,24 @@ def _extract_yvalue_from_specific_key(
     float | None
         Parsed finite float when available, else ``None``.
     """
-    try:
-        token = _extract_value_token_from_specific_key(
-            specific_key=specific_key,
-            strip0=strip0,
-            strip1=strip1,
+    if strip0 is None or strip0 == "":
+        start_idx = 0
+    else:
+        start_idx = specific_key.find(strip0)
+        if start_idx < 0:
+            return None
+        start_idx += len(strip0)
+
+    if strip1 is None:
+        token = specific_key[start_idx:]
+    else:
+        end_idx = specific_key.find(strip1, start_idx)
+        token = (
+            specific_key[start_idx:] if end_idx < 0 else specific_key[start_idx:end_idx]
         )
-    except ValueError:
+
+    token = token.strip()
+    if token == "":
         return None
 
     try:
@@ -279,46 +218,6 @@ def _extract_yvalue_from_specific_key(
     if not np.isfinite(value):
         return None
     return value
-
-
-def _extract_value_from_specific_key(
-    specific_key: str,
-    strip0: str | None = "=",
-    strip1: str | None = None,
-) -> float:
-    """Parse one numeric value from a specific key string.
-
-    Parameters
-    ----------
-    specific_key : str
-        Key string such as ``"nu=-31.0dBm"``.
-    strip0 : str, default="="
-        Start delimiter. Parsing begins right after its first occurrence.
-    strip1 : str | None, default=None
-        Optional end delimiter. If ``None`` (or not found), parsing continues
-        to the end of the key.
-
-    Returns
-    -------
-    float
-        Parsed numeric value.
-
-    Raises
-    ------
-    ValueError
-        If delimiters are invalid or the parsed token is not numeric.
-    """
-    token = _extract_value_token_from_specific_key(
-        specific_key=specific_key,
-        strip0=strip0,
-        strip1=strip1,
-    )
-    try:
-        return float(token)
-    except ValueError as exc:
-        raise ValueError(
-            f"Could not parse float from specific_key '{specific_key}'.",
-        ) from exc
 
 
 def _normalize_removed_specific_keys(
@@ -406,84 +305,6 @@ def _normalize_added_specific_keys(
     return normalized
 
 
-def _resolve_keys_spec(
-    *,
-    spec: KeysSpec | None,
-    strip0: str | None,
-    strip1: str | None,
-    remove_key: str | Sequence[str] | None,
-    add_key: tuple[str, float] | Sequence[tuple[str, float]] | None,
-    limits: (
-        float
-        | slice
-        | tuple[int | float | None, int | float | None]
-        | list[int | float | None]
-        | None
-    ),
-) -> KeysSpec:
-    """Resolve one explicit key config or one ``KeysSpec`` instance."""
-    if spec is not None:
-        if (
-            strip0 != "="
-            or strip1 is not None
-            or remove_key is not None
-            or add_key is not None
-            or limits is not None
-        ):
-            raise ValueError(
-                "Provide either spec or individual key arguments, not both.",
-            )
-        return spec
-
-    return KeysSpec(
-        strip0=strip0,
-        strip1=strip1,
-        remove_key=remove_key,
-        add_key=add_key,
-        limits=limits,
-    )
-
-
-def _resolve_get_keys_args(
-    *,
-    h5path: str | Path | FileSpec | None,
-    measurement: str | None,
-    spec: KeysSpec | None,
-) -> tuple[str | Path | FileSpec, str | None, KeysSpec | None]:
-    """Resolve required ``get_keys`` arguments."""
-    if h5path is None:
-        raise ValueError("Provide h5path.")
-
-    return h5path, measurement, spec
-
-
-def _infer_keys_labels(
-    specific_keys: Sequence[str],
-    *,
-    spec: KeysSpec,
-) -> tuple[str, str]:
-    """Infer plain and HTML labels for one key collection."""
-    if spec.label is not None:
-        label = spec.label.print_label
-        html_label = spec.label.html_label
-    else:
-        prefix = "y"
-        for specific_key in specific_keys:
-            if spec.strip0 is None:
-                break
-            start_idx = specific_key.find(spec.strip0)
-            if start_idx > 0:
-                candidate = specific_key[:start_idx].strip()
-                if candidate != "":
-                    prefix = candidate
-                    break
-        unit = "" if spec.strip1 is None else spec.strip1.strip()
-        label = prefix if unit == "" else f"{prefix} ({unit})"
-        html_label = label
-
-    return label, html_label
-
-
 def _build_keys_output(
     specific_keys: list[str],
     yvalues: Sequence[object],
@@ -508,7 +329,12 @@ def _build_keys_output(
         specific_keys=list(specific_keys),
         indices=np.arange(len(specific_keys), dtype=np.int64),
         yvalues=values,
-        spec=spec,
+        y=_build_y_axis(
+            specific_keys=specific_keys,
+            indices=np.arange(len(specific_keys), dtype=np.int64),
+            yvalues=values,
+            spec=spec,
+        ),
     )
 
 
@@ -547,30 +373,6 @@ def _build_y_axis(
     return _make_y_axis(values=values, specific_keys=specific_keys, spec=spec)
 
 
-def _coerce_numeric_yvalues(
-    indices: Sequence[int] | NDArray[np.int64],
-    yvalues: Sequence[object],
-) -> NDArray64:
-    numeric: list[float] = []
-    valid_numeric = True
-    for value in yvalues:
-        if isinstance(value, (int, float, np.integer, np.floating)) and not isinstance(
-            value,
-            bool,
-        ):
-            cast = float(value)
-            if not np.isfinite(cast):
-                valid_numeric = False
-                break
-            numeric.append(cast)
-        else:
-            valid_numeric = False
-            break
-    if valid_numeric:
-        return np.asarray(numeric, dtype=np.float64)
-    return np.asarray(indices, dtype=np.float64).reshape(-1)
-
-
 def _make_y_axis(
     *,
     values: NDArray64,
@@ -586,16 +388,7 @@ def _make_y_axis(
             values=values,
             order=0,
         )
-    return axis(_infer_code_label(specific_keys, spec), values=values, order=0)
-
-
-def _infer_code_label(
-    specific_keys: Sequence[str],
-    spec: KeysSpec,
-) -> str:
-    """Infer one code label from the specific-key prefix."""
-    if spec.label is not None:
-        return spec.label.code_label
+    prefix = "y"
     for specific_key in specific_keys:
         if spec.strip0 is None:
             break
@@ -603,18 +396,10 @@ def _infer_code_label(
         if start_idx > 0:
             candidate = specific_key[:start_idx].strip()
             if candidate != "":
-                return candidate
-    return "y"
-
-
-def _is_int_like(value: object) -> bool:
-    """Return whether one object should be treated as an integer index."""
-    return isinstance(value, (int, np.integer)) and not isinstance(value, bool)
-
-
-def _is_float_like(value: object) -> bool:
-    """Return whether one object should be treated as a fractional bound."""
-    return isinstance(value, (float, np.floating)) and not isinstance(value, bool)
+                prefix = candidate
+                break
+    unit = "" if spec.strip1 is None else spec.strip1.strip()
+    return axis(prefix if unit == "" else f"{prefix} ({unit})", values=values, order=0)
 
 
 def _normalize_limit_bound(
@@ -652,13 +437,13 @@ def _normalize_limit_bound(
     if bound is None:
         return default
 
-    if _is_int_like(bound):
+    if is_int_like(bound):
         idx = int(bound)
         if idx < 0:
             idx += size
         return int(np.clip(idx, 0, size))
 
-    if _is_float_like(bound):
+    if is_float_like(bound):
         fraction = float(bound)
         if not np.isfinite(fraction) or fraction < 0.0 or fraction > 1.0:
             raise ValueError(
@@ -715,7 +500,7 @@ def _resolve_limits_slice(
         start_idx, stop_idx, step = limits.indices(size)
         if step != 1:
             raise ValueError("limits slices must use step=1.")
-    elif _is_float_like(limits):
+    elif is_float_like(limits):
         start_idx = 0
         stop_idx = _normalize_limit_bound(
             limits,
@@ -750,74 +535,27 @@ def _resolve_limits_slice(
 
 
 def get_keys(
-    h5path: str | Path | FileSpec | None = None,
-    measurement: str | None = None,
-    *,
-    strip0: str | None = "=",
-    strip1: str | None = None,
-    remove_key: str | Sequence[str] | None = None,
-    add_key: tuple[str, float] | Sequence[tuple[str, float]] | None = None,
-    spec: KeysSpec | None = None,
-    limits: (
-        float
-        | slice
-        | tuple[int | float | None, int | float | None]
-        | list[int | float | None]
-        | None
-    ) = None,
+    filespec: FileSpec,
+    keysspec: KeysSpec | None = None,
 ) -> Keys:
     """List, parse, and sort specific keys.
 
     Parameters
     ----------
-    h5path : str | pathlib.Path or FileSpec, optional
-        HDF5 file path or one file specification.
-    measurement : str | None, default=None
-        Measurement name, e.g. ``"frequency_at_15GHz"``. Optional when
-        provided by ``FileSpec``.
-    strip0 : str | None, default="="
-        Start delimiter for value parsing from each key. ``None`` means the
-        value token starts at the beginning of the key.
-    strip1 : str | None, default=None
-        End delimiter for value parsing. If ``None``, parse to key end.
-    remove_key : str or sequence of str, optional
-        Exact specific-key names to remove before parsing and sorting.
-    add_key : tuple or sequence of tuple, optional
-        Exact specific-key additions as ``(key, value)`` or
-        ``[(key, value), ...]``.
-    spec : KeysSpec | None, optional
-        Alternative bundled key-parsing configuration. Mutually exclusive with
-        the individual key-parsing arguments.
-    limits : float, slice, tuple, list, or None, optional
-        Optional selection applied after sorting. ``limits=0.7`` keeps the
-        first 70 percent of the sorted list.
+    filespec : FileSpec
+        HDF5 file specification.
+    keysspec : KeysSpec, optional
+        Bundled key-parsing configuration.
 
     Returns
     -------
     Keys
         Sorted key metadata with parsed y-values.
     """
-    h5path, measurement, spec = _resolve_get_keys_args(
-        h5path=h5path,
-        measurement=measurement,
-        spec=spec,
-    )
-    resolved = _resolve_keys_spec(
-        spec=spec,
-        strip0=strip0,
-        strip1=strip1,
-        remove_key=remove_key,
-        add_key=add_key,
-        limits=limits,
-    )
-    _, resolved_measurement = _require_measurement(
-        h5path=h5path,
-        measurement=measurement,
-    )
-    specific_keys = list_specific_keys(
-        h5path=h5path,
-        measurement=resolved_measurement,
-    )
+    if not isinstance(filespec, FileSpec):
+        raise TypeError("filespec must be a FileSpec.")
+    resolved = KeysSpec() if keysspec is None else keysspec
+    specific_keys = list_specific_keys(h5path=filespec)
     keys = list(specific_keys)
     removed_keys = set(resolved.remove_key)
     if len(removed_keys) > 0:

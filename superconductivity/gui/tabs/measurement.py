@@ -178,8 +178,8 @@ class GUIMeasurementTabMixin:
             return None
         try:
             return get_keys(
-                h5path=self._filespec,
-                spec=self._effective_keysspec(),
+                filespec=self._filespec,
+                keysspec=self._effective_keysspec(),
             )
         except Exception:
             return None
@@ -917,8 +917,8 @@ class GUIMeasurementTabMixin:
             return
 
         loaded_keys = get_keys(
-            h5path=self._filespec,
-            spec=self._keysspec,
+            filespec=self._filespec,
+            keysspec=self._keysspec,
         )
         self._keys = loaded_keys
         loaded_traces = get_traces(

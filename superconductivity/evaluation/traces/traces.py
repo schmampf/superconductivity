@@ -8,11 +8,10 @@ from typing import Iterator, Sequence
 import numpy as np
 
 from ...utilities.meta import AxisSpec, Dataset, DataSpec, axis, data
-from ...utilities.meta.label import LabelSpec
 from ...utilities.safety import require_all_finite
 from ...utilities.types import NDArray64
 from .file import FileSpec, _import_h5py, _require_measurement, _to_measurement_path
-from .keys import Keys, KeysSpec, _coerce_numeric_yvalues, get_keys
+from .keys import Keys, KeysSpec, get_keys
 
 
 @dataclass(slots=True)
@@ -112,7 +111,8 @@ class Traces:
         specific_keys: Sequence[str],
         indices: Sequence[int],
         yvalues: Sequence[object],
-        y_label: LabelSpec | None,
+        y_axis: AxisSpec | None = None,
+        y_label: LabelSpec | None = None,
     ) -> Traces:
         collection = cls(traces=traces)
         object.__setattr__(collection, "skeys", tuple(specific_keys))
@@ -130,9 +130,10 @@ class Traces:
             collection,
             "y",
             _build_y_axis(
-                values=_coerce_numeric_yvalues(indices=indices, yvalues=yvalues),
+                values=np.asarray(yvalues, dtype=np.float64),
                 specific_keys=specific_keys,
-                label_spec=y_label,
+                y_axis=y_axis,
+                y_label=y_label,
             ),
         )
         return collection
@@ -291,7 +292,7 @@ def _resolve_trace_reference(
         )
 
     keys_sorted = list(keys.specific_keys)
-    yvalues_sorted = np.asarray(keys.yvalues, dtype=np.float64)
+    yvalues_sorted = np.asarray(keys.yaxis.values, dtype=np.float64)
 
     resolved_key = specific_key
     resolved_index: int | None = None
@@ -423,7 +424,8 @@ def _load_trace_from_file(
 def _build_y_axis(
     values: NDArray64,
     specific_keys: Sequence[str],
-    label_spec: LabelSpec | None,
+    y_axis: AxisSpec | None,
+    y_label: LabelSpec | None,
 ) -> AxisSpec | None:
     numeric = np.asarray(values, dtype=np.float64).reshape(-1)
     if (
@@ -432,16 +434,18 @@ def _build_y_axis(
         or np.any(np.diff(numeric) <= 0.0)
     ):
         return None
-    if label_spec is None:
+    if y_axis is None:
+        if y_label is not None:
+            return AxisSpec(
+                code_label=y_label.code_label,
+                print_label=y_label.print_label,
+                html_label=y_label.html_label,
+                latex_label=y_label.latex_label,
+                values=numeric,
+                order=0,
+            )
         return axis(_infer_code_label(specific_keys), values=numeric, order=0)
-    return AxisSpec(
-        code_label=label_spec.code_label,
-        print_label=label_spec.print_label,
-        html_label=label_spec.html_label,
-        latex_label=label_spec.latex_label,
-        values=numeric,
-        order=0,
-    )
+    return y_axis
 
 
 def _build_index_axis(values: NDArray64) -> AxisSpec | None:
@@ -480,7 +484,7 @@ def _load_traces_from_keys(
     skip_pair = _normalize_skip(tracespec.skip)
     keys_list, yvalues_list = _normalize_keys_and_yvalues(
         keys=keys.specific_keys,
-        yvalues=keys.yvalues,
+        yvalues=keys.yaxis.values,
     )
 
     h5py = _import_h5py()
@@ -510,8 +514,8 @@ def _load_traces_from_keys(
         traces=traces,
         specific_keys=keys.specific_keys,
         indices=np.asarray(keys.indices, dtype=np.int64).tolist(),
-        yvalues=keys.yvalues,
-        y_label=keys._spec.label,
+        yvalues=keys.yaxis.values,
+        y_axis=keys.yaxis,
     )
 
 
@@ -535,7 +539,9 @@ def get_traces(
             "Provide either keys or trace selectors, not both.",
         )
 
-    resolved_keys = get_keys(h5path=filespec, spec=keysspec) if keys is None else keys
+    resolved_keys = (
+        get_keys(filespec=filespec, keysspec=keysspec) if keys is None else keys
+    )
     if has_selector:
         resolved_key, resolved_index, resolved_value = _resolve_trace_reference(
             resolved_keys,
@@ -543,6 +549,7 @@ def get_traces(
             yvalue=yvalue,
             index=index,
         )
+        resolved_y = resolved_keys.yaxis
         resolved_keys = Keys.from_fields(
             specific_keys=[resolved_key],
             indices=np.asarray(
@@ -550,7 +557,14 @@ def get_traces(
                 dtype=np.int64,
             ),
             yvalues=[resolved_value],
-            spec=resolved_keys._spec,
+            y=AxisSpec(
+                code_label=resolved_y.code_label,
+                print_label=resolved_y.print_label,
+                html_label=resolved_y.html_label,
+                latex_label=resolved_y.latex_label,
+                values=np.asarray([resolved_value], dtype=np.float64),
+                order=resolved_y.order,
+            ),
         )
 
     traces = _load_traces_from_keys(

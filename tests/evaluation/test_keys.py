@@ -19,46 +19,11 @@ def test_get_keys_forwards_remove_and_add_keys(
     """The HDF5 convenience wrapper should pass through key edits."""
 
     def fake_list_specific_keys(
-        h5path: str,
-        measurement: str,
-    ) -> list[str]:
-        assert h5path == "dummy.h5"
-        assert measurement == "frequency_at_15GHz"
-        return ["nu=3dBm", "off", "no_irradiation"]
-
-    monkeypatch.setattr(
-        "superconductivity.evaluation.traces.keys.list_specific_keys",
-        fake_list_specific_keys,
-    )
-
-    out = get_keys(
-        "dummy.h5",
-        "frequency_at_15GHz",
-        strip0="=",
-        strip1="dBm",
-        remove_key=["off", "no_irradiation"],
-        add_key=("no_irradiation", 0.0),
-    )
-
-    assert out["specific_keys"] == ["no_irradiation", "nu=3dBm"]
-    assert np.allclose(out["yvalues"], np.asarray([0.0, 3.0]))
-    assert np.array_equal(out["indices"], np.asarray([0, 1]))
-    assert out.keys() == ("y", "nu", "i", "indices", "skeys", "specific_keys")
-    assert out.label == "nu (dBm)"
-    assert out._spec.label is None
-
-
-def test_get_keys_accepts_filespec_and_spec(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The convenience API should accept the spec objects directly."""
-
-    def fake_list_specific_keys(
-        h5path: FileSpec,
-        measurement: str | None = None,
+        h5path: str | FileSpec,
     ) -> list[str]:
         assert isinstance(h5path, FileSpec)
-        assert measurement == "frequency_at_15GHz"
+        assert h5path.h5path == "dummy.h5"
+        assert h5path.measurement == "frequency_at_15GHz"
         return ["nu=3dBm", "off", "no_irradiation"]
 
     monkeypatch.setattr(
@@ -67,11 +32,56 @@ def test_get_keys_accepts_filespec_and_spec(
     )
 
     out = get_keys(
-        h5path=FileSpec(
+        filespec=FileSpec(
             h5path="dummy.h5",
             measurement="frequency_at_15GHz",
         ),
-        spec=KeysSpec(
+        keysspec=KeysSpec(
+            strip0="=",
+            strip1="dBm",
+            remove_key=["off", "no_irradiation"],
+            add_key=("no_irradiation", 0.0),
+        ),
+    )
+
+    assert out["specific_keys"] == ["no_irradiation", "nu=3dBm"]
+    assert np.allclose(out.y.values, np.asarray([0.0, 3.0]))
+    assert np.array_equal(out["indices"], np.asarray([0, 1]))
+    assert out.keys() == (
+        "y",
+        "nu (dBm)",
+        "i",
+        "indices",
+        "skeys",
+        "specific_keys",
+    )
+    assert out.label == "nu (dBm)"
+
+
+def test_get_keys_accepts_filespec_and_label(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The convenience API should accept the label-bearing spec directly."""
+
+    def fake_list_specific_keys(
+        h5path: FileSpec,
+    ) -> list[str]:
+        assert isinstance(h5path, FileSpec)
+        assert h5path.h5path == "dummy.h5"
+        assert h5path.measurement == "frequency_at_15GHz"
+        return ["nu=3dBm", "off", "no_irradiation"]
+
+    monkeypatch.setattr(
+        "superconductivity.evaluation.traces.keys.list_specific_keys",
+        fake_list_specific_keys,
+    )
+
+    out = get_keys(
+        filespec=FileSpec(
+            h5path="dummy.h5",
+            measurement="frequency_at_15GHz",
+        ),
+        keysspec=KeysSpec(
             strip0="=",
             strip1="dBm",
             remove_key=["off", "no_irradiation"],
@@ -86,7 +96,7 @@ def test_get_keys_accepts_filespec_and_spec(
     )
 
     assert out["specific_keys"] == ["no_irradiation", "nu=3dBm"]
-    assert np.allclose(out["yvalues"], np.asarray([0.0, 3.0]))
+    assert np.allclose(out.y.values, np.asarray([0.0, 3.0]))
     assert out.keys() == (
         "y",
         "nu_GHz",
@@ -96,7 +106,6 @@ def test_get_keys_accepts_filespec_and_spec(
         "specific_keys",
     )
     assert out.label == "nu_GHz"
-    assert out._spec.label.html_label == "<i>nu</i> (dBm)"
 
 
 def test_get_keys_accepts_keysspec(
@@ -105,11 +114,11 @@ def test_get_keys_accepts_keysspec(
     """The HDF5 convenience wrapper should accept a bundled KeysSpec."""
 
     def fake_list_specific_keys(
-        h5path: str,
-        measurement: str,
+        h5path: str | FileSpec,
     ) -> list[str]:
-        assert h5path == "dummy.h5"
-        assert measurement == "frequency_at_15GHz"
+        assert isinstance(h5path, FileSpec)
+        assert h5path.h5path == "dummy.h5"
+        assert h5path.measurement == "frequency_at_15GHz"
         return ["nu=3dBm", "off", "no_irradiation"]
 
     monkeypatch.setattr(
@@ -118,9 +127,11 @@ def test_get_keys_accepts_keysspec(
     )
 
     out = get_keys(
-        "dummy.h5",
-        "frequency_at_15GHz",
-        spec=KeysSpec(
+        filespec=FileSpec(
+            h5path="dummy.h5",
+            measurement="frequency_at_15GHz",
+        ),
+        keysspec=KeysSpec(
             strip0="=",
             strip1="dBm",
             remove_key=["off", "no_irradiation"],
@@ -135,9 +146,8 @@ def test_get_keys_accepts_keysspec(
     )
 
     assert out["specific_keys"] == ["no_irradiation", "nu=3dBm"]
-    assert np.allclose(out["yvalues"], np.asarray([0.0, 3.0]))
+    assert np.allclose(out.y.values, np.asarray([0.0, 3.0]))
     assert out.label == "nu (dBm)"
-    assert out._spec.label.html_label == "<i>nu</i> (dBm)"
 
 
 def test_get_keys_accepts_add_key_as_tuple_of_tuples(
@@ -146,11 +156,11 @@ def test_get_keys_accepts_add_key_as_tuple_of_tuples(
     """Tuple-of-tuples add_key input should be treated as multiple additions."""
 
     def fake_list_specific_keys(
-        h5path: str,
-        measurement: str,
+        h5path: str | FileSpec,
     ) -> list[str]:
-        assert h5path == "dummy.h5"
-        assert measurement == "frequency_at_15GHz"
+        assert isinstance(h5path, FileSpec)
+        assert h5path.h5path == "dummy.h5"
+        assert h5path.measurement == "frequency_at_15GHz"
         return ["nu=3dBm"]
 
     monkeypatch.setattr(
@@ -159,43 +169,34 @@ def test_get_keys_accepts_add_key_as_tuple_of_tuples(
     )
 
     out = get_keys(
-        "dummy.h5",
-        "frequency_at_15GHz",
-        strip0="=",
-        strip1="dBm",
-        add_key=(("no_irradiation", 0.0), ("no_irradiation", 0.005)),
+        filespec=FileSpec(
+            h5path="dummy.h5",
+            measurement="frequency_at_15GHz",
+        ),
+        keysspec=KeysSpec(
+            strip0="=",
+            strip1="dBm",
+            add_key=(("no_irradiation", 0.0), ("no_irradiation", 0.005)),
+        ),
     )
 
     assert out.specific_keys == ["no_irradiation", "no_irradiation", "nu=3dBm"]
-    assert np.allclose(out.yvalues, np.asarray([0.0, 0.005, 3.0]))
+    assert np.allclose(out.y.values, np.asarray([0.0, 0.005, 3.0]))
 
 
 def test_get_keys_rejects_invalid_norm() -> None:
     """KeysSpec.norm must be finite and positive."""
     with pytest.raises(ValueError, match="norm must be finite and > 0"):
         get_keys(
-            h5path=FileSpec(
+            filespec=FileSpec(
                 h5path="dummy.h5",
                 measurement="frequency_at_15GHz",
             ),
-            spec=KeysSpec(
+            keysspec=KeysSpec(
                 strip0="=",
                 strip1="dBm",
                 norm=0.0,
             ),
-        )
-
-
-def test_get_keys_rejects_spec_plus_explicit_args() -> None:
-    """KeysSpec must not be mixed with individual key arguments."""
-    with pytest.raises(ValueError, match="either spec or individual"):
-        get_keys(
-            h5path=FileSpec(
-                h5path="dummy.h5",
-                measurement="frequency_at_15GHz",
-            ),
-            strip1="dBm",
-            spec=KeysSpec(strip0="=", strip1="dBm"),
         )
 
 
@@ -205,11 +206,11 @@ def test_get_keys_falls_back_to_index_when_value_is_non_numeric(
     """Non-numeric extracted values should fall back to positional indices."""
 
     def fake_list_specific_keys(
-        h5path: str,
-        measurement: str,
+        h5path: str | FileSpec,
     ) -> list[str]:
-        assert h5path == "dummy.h5"
-        assert measurement == "frequency_at_15GHz"
+        assert isinstance(h5path, FileSpec)
+        assert h5path.h5path == "dummy.h5"
+        assert h5path.measurement == "frequency_at_15GHz"
         return ["mode=alpha", "mode=beta"]
 
     monkeypatch.setattr(
@@ -218,13 +219,15 @@ def test_get_keys_falls_back_to_index_when_value_is_non_numeric(
     )
 
     out = get_keys(
-        "dummy.h5",
-        "frequency_at_15GHz",
-        strip0="=",
+        filespec=FileSpec(
+            h5path="dummy.h5",
+            measurement="frequency_at_15GHz",
+        ),
+        keysspec=KeysSpec(strip0="="),
     )
 
     assert out.specific_keys == ["mode=alpha", "mode=beta"]
-    assert np.allclose(out.yvalues, np.asarray([0.0, 1.0]))
+    assert np.allclose(out.y.values, np.asarray([0.0, 1.0]))
     assert out.y.code_label == "mode"
 
 
@@ -234,11 +237,11 @@ def test_get_keys_supports_strip0_none(
     """Parsing should start at the beginning when strip0 is None."""
 
     def fake_list_specific_keys(
-        h5path: str,
-        measurement: str,
+        h5path: str | FileSpec,
     ) -> list[str]:
-        assert h5path == "dummy.h5"
-        assert measurement == "frequency_at_15GHz"
+        assert isinstance(h5path, FileSpec)
+        assert h5path.h5path == "dummy.h5"
+        assert h5path.measurement == "frequency_at_15GHz"
         return ["0.5", "1.5", "2.5"]
 
     monkeypatch.setattr(
@@ -247,11 +250,13 @@ def test_get_keys_supports_strip0_none(
     )
 
     out = get_keys(
-        "dummy.h5",
-        "frequency_at_15GHz",
-        strip0=None,
+        filespec=FileSpec(
+            h5path="dummy.h5",
+            measurement="frequency_at_15GHz",
+        ),
+        keysspec=KeysSpec(strip0=None),
     )
 
     assert out.specific_keys == ["0.5", "1.5", "2.5"]
-    assert np.allclose(out.yvalues, np.asarray([0.5, 1.5, 2.5]))
+    assert np.allclose(out.y.values, np.asarray([0.5, 1.5, 2.5]))
     assert out.y.code_label == "y"

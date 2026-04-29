@@ -101,6 +101,15 @@ def require_all_finite(
         raise ValueError(f"{name} must contain only finite values.")
 
 
+def is_int_like(value: object) -> bool:
+    """Return whether one object should be treated as an integer index."""
+    return isinstance(value, (int, np.integer)) and not isinstance(value, bool)
+
+
+def is_float_like(value: object) -> bool:
+    """Return whether one object should be treated as a fractional bound."""
+    return isinstance(value, (float, np.floating)) and not isinstance(value, bool)
+
 
 def is_ragged_sequence(value: object) -> bool:
     """Return True for Python list/tuple ragged inputs."""
@@ -115,4 +124,3 @@ def normalize_axis(axis: int, ndim: int) -> int:
             f"axis {axis_int} is out of bounds for array of ndim {ndim}."
         )
     return axis_int % ndim
-
