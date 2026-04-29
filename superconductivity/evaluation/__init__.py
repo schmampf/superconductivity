@@ -21,7 +21,6 @@ from .sampling import (
 )
 from .traces import (
     FileSpec,
-    numeric_yvalue,
     TraceSpec,
     Trace,
     Traces,
@@ -46,7 +45,6 @@ __all__ = [
     "KeysSpec",
     "get_keys",
     "get_status_keys",
-    "numeric_yvalue",
     "get_status_series",
     "get_measurement_keys",
     "get_measurement_series",
