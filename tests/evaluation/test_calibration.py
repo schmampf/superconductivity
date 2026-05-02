@@ -219,15 +219,14 @@ def test_sample_then_calibrate_only_changes_collection_axis() -> None:
     t_s = np.linspace(0.0, 10.0, 401, dtype=np.float64)
     v_true_mV = np.linspace(-2.0, 2.0, t_s.size, dtype=np.float64)
     i_true_nA = v_true_mV + 0.2 * v_true_mV**3
-    traces = Traces.from_fields(
+    traces = Traces(
         traces=[
             Trace(V_mV=v_true_mV + 0.4, I_nA=i_true_nA + 0.3, t_s=t_s),
             Trace(V_mV=v_true_mV + 0.2, I_nA=i_true_nA + 0.1, t_s=t_s),
         ],
-        specific_keys=["a", "b"],
+        skeys=["a", "b"],
         indices=[0, 1],
-        yvalues=[1.0, 5.0],
-        y_label=None,
+        yaxis=axis("Aout_mV", values=np.asarray([1.0, 5.0], dtype=np.float64), order=0),
     )
     samplingspec = SamplingSpec(
         Vbins_mV=np.linspace(-2.0, 2.0, 81),

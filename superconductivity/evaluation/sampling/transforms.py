@@ -220,12 +220,11 @@ def downsample_traces(
             desc="downsample_traces",
             unit="trace",
         )
-    return Traces.from_fields(
+    return Traces(
         traces=[downsample_trace(trace, nu_Hz=nu_Hz) for trace in iterable],
-        specific_keys=traces.specific_keys,
-        indices=np.asarray(traces.indices, dtype=np.int64),
-        yvalues=np.asarray(traces.yvalues, dtype=np.float64),
-        y_label=None if traces.y is None else traces.y,
+        skeys=traces.specific_keys,
+        indices=np.asarray(traces.indices, dtype=np.float64),
+        yaxis=traces.yaxis,
     )
 
 
@@ -295,7 +294,10 @@ def _sample_traces(
     return _stack_transport_samples(
         exp_v_list,
         exp_i_list,
-        yvalues=np.asarray(traces.yvalues, dtype=np.float64),
+        yvalues=np.asarray(
+            traces.yaxis.values if traces.yaxis is not None else traces.indices,
+            dtype=np.float64,
+        ),
         y_label=None if traces.y is None else traces.y.code_label,
     )
 
@@ -506,7 +508,7 @@ def offset_correction(
         )
 
     if isinstance(traces, Traces):
-        return Traces.from_fields(
+        return Traces(
             traces=[
                 _offset_correct_trace(
                     trace,
@@ -515,10 +517,9 @@ def offset_correction(
                 )
                 for index, trace in enumerate(traces)
             ],
-            specific_keys=traces.specific_keys,
-            indices=np.asarray(traces.indices, dtype=np.int64),
-            yvalues=np.asarray(traces.yvalues, dtype=np.float64),
-            y_label=None if traces.y is None else traces.y,
+            skeys=traces.specific_keys,
+            indices=np.asarray(traces.indices, dtype=np.float64),
+            yaxis=traces.yaxis,
         )
 
     return _offset_correct_trace(
@@ -545,14 +546,13 @@ def upsampling(
                 desc="upsampling",
                 unit="trace",
             )
-        return Traces.from_fields(
+        return Traces(
             traces=[
                 _upsample_trace(trace, factor=samplingspec.N_up) for trace in iterable
             ],
-            specific_keys=traces.specific_keys,
-            indices=np.asarray(traces.indices, dtype=np.int64),
-            yvalues=np.asarray(traces.yvalues, dtype=np.float64),
-            y_label=None if traces.y is None else traces.y,
+            skeys=traces.specific_keys,
+            indices=np.asarray(traces.indices, dtype=np.float64),
+            yaxis=traces.yaxis,
         )
     return _upsample_trace(traces, factor=samplingspec.N_up)
 

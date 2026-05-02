@@ -7,8 +7,7 @@ import pytest
 
 import superconductivity.evaluation.analysis.offset as offset
 from superconductivity.evaluation.traces import Trace, Traces
-from superconductivity.utilities.meta.axis import AxisSpec
-from superconductivity.utilities.meta.label import LabelSpec
+from superconductivity.utilities.meta.axis import AxisSpec, axis
 from superconductivity.utilities.meta.param import ParamSpec
 from superconductivity.utilities.meta.dataset import Dataset
 
@@ -31,20 +30,14 @@ def _make_iv_trace(
 
 
 def _make_traces() -> Traces:
-    return Traces.from_fields(
+    return Traces(
         traces=[
             _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3),
             _make_iv_trace("b", 1, 5.0, v_shift_mV=0.2, i_shift_nA=0.1),
         ],
-        specific_keys=["a", "b"],
+        skeys=["a", "b"],
         indices=[0, 1],
-        yvalues=[1.0, 5.0],
-        y_label=LabelSpec(
-            code_label="Aout_mV",
-            print_label="Aout_mV",
-            html_label="Aout_mV",
-            latex_label="Aout_mV",
-        ),
+        yaxis=axis("Aout_mV", values=np.asarray([1.0, 5.0], dtype=np.float64), order=0),
     )
 
 

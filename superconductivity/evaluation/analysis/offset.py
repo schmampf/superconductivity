@@ -550,14 +550,9 @@ def offset_analysis(
     y_axis = (
         traces.y if traces.y is not None else axis("y", values=traces.indices, order=0)
     )
-    index_axis = (
-        traces.index
-        if traces.index is not None
-        else axis("index", values=traces.indices, order=0)
-    )
     return OffsetDataset(
         y=y_axis,
-        index=index_axis,
+        index=axis("index", values=traces.indices, order=0),
         skeys=traces.skeys,
         dGerr_G0=np.vstack(g_rows),
         dRerr_R0=np.vstack(r_rows),

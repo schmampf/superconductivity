@@ -11,11 +11,11 @@ import superconductivity.api as api_module
 import superconductivity.evaluation as evaluation_module
 import superconductivity.evaluation.sampling as sampling
 from superconductivity.utilities.meta import Dataset, data
+from superconductivity.utilities.meta.axis import axis
 from superconductivity.evaluation.traces import Trace, Traces
 from superconductivity.utilities.constants import G0_muS
 from superconductivity.utilities.functions.binning import bin
 from superconductivity.utilities.functions.upsampling import upsample as upsample_xy
-from superconductivity.utilities.meta.label import label
 from superconductivity.utilities.transport import TransportDatasetSpec
 
 pipeline_mod = importlib.import_module(
@@ -365,15 +365,14 @@ def test_sampling_skips_disabled_stages(
 
 def test_sampling_returns_collection() -> None:
     """Collection sampling should return stacked sampled results."""
-    traces = Traces.from_fields(
+    traces = Traces(
         traces=[
             _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3),
             _make_iv_trace("b", 1, 5.0, v_shift_mV=0.2, i_shift_nA=0.1),
         ],
-        specific_keys=["a", "b"],
+        skeys=["a", "b"],
         indices=[0, 1],
-        yvalues=[1.0, 5.0],
-        y_label=None,
+        yaxis=axis("Aout_mV", values=np.asarray([1.0, 5.0], dtype=np.float64), order=0),
     )
     spec = _make_spec(
         Voff_mV=data("Voff_mV", np.asarray([0.4, 0.2], dtype=np.float64)),
@@ -386,10 +385,10 @@ def test_sampling_returns_collection() -> None:
     assert isinstance(exp_i, TransportDatasetSpec)
     assert np.allclose(exp_v.V_mV.values, spec.Vbins_mV)
     assert np.allclose(exp_i.I_nA.values, spec.Ibins_nA)
-    assert np.allclose(exp_v.y.values, np.asarray([1.0, 5.0]))
-    assert np.allclose(exp_i.y.values, np.asarray([1.0, 5.0]))
-    assert exp_v.y.code_label == "y"
-    assert exp_i.y.code_label == "y"
+    assert np.allclose(exp_v.Aout_mV.values, np.asarray([1.0, 5.0]))
+    assert np.allclose(exp_i.Aout_mV.values, np.asarray([1.0, 5.0]))
+    assert exp_v.Aout_mV.code_label == "Aout_mV"
+    assert exp_i.Aout_mV.code_label == "Aout_mV"
     assert exp_v.I_nA.values.shape == (2, spec.Vbins_mV.size)
     assert exp_i.V_mV.values.shape == (2, spec.Ibins_nA.size)
     assert exp_v.dG_G0.values.shape == (2, spec.Vbins_mV.size)
@@ -398,15 +397,14 @@ def test_sampling_returns_collection() -> None:
 
 def test_sampling_uses_trace_label_for_collection_axis() -> None:
     """The sampled collection axis should inherit the trace label."""
-    traces = Traces.from_fields(
+    traces = Traces(
         traces=[
             _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3),
             _make_iv_trace("b", 1, 5.0, v_shift_mV=0.2, i_shift_nA=0.1),
         ],
-        specific_keys=["nu=1dBm", "nu=5dBm"],
+        skeys=["nu=1dBm", "nu=5dBm"],
         indices=[0, 1],
-        yvalues=[1.0, 5.0],
-        y_label=label("Aout_mV"),
+        yaxis=axis("Aout_mV", values=np.asarray([1.0, 5.0], dtype=np.float64), order=0),
     )
     spec = _make_spec(
         Voff_mV=data("Voff_mV", np.asarray([0.4, 0.2], dtype=np.float64)),
@@ -428,6 +426,9 @@ def test_sampling_with_smoothing_returns_collection() -> None:
             _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3),
             _make_iv_trace("b", 1, 5.0, v_shift_mV=0.2, i_shift_nA=0.1),
         ],
+        skeys=["nu=1dBm", "nu=5dBm"],
+        indices=[0, 1],
+        yaxis=axis("Aout_mV", values=np.asarray([1.0, 5.0], dtype=np.float64), order=0),
     )
     spec = _make_spec(
         Voff_mV=data("Voff_mV", np.asarray([0.4, 0.2], dtype=np.float64)),

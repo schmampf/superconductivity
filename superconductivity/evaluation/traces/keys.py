@@ -97,32 +97,17 @@ class Keys:
     indices: NDArray64
     skeys: tuple[str, ...]
 
-    @classmethod
-    def from_fields(
-        cls,
-        *,
-        specific_keys: Sequence[str],
-        indices: Sequence[int] | NDArray[np.int64],
-        yvalues: Sequence[object] | NDArray[np.object_] | NDArray64,
-        y: AxisSpec,
-    ) -> Keys:
-        """Build key metadata from aligned field arrays."""
-        keys_list = list(specific_keys)
-        indices_array = np.asarray(indices, dtype=np.int64).reshape(-1)
-        yvalues_list = list(yvalues)
-        if len(keys_list) != indices_array.size:
+    def __post_init__(self) -> None:
+        """Validate and normalize key metadata."""
+        if not isinstance(self.yaxis, AxisSpec):
+            raise TypeError("yaxis must be an AxisSpec.")
+        indices = np.asarray(self.indices, dtype=np.float64).reshape(-1)
+        object.__setattr__(self, "indices", indices)
+        object.__setattr__(self, "skeys", tuple(self.skeys))
+        if len(self.skeys) != indices.size:
             raise ValueError("specific_keys and indices must have the same length.")
-        if len(keys_list) != len(yvalues_list):
-            raise ValueError("specific_keys and yvalues must have the same length.")
-        if not isinstance(y, AxisSpec):
-            raise TypeError("y must be an AxisSpec.")
-        if len(keys_list) != int(np.asarray(y.values).reshape(-1).size):
-            raise ValueError("specific_keys and y must have the same length.")
-        return cls(
-            yaxis=y,
-            indices=np.asarray(indices_array, dtype=np.float64),
-            skeys=tuple(keys_list),
-        )
+        if len(self.skeys) != len(np.asarray(self.yaxis.values).reshape(-1)):
+            raise ValueError("specific_keys and yaxis must have the same length.")
 
     @property
     def specific_keys(self) -> list[str]:
@@ -325,16 +310,16 @@ def _build_keys_output(
                 values.append(numeric)
         else:
             values.append(value)
-    return Keys.from_fields(
-        specific_keys=list(specific_keys),
-        indices=np.arange(len(specific_keys), dtype=np.int64),
-        yvalues=values,
-        y=_build_y_axis(
+    indices = np.arange(len(specific_keys), dtype=np.int64)
+    return Keys(
+        yaxis=_build_y_axis(
             specific_keys=specific_keys,
-            indices=np.arange(len(specific_keys), dtype=np.int64),
+            indices=indices,
             yvalues=values,
             spec=spec,
         ),
+        indices=indices,
+        skeys=tuple(specific_keys),
     )
 
 

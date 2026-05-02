@@ -114,9 +114,9 @@ def test_get_traces_selects_one_trace_by_specific_key(
         filespec=FileSpec(h5path="dummy.h5", measurement="test"),
         keysspec=KeysSpec(strip1="dBm"),
         tracespec=traces_module.TraceSpec(
-            amp_voltage=1.0,
-            amp_current=1.0,
-            r_ref_ohm=1.0,
+            AmpV=1.0,
+            AmpI=1.0,
+            Rref_Ohm=1.0,
             trigger_values=1,
         ),
         specific_key="nu=1dBm",
@@ -138,9 +138,9 @@ def test_get_traces_accepts_filespec_with_measurement(
         filespec=FileSpec(h5path="dummy.h5", measurement="test"),
         keysspec=KeysSpec(strip1="dBm"),
         tracespec=traces_module.TraceSpec(
-            amp_voltage=1.0,
-            amp_current=1.0,
-            r_ref_ohm=1.0,
+            AmpV=1.0,
+            AmpI=1.0,
+            Rref_Ohm=1.0,
             trigger_values=1,
         ),
         specific_key="nu=1dBm",
@@ -157,11 +157,10 @@ def test_get_traces_resolves_one_trace_by_value(
     monkeypatch.setattr(
         traces_module,
         "get_keys",
-        lambda **_kwargs: Keys.from_fields(
-            specific_keys=["nu=1dBm", "nu=5dBm"],
+        lambda **_kwargs: Keys(
+            skeys=("nu=1dBm", "nu=5dBm"),
             indices=np.asarray([0, 1], dtype=np.int64),
-            yvalues=np.asarray([1.0, 5.0]),
-            y=AxisSpec(
+            yaxis=AxisSpec(
                 code_label="nu_GHz",
                 print_label="nu (dBm)",
                 html_label="<i>nu</i> (dBm)",
@@ -175,9 +174,9 @@ def test_get_traces_resolves_one_trace_by_value(
     trace = traces_module.get_traces(
         filespec=FileSpec(h5path="dummy.h5", measurement="test"),
         tracespec=traces_module.TraceSpec(
-            amp_voltage=1.0,
-            amp_current=1.0,
-            r_ref_ohm=1.0,
+            AmpV=1.0,
+            AmpI=1.0,
+            Rref_Ohm=1.0,
             trigger_values=1,
         ),
         yvalue=5.0,
@@ -194,11 +193,10 @@ def test_get_traces_returns_collection_with_lookup_methods(
 
     traces = traces_module.get_traces(
         filespec=FileSpec(h5path="dummy.h5", measurement="test"),
-        keys=Keys.from_fields(
-            specific_keys=["nu=1dBm", "nu=5dBm"],
+        keys=Keys(
+            skeys=("nu=1dBm", "nu=5dBm"),
             indices=np.asarray([0, 1], dtype=np.int64),
-            yvalues=np.asarray([1.0, 5.0]),
-            y=AxisSpec(
+            yaxis=AxisSpec(
                 code_label="nu_GHz",
                 print_label="nu (GHz)",
                 html_label="<i>nu</i> (GHz)",
@@ -208,16 +206,16 @@ def test_get_traces_returns_collection_with_lookup_methods(
             ),
         ),
         tracespec=traces_module.TraceSpec(
-            amp_voltage=1.0,
-            amp_current=1.0,
-            r_ref_ohm=1.0,
+            AmpV=1.0,
+            AmpI=1.0,
+            Rref_Ohm=1.0,
             trigger_values=1,
         ),
     )
 
     assert len(traces) == 2
     assert traces.specific_keys == ["nu=1dBm", "nu=5dBm"]
-    assert np.allclose(traces.yvalues, np.asarray([1.0, 5.0]))
+    assert np.allclose(traces.yaxis.values, np.asarray([1.0, 5.0]))
     assert traces.y is not None
     assert traces.y.code_label == "nu_GHz"
     assert np.allclose(traces.indices, np.asarray([0.0, 1.0]))
@@ -247,11 +245,10 @@ def test_get_traces_accepts_filespec_keys_and_ivspec(
 
     traces = traces_module.get_traces(
         filespec=FileSpec(h5path="dummy.h5", measurement="test"),
-        keys=Keys.from_fields(
-            specific_keys=["nu=1dBm", "nu=5dBm"],
+        keys=Keys(
+            skeys=("nu=1dBm", "nu=5dBm"),
             indices=np.asarray([0, 1], dtype=np.int64),
-            yvalues=np.asarray([1.0, 5.0]),
-            y=AxisSpec(
+            yaxis=AxisSpec(
                 code_label="nu_GHz",
                 print_label="nu (dBm)",
                 html_label="<i>nu</i> (dBm)",
@@ -261,36 +258,32 @@ def test_get_traces_accepts_filespec_keys_and_ivspec(
             ),
         ),
         tracespec=traces_module.TraceSpec(
-            amp_voltage=1.0,
-            amp_current=1.0,
-            r_ref_ohm=1.0,
+            AmpV=1.0,
+            AmpI=1.0,
+            Rref_Ohm=1.0,
             trigger_values=1,
         ),
     )
 
     assert len(traces) == 2
     assert traces.specific_keys == ["nu=1dBm", "nu=5dBm"]
-    assert np.allclose(traces.yvalues, np.asarray([1.0, 5.0]))
+    assert np.allclose(traces.yaxis.values, np.asarray([1.0, 5.0]))
     assert np.allclose(traces.indices, np.asarray([0.0, 1.0]))
 
 
 def test_get_traces_rejects_mismatched_keys_and_yvalues() -> None:
     """Collection metadata must stay aligned."""
     with pytest.raises(ValueError, match="same length"):
-        traces_module.get_traces(
-            filespec=FileSpec(h5path="dummy.h5", measurement="test"),
-            keys=Keys.from_fields(
-                specific_keys=["nu=1dBm"],
-                indices=np.asarray([0], dtype=np.int64),
-                yvalues=np.asarray([1.0, 5.0]),
-                y=AxisSpec(
-                    code_label="nu_GHz",
-                    print_label="nu (dBm)",
-                    html_label="<i>nu</i> (dBm)",
-                    latex_label=r"$\nu$ (dBm)",
-                    values=np.asarray([1.0], dtype=np.float64),
-                    order=0,
-                ),
+        Keys(
+            skeys=("nu=1dBm",),
+            indices=np.asarray([0], dtype=np.int64),
+            yaxis=AxisSpec(
+                code_label="nu_GHz",
+                print_label="nu (dBm)",
+                html_label="<i>nu</i> (dBm)",
+                latex_label=r"$\nu$ (dBm)",
+                values=np.asarray([1.0, 5.0], dtype=np.float64),
+                order=0,
             ),
         )
 
@@ -303,11 +296,10 @@ def test_get_traces_falls_back_to_index_for_non_numeric_yvalues(
 
     traces = traces_module.get_traces(
         filespec=FileSpec(h5path="dummy.h5", measurement="test"),
-        keys=Keys.from_fields(
-            specific_keys=["nu=1dBm", "nu=5dBm"],
+        keys=Keys(
+            skeys=("nu=1dBm", "nu=5dBm"),
             indices=np.asarray([0, 1], dtype=np.int64),
-            yvalues=np.asarray(["alpha", "beta"], dtype=object),
-            y=AxisSpec(
+            yaxis=AxisSpec(
                 code_label="nu_GHz",
                 print_label="nu (dBm)",
                 html_label="<i>nu</i> (dBm)",
@@ -317,13 +309,13 @@ def test_get_traces_falls_back_to_index_for_non_numeric_yvalues(
             ),
         ),
         tracespec=traces_module.TraceSpec(
-            amp_voltage=1.0,
-            amp_current=1.0,
-            r_ref_ohm=1.0,
+            AmpV=1.0,
+            AmpI=1.0,
+            Rref_Ohm=1.0,
             trigger_values=1,
         ),
     )
 
-    assert np.allclose(traces.yvalues, np.asarray([0.0, 1.0]))
+    assert np.allclose(traces.yaxis.values, np.asarray([0.0, 1.0]))
     assert traces.y is not None
     assert traces.y.code_label == "nu_GHz"

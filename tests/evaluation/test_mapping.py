@@ -7,7 +7,7 @@ from superconductivity.evaluation import sample
 from superconductivity.evaluation.sampling import SamplingSpec
 from superconductivity.evaluation.traces import Trace, Traces
 from superconductivity.utilities import mapping
-from superconductivity.utilities.meta import axis, data, label, param
+from superconductivity.utilities.meta import axis, data, param
 from superconductivity.utilities.transport import TransportDatasetSpec, reduced_units
 
 
@@ -185,15 +185,14 @@ def test_mapping_integrates_with_sampled_transport_dataset() -> None:
     t_s = np.linspace(0.0, 10.0, 401, dtype=np.float64)
     v_true_mV = np.linspace(-2.0, 2.0, t_s.size, dtype=np.float64)
     i_true_nA = v_true_mV + 0.2 * v_true_mV**3
-    traces = Traces.from_fields(
+    traces = Traces(
         traces=[
             Trace(V_mV=v_true_mV + 0.4, I_nA=i_true_nA + 0.3, t_s=t_s),
             Trace(V_mV=v_true_mV + 0.2, I_nA=i_true_nA + 0.1, t_s=t_s),
         ],
-        specific_keys=["a", "b"],
+        skeys=["a", "b"],
         indices=[0, 1],
-        yvalues=[1.0, 5.0],
-        y_label=label("Aout_mV"),
+        yaxis=axis("Aout_mV", values=np.asarray([1.0, 5.0], dtype=np.float64), order=0),
     )
     spec = SamplingSpec(
         Vbins_mV=np.linspace(-2.0, 2.0, 81),

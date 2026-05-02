@@ -82,7 +82,7 @@ def test_psd_analysis_returns_collection() -> None:
     )
     assert out.specific_keys == traces.specific_keys
     assert np.allclose(out.indices, traces.indices)
-    assert np.allclose(out.yvalues, traces.yvalues)
+    assert np.allclose(out.yvalues, traces.indices)
     assert len(out.I_psd_nA2_per_Hz) == 2
     assert len(out.V_psd_mV2_per_Hz) == 2
     assert len(out.f_Hz) == 2

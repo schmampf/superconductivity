@@ -123,7 +123,7 @@ def test_smoothing_returns_collection() -> None:
         show_progress=False,
     )
 
-    assert np.allclose(out.yvalues, np.asarray([1.0, 5.0]))
+    assert np.allclose(out.yaxis.values, np.asarray([1.0, 5.0]))
     assert out.I_nA.shape == (2, 9)
     assert out.V_mV.shape == (2, 11)
     assert out.dG_G0.shape == (2, 9)

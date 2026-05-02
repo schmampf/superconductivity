@@ -436,8 +436,8 @@ def psd_analysis(
             traces=[_build_single_psd_result(trace, spec=spec) for trace in traces],
             specific_keys=traces.specific_keys,
             indices=traces.indices,
-            yvalues=traces.yvalues,
-            y_label=traces.y if traces.y is not None else None,
+            yvalues=traces.yaxis.values if traces.yaxis is not None else traces.indices,
+            y_label=None if traces.y is None else traces.y,
         )
     return _build_single_psd_result(traces, spec=spec)
 
