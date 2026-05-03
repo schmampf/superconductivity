@@ -14,6 +14,18 @@ from .file import FileSpec, _import_h5py, _require_measurement, _to_measurement_
 from .keys import Keys, KeysSpec, get_keys
 
 
+def _import_scipy_signal():
+    """Import SciPy signal filters lazily."""
+    try:
+        from scipy.signal import butter, sosfilt, sosfiltfilt
+    except ImportError as exc:  # pragma: no cover
+        raise ImportError(
+            "SciPy is required for low-pass filtering. Install it with "
+            "'pip install scipy'.",
+        ) from exc
+    return butter, sosfilt, sosfiltfilt
+
+
 @dataclass(slots=True)
 class TraceSpec:
     """Configuration for loading traces from one measurement."""
@@ -198,6 +210,64 @@ class Trace(Dataset):
             t_s=np.asarray(t_new, dtype=np.float64),
         )
 
+    def low_pass(self, *, cutoff_Hz: float, order: int = 4) -> Trace:
+        """Return one trace low-pass filtered in the time domain."""
+        cutoff_Hz = float(cutoff_Hz)
+        if not np.isfinite(cutoff_Hz) or cutoff_Hz <= 0.0:
+            raise ValueError("cutoff_Hz must be finite and > 0.")
+        order = int(order)
+        if order < 1:
+            raise ValueError("order must be at least 1.")
+
+        t_raw = np.asarray(self.t_s.values, dtype=np.float64)
+        v_raw_mV = np.asarray(self.V_mV.values, dtype=np.float64)
+        i_raw_nA = np.asarray(self.I_nA.values, dtype=np.float64)
+        if t_raw.size < 2:
+            raise ValueError("t_s must contain at least two points.")
+        if not (
+            t_raw.shape == v_raw_mV.shape == i_raw_nA.shape
+        ):
+            raise ValueError("t_s, V_mV, and I_nA must have the same shape.")
+        if np.any(~np.isfinite(t_raw)) or np.any(~np.isfinite(v_raw_mV)) or np.any(
+            ~np.isfinite(i_raw_nA)
+        ):
+            raise ValueError("Trace arrays must be finite.")
+        if np.any(np.diff(t_raw) <= 0.0):
+            raise ValueError("t_s must be strictly increasing.")
+
+        nyquist_Hz = 0.5 * self.nu_Hz
+        if cutoff_Hz >= nyquist_Hz:
+            raise ValueError("cutoff_Hz must be below the Nyquist frequency.")
+
+        butter, sosfilt, sosfiltfilt = _import_scipy_signal()
+        sos = butter(
+            order,
+            cutoff_Hz / nyquist_Hz,
+            btype="lowpass",
+            output="sos",
+        )
+        if t_raw.size < max(3, 3 * order):
+            v_filt_mV = sosfilt(sos, v_raw_mV)
+            i_filt_nA = sosfilt(sos, i_raw_nA)
+        else:
+            v_filt_mV = sosfiltfilt(sos, v_raw_mV)
+            i_filt_nA = sosfiltfilt(sos, i_raw_nA)
+        return Trace(
+            I_nA=np.asarray(i_filt_nA, dtype=np.float64),
+            V_mV=np.asarray(v_filt_mV, dtype=np.float64),
+            t_s=np.asarray(t_raw, dtype=np.float64),
+        )
+
+    def offset(self, *, Voff_mV: float = 0.0, Ioff_nA: float = 0.0) -> Trace:
+        """Return one trace with constant voltage and current offsets removed."""
+        Voff_mV = float(Voff_mV)
+        Ioff_nA = float(Ioff_nA)
+        return Trace(
+            I_nA=np.asarray(self.I_nA.values, dtype=np.float64) - Ioff_nA,
+            V_mV=np.asarray(self.V_mV.values, dtype=np.float64) - Voff_mV,
+            t_s=np.asarray(self.t_s.values, dtype=np.float64),
+        )
+
 
 @dataclass(slots=True, kw_only=True)
 class Traces(Keys):
@@ -299,6 +369,47 @@ class Traces(Keys):
         """Return one resampled trace collection."""
         return Traces(
             traces=[trace.resample(nu_Hz=nu_Hz) for trace in self.traces],
+            skeys=self.skeys,
+            indices=self.indices,
+            yaxis=self.yaxis,
+        )
+
+    def low_pass(self, *, cutoff_Hz: float, order: int = 4) -> Traces:
+        """Return one low-pass filtered trace collection."""
+        return Traces(
+            traces=[trace.low_pass(cutoff_Hz=cutoff_Hz, order=order) for trace in self.traces],
+            skeys=self.skeys,
+            indices=self.indices,
+            yaxis=self.yaxis,
+        )
+
+    def offset(
+        self,
+        *,
+        Voff_mV: Sequence[float] | NDArray64 | float = 0.0,
+        Ioff_nA: Sequence[float] | NDArray64 | float = 0.0,
+    ) -> Traces:
+        """Return one offset-corrected trace collection."""
+        if np.isscalar(Voff_mV):
+            voff = np.full(len(self.traces), float(Voff_mV), dtype=np.float64)
+        else:
+            voff = np.asarray(Voff_mV, dtype=np.float64).reshape(-1)
+        if np.isscalar(Ioff_nA):
+            ioff = np.full(len(self.traces), float(Ioff_nA), dtype=np.float64)
+        else:
+            ioff = np.asarray(Ioff_nA, dtype=np.float64).reshape(-1)
+        if voff.size != len(self.traces):
+            raise ValueError("Voff_mV must match the number of traces.")
+        if ioff.size != len(self.traces):
+            raise ValueError("Ioff_nA must match the number of traces.")
+        return Traces(
+            traces=[
+                trace.offset(
+                    Voff_mV=float(voff[index]),
+                    Ioff_nA=float(ioff[index]),
+                )
+                for index, trace in enumerate(self.traces)
+            ],
             skeys=self.skeys,
             indices=self.indices,
             yaxis=self.yaxis,
