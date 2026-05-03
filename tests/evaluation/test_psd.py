@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 
 from superconductivity.evaluation.traces import Trace, Traces
-from superconductivity.evaluation.sampling import downsample_trace
 
 
 def _make_iv_trace(
@@ -56,7 +55,7 @@ def test_downsample_trace_uses_nu_hz_as_sample_rate() -> None:
         t_s=np.arange(i_nA.size, dtype=np.float64),
     )
 
-    downsampled = downsample_trace(trace, nu_Hz=0.5)
+    downsampled = trace.resample(nu_Hz=0.5)
 
     assert np.asarray(downsampled["t_s"]).size == 4
     assert downsampled.nu_Hz == pytest.approx(0.5)

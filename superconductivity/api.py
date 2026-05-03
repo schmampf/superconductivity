@@ -15,7 +15,7 @@ implemented in `superconductivity/__init__.py` and forwards missing attributes
 to this module.
 """
 
-from .evaluation.analysis import (
+from .evaluation.offset import (
     OffsetSpec,
     OffsetDataset,
     offset_analysis,
@@ -24,13 +24,7 @@ from .evaluation.calibration import CalibrationSpec, calibrate
 from .evaluation.sampling import (
     SamplingSpec,
     binning,
-    downsample_trace,
-    downsample_traces,
-    downsampling,
-    offset_correction,
     sample,
-    smooth,
-    upsampling,
 )
 from .utilities.transport import reduced_units
 from .evaluation.traces import (

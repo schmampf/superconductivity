@@ -1,4 +1,4 @@
-from .analysis import (
+from .offset import (
     OffsetSpec,
     OffsetDataset,
     offset_analysis,
@@ -7,13 +7,7 @@ from .calibration import CalibrationSpec, calibrate
 from .sampling import (
     SamplingSpec,
     binning,
-    downsample_trace,
-    downsample_traces,
-    downsampling,
-    offset_correction,
     sample,
-    smooth,
-    upsampling,
 )
 from .traces import (
     FileSpec,
@@ -55,12 +49,6 @@ __all__ = [
     "CalibrationSpec",
     "calibrate",
     "SamplingSpec",
-    "downsample_trace",
-    "downsample_traces",
-    "downsampling",
-    "upsampling",
-    "offset_correction",
     "binning",
     "sample",
-    "smooth",
 ]

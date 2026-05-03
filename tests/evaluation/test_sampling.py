@@ -18,21 +18,19 @@ from superconductivity.utilities.functions.binning import bin
 from superconductivity.utilities.functions.upsampling import upsample as upsample_xy
 from superconductivity.utilities.transport import TransportDatasetSpec
 
-pipeline_mod = importlib.import_module(
-    "superconductivity.evaluation.sampling.pipeline",
-)
+pipeline_mod = importlib.import_module("superconductivity.evaluation.sampling")
 
 
 def test_sampling_exports_expose_upsampling() -> None:
     """Public exports should expose the explicit upsampling stage."""
     assert hasattr(sampling, "SamplingSpec")
-    assert hasattr(sampling, "upsampling")
+    assert hasattr(sampling, "binning")
 
     assert hasattr(evaluation_module, "SamplingSpec")
-    assert hasattr(evaluation_module, "upsampling")
+    assert hasattr(evaluation_module, "binning")
 
     assert hasattr(api_module, "SamplingSpec")
-    assert hasattr(api_module, "upsampling")
+    assert hasattr(api_module, "binning")
 
 
 def _make_iv_trace(
@@ -57,17 +55,19 @@ def _make_spec(**updates: object) -> sampling.SamplingSpec:
         "Vbins_mV": np.linspace(-2.0, 2.0, 81),
         "Ibins_nA": np.linspace(-4.0, 4.0, 81),
         "apply_smoothing": False,
-        "nu_Hz": 40.0,
-        "N_up": 4,
+        "cutoff_Hz": 10.0,
+        "sampling_Hz": 40.0,
     }
     defaults.update(updates)
     return sampling.SamplingSpec(**defaults)
 
 
 def _manual_binning(
-    trace: Trace,
+    trace: Trace | Traces,
     spec: sampling.SamplingSpec,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    if isinstance(trace, Traces):
+        trace = trace[0]
     v_trace_mV = np.asarray(trace["V_mV"], dtype=np.float64)
     i_trace_nA = np.asarray(trace["I_nA"], dtype=np.float64)
     v_sampled_mV = bin(z=v_trace_mV, x=i_trace_nA, xbins=spec.Ibins_nA)
@@ -83,13 +83,13 @@ def _explicit_upsample_then_bin(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     i_over_nA = upsample_xy(
         np.asarray(trace["I_nA"], dtype=np.float64),
-        N_up=spec.N_up,
+        N_up=int(spec.sampling_Hz / trace.nu_Hz),
         axis=0,
         method="linear",
     )
     v_over_mV = upsample_xy(
         np.asarray(trace["V_mV"], dtype=np.float64),
-        N_up=spec.N_up,
+        N_up=int(spec.sampling_Hz / trace.nu_Hz),
         axis=0,
         method="linear",
     )
@@ -100,35 +100,29 @@ def _explicit_upsample_then_bin(
     return i_sampled_nA, v_sampled_mV, dG_G0, dR_R0
 
 
-def test_downsampling_uses_sampling_spec_nu_hz() -> None:
-    """The high-level downsampling wrapper should use ``nu_Hz`` from the spec."""
+def test_lowpass_uses_sampling_spec_cutoff_hz() -> None:
+    """The high-level low-pass wrapper should use ``cutoff_Hz`` from the spec."""
     trace = _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3)
     spec = _make_spec()
 
-    downsampled = sampling.downsampling(trace, samplingspec=spec)
-    expected = sampling.downsample_trace(trace, nu_Hz=spec.nu_Hz)
+    downsampled = trace.low_pass(cutoff_Hz=spec.cutoff_Hz)
+    expected = trace.low_pass(cutoff_Hz=spec.cutoff_Hz)
 
     assert np.allclose(downsampled["t_s"], expected["t_s"])
     assert np.allclose(downsampled["V_mV"], expected["V_mV"])
     assert np.allclose(downsampled["I_nA"], expected["I_nA"])
 
 
-def test_upsampling_densifies_trace_and_preserves_axes() -> None:
-    """Explicit upsampling should interpolate all trace arrays."""
+def test_resampling_densifies_trace_and_preserves_axes() -> None:
+    """Explicit resampling should interpolate all trace arrays."""
     trace = _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3)
-    spec = _make_spec(N_up=5)
+    spec = _make_spec(sampling_Hz=200.0)
 
-    upsampled = sampling.upsampling(trace, samplingspec=spec)
+    upsampled = trace.resample(nu_Hz=spec.sampling_Hz)
 
-    assert (
-        np.asarray(upsampled["t_s"]).size == np.asarray(trace["t_s"]).size * spec.N_up
-    )
-    assert (
-        np.asarray(upsampled["V_mV"]).size == np.asarray(trace["V_mV"]).size * spec.N_up
-    )
-    assert (
-        np.asarray(upsampled["I_nA"]).size == np.asarray(trace["I_nA"]).size * spec.N_up
-    )
+    assert np.asarray(upsampled["t_s"]).size > np.asarray(trace["t_s"]).size
+    assert np.asarray(upsampled["V_mV"]).size == np.asarray(upsampled["t_s"]).size
+    assert np.asarray(upsampled["I_nA"]).size == np.asarray(upsampled["t_s"]).size
     assert upsampled["t_s"][0] == pytest.approx(trace["t_s"][0])
     assert upsampled["t_s"][-1] == pytest.approx(trace["t_s"][-1])
 
@@ -140,9 +134,9 @@ def test_offset_correction_subtracts_offsets() -> None:
         Voff_mV=data("Voff_mV", np.asarray([0.4], dtype=np.float64)),
         Ioff_nA=data("Ioff_nA", np.asarray([0.3], dtype=np.float64)),
     )
-    corrected = sampling.offset_correction(
-        trace,
-        samplingspec=spec,
+    corrected = trace.offset(
+        Voff_mV=float(spec.Voff_mV.values[0]),
+        Ioff_nA=float(spec.Ioff_nA.values[0]),
     )
 
     assert np.allclose(
@@ -159,9 +153,10 @@ def test_binning_matches_manual_flow_for_upsampled_trace() -> None:
     """Pure binning should match manual binning of the prepared trace."""
     trace = _make_iv_trace("a", 0, 1.0, v_shift_mV=0.0, i_shift_nA=0.0)
     spec = _make_spec()
-    prepared = sampling.upsampling(trace, samplingspec=spec)
+    prepared = trace.resample(nu_Hz=spec.sampling_Hz)
+    prepared_traces = Traces(traces=[prepared], skeys=["a"], indices=[0])
 
-    exp_v, exp_i = sampling.binning(prepared, samplingspec=spec)
+    exp_v, exp_i = sampling.binning(prepared_traces, samplingspec=spec)
     i_exp_nA, v_exp_mV, dG_exp_G0, dR_exp_R0 = _manual_binning(prepared, spec)
 
     assert np.allclose(exp_v.I_nA.values, i_exp_nA, equal_nan=True)
@@ -174,9 +169,11 @@ def test_binning_of_upsampled_trace_matches_direct_reference() -> None:
     """Explicit upsampling should match the direct upsample-then-bin reference."""
     trace = _make_iv_trace("a", 0, 1.0, v_shift_mV=0.0, i_shift_nA=0.0)
     spec = _make_spec()
+    prepared = trace.resample(nu_Hz=spec.sampling_Hz)
+    prepared_traces = Traces(traces=[prepared], skeys=["a"], indices=[0])
 
     exp_v, exp_i = sampling.binning(
-        sampling.upsampling(trace, samplingspec=spec),
+        prepared_traces,
         samplingspec=spec,
     )
     i_exp_nA, v_exp_mV, dG_exp_G0, dR_exp_R0 = _explicit_upsample_then_bin(
@@ -193,18 +190,16 @@ def test_binning_of_upsampled_trace_matches_direct_reference() -> None:
 def test_sampling_matches_manual_pipeline_with_offsets() -> None:
     """Full sampling should use the explicit stage order."""
     trace = _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3)
+    traces = Traces(traces=[trace], skeys=["a"], indices=[0])
     spec = _make_spec(
         Voff_mV=data("Voff_mV", np.asarray([0.4], dtype=np.float64)),
         Ioff_nA=data("Ioff_nA", np.asarray([0.3], dtype=np.float64)),
     )
 
-    exp_v, exp_i = sampling.sample(trace, samplingspec=spec)
-    corrected = sampling.offset_correction(
-        trace,
-        samplingspec=spec,
-    )
-    downsampled = sampling.downsampling(corrected, samplingspec=spec)
-    upsampled = sampling.upsampling(downsampled, samplingspec=spec)
+    exp_v, exp_i = sampling.sample(traces, samplingspec=spec)
+    corrected = traces.offset(Voff_mV=spec.Voff_mV, Ioff_nA=spec.Ioff_nA)
+    downsampled = corrected.low_pass(cutoff_Hz=spec.cutoff_Hz)
+    upsampled = downsampled.resample(nu_Hz=spec.sampling_Hz)
     i_exp_nA, v_exp_mV, dG_exp_G0, dR_exp_R0 = _manual_binning(
         upsampled,
         spec,
@@ -218,21 +213,22 @@ def test_sampling_matches_manual_pipeline_with_offsets() -> None:
     assert np.allclose(exp_i.dR_R0.values, dR_exp_R0, equal_nan=True)
     assert isinstance(exp_v, TransportDatasetSpec)
     assert isinstance(exp_i, TransportDatasetSpec)
-    assert exp_v.V_mV.order == 0
-    assert exp_i.I_nA.order == 0
+    assert exp_v.V_mV.order == 1
+    assert exp_i.I_nA.order == 1
 
 
 def test_sampling_without_offset_spec_uses_zero_offsets() -> None:
     """Missing offset input should behave like explicit zero offsets."""
     trace = _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3)
+    traces = Traces(traces=[trace], skeys=["a"], indices=[0])
     implicit_spec = _make_spec()
     explicit_spec = _make_spec(
         Voff_mV=data("Voff_mV", np.asarray([0.0], dtype=np.float64)),
         Ioff_nA=data("Ioff_nA", np.asarray([0.0], dtype=np.float64)),
     )
 
-    implicit_v, implicit_i = sampling.sample(trace, samplingspec=implicit_spec)
-    explicit_v, explicit_i = sampling.sample(trace, samplingspec=explicit_spec)
+    implicit_v, implicit_i = sampling.sample(traces, samplingspec=implicit_spec)
+    explicit_v, explicit_i = sampling.sample(traces, samplingspec=explicit_spec)
 
     assert np.allclose(implicit_v.I_nA.values, explicit_v.I_nA.values, equal_nan=True)
     assert np.allclose(implicit_i.V_mV.values, explicit_i.V_mV.values, equal_nan=True)
@@ -244,70 +240,71 @@ def test_sample_calls_stages_in_explicit_order(monkeypatch: pytest.MonkeyPatch) 
     """Pipeline orchestration should follow the explicit stage order."""
     calls: list[str] = []
     trace = _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3)
+    traces = Traces(traces=[trace], skeys=["a"], indices=[0])
     spec = _make_spec(apply_smoothing=True, median_bins=3, sigma_bins=1.0)
     sample_out = sampling.binning(
-        sampling.upsampling(trace, samplingspec=spec),
+        traces.resample(nu_Hz=spec.sampling_Hz),
         samplingspec=spec,
     )
 
-    def _offset(traces, *, samplingspec):
+    def _offset(self, *, Voff_mV=0.0, Ioff_nA=0.0):
         calls.append("offset")
-        assert samplingspec is not None
-        return traces
+        return self
 
-    def _downsampling(traces, *, samplingspec, show_progress):
-        calls.append("downsample")
-        return traces
+    def _low_pass(self, *, cutoff_Hz, order=4):
+        calls.append("lowpass")
+        return self
 
-    def _upsampling(traces, *, samplingspec, show_progress):
-        calls.append("upsample")
-        return traces
+    def _resample(self, *, nu_Hz):
+        calls.append("resample")
+        return self
 
     def _binning(traces, *, samplingspec, show_progress):
         calls.append("binning")
         return sample_out
 
-    def _smooth(samples, *, samplingspec, show_progress):
+    def _smooth(self, *, median_bins=3, sigma_bins=2.0, mode="nearest"):
         calls.append("smooth")
-        return samples
+        return self
 
-    monkeypatch.setattr(pipeline_mod, "offset_correction", _offset)
-    monkeypatch.setattr(pipeline_mod, "downsampling", _downsampling)
-    monkeypatch.setattr(pipeline_mod, "upsampling", _upsampling)
+    monkeypatch.setattr(Traces, "offset", _offset)
+    monkeypatch.setattr(Traces, "low_pass", _low_pass)
+    monkeypatch.setattr(Traces, "resample", _resample)
+    monkeypatch.setattr(TransportDatasetSpec, "smooth", _smooth)
     monkeypatch.setattr(pipeline_mod, "binning", _binning)
-    monkeypatch.setattr(pipeline_mod, "smooth", _smooth)
 
-    out = sampling.sample(trace, samplingspec=spec)
+    out = sampling.sample(traces, samplingspec=spec)
 
-    assert out == sample_out
-    assert calls == ["offset", "downsample", "upsample", "binning", "smooth"]
+    assert out[0] is sample_out[0]
+    assert out[1] is sample_out[1]
+    assert calls == ["offset", "lowpass", "resample", "binning", "smooth", "smooth"]
 
 
 @pytest.mark.parametrize(
     ("spec", "expected_calls"),
     [
         (
-            _make_spec(apply_offset_correction=False),
-            ["downsample", "upsample", "binning"],
+            _make_spec(apply_offset=False),
+            ["lowpass", "resample", "binning"],
         ),
         (
-            _make_spec(apply_downsampling=False),
-            ["offset", "upsample", "binning"],
+            _make_spec(apply_lowpass=False),
+            ["offset", "resample", "binning"],
         ),
         (
-            _make_spec(apply_upsampling=False),
-            ["offset", "downsample", "binning"],
+            _make_spec(apply_resampling=False),
+            ["offset", "lowpass", "binning"],
         ),
         (
             _make_spec(
-                apply_offset_correction=False,
-                apply_downsampling=False,
-                apply_upsampling=False,
+                apply_offset=False,
+                apply_lowpass=False,
+                apply_resampling=False,
                 apply_smoothing=True,
                 median_bins=3,
                 sigma_bins=1.0,
             ),
-            ["binning", "smooth"],
+            ["binning"],
         ),
     ],
 )
@@ -319,29 +316,23 @@ def test_sampling_skips_disabled_stages(
     """Disabled stages should behave as true no-ops in the pipeline."""
     calls: list[str] = []
     trace = _make_iv_trace("a", 0, 1.0, v_shift_mV=0.4, i_shift_nA=0.3)
-    sample_out = sampling.binning(
-        sampling.upsampling(trace, samplingspec=spec),
-        samplingspec=spec,
-    )
+    traces = Traces(traces=[trace], skeys=["a"], indices=[0])
+    sample_out = sampling.binning(traces.resample(nu_Hz=spec.sampling_Hz), samplingspec=spec)
 
     monkeypatch.setattr(
-        pipeline_mod,
-        "offset_correction",
-        lambda traces, *, samplingspec: calls.append("offset") or traces,
+        Traces,
+        "offset",
+        lambda self, *, Voff_mV=0.0, Ioff_nA=0.0: calls.append("offset") or self,
     )
     monkeypatch.setattr(
-        pipeline_mod,
-        "downsampling",
-        lambda traces, *, samplingspec, show_progress: (
-            calls.append("downsample") or traces
-        ),
+        Traces,
+        "low_pass",
+        lambda self, *, cutoff_Hz, order=4: (calls.append("lowpass") or self),
     )
     monkeypatch.setattr(
-        pipeline_mod,
-        "upsampling",
-        lambda traces, *, samplingspec, show_progress: (
-            calls.append("upsample") or traces
-        ),
+        Traces,
+        "resample",
+        lambda self, *, nu_Hz: (calls.append("resample") or self),
     )
     monkeypatch.setattr(
         pipeline_mod,
@@ -350,15 +341,8 @@ def test_sampling_skips_disabled_stages(
             calls.append("binning") or sample_out
         ),
     )
-    monkeypatch.setattr(
-        pipeline_mod,
-        "smooth",
-        lambda samples, *, samplingspec, show_progress: (
-            calls.append("smooth") or samples
-        ),
-    )
 
-    sampling.sample(trace, samplingspec=spec)
+    sampling.sample(traces, samplingspec=spec)
 
     assert calls == expected_calls
 
@@ -458,4 +442,4 @@ def test_offset_correction_rejects_length_mismatch() -> None:
     )
 
     with pytest.raises(ValueError, match="must match the number of traces"):
-        sampling.offset_correction(traces, samplingspec=spec)
+        traces.offset(Voff_mV=spec.Voff_mV, Ioff_nA=spec.Ioff_nA)

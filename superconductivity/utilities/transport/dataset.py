@@ -12,6 +12,61 @@ from ..meta.dataset import Dataset, dataset, validate_gridded_dataset
 from ..meta.label import label
 from ..meta.param import ParamSpec
 
+
+def _import_scipy_ndimage():
+    """Import SciPy ndimage filters lazily."""
+    try:
+        from scipy.ndimage import gaussian_filter1d, median_filter
+    except ImportError as exc:  # pragma: no cover
+        raise ImportError(
+            "SciPy is required for smoothing. Install it with 'pip install scipy'.",
+        ) from exc
+    return gaussian_filter1d, median_filter
+
+
+def _smooth_supported_segment(
+    y: NDArray64,
+    *,
+    median_bins: int,
+    sigma_bins: float,
+    mode: str,
+    gaussian_filter1d,
+    median_filter,
+) -> NDArray64:
+    """Smooth one 1D curve on its finite supported segment."""
+    y_arr = np.asarray(y, dtype=np.float64)
+    finite_idx = np.flatnonzero(np.isfinite(y_arr))
+    if finite_idx.size == 0:
+        return np.asarray(y_arr, dtype=np.float64)
+
+    lo = int(finite_idx[0])
+    hi = int(finite_idx[-1]) + 1
+    y_segment = np.asarray(y_arr[lo:hi], dtype=np.float64)
+    if median_bins > 1:
+        y_segment = np.asarray(
+            median_filter(y_segment, size=median_bins, mode=mode),
+            dtype=np.float64,
+        )
+    if sigma_bins > 0.0:
+        y_segment = np.asarray(
+            gaussian_filter1d(y_segment, sigma=sigma_bins, mode=mode),
+            dtype=np.float64,
+        )
+
+    y_out = np.full_like(y_arr, np.nan, dtype=np.float64)
+    y_out[lo:hi] = y_segment
+    return y_out
+
+
+def _clone_data_spec_with_values(entry: DataSpec, values: object) -> DataSpec:
+    return DataSpec(
+        code_label=entry.code_label,
+        print_label=entry.print_label,
+        html_label=entry.html_label,
+        latex_label=entry.latex_label,
+        values=values,
+    )
+
 _G0_uS = float(G0_muS)
 _DERIVED_LABELS = (
     "dG_uS",
@@ -72,6 +127,72 @@ class TransportDatasetSpec(Dataset):
             params=tuple(
                 entry for entry in self.params if entry.code_label not in labels
             ),
+        )
+
+    def smooth(
+        self,
+        *,
+        median_bins: int = 3,
+        sigma_bins: float = 2.0,
+        mode: str = "nearest",
+    ) -> TransportDatasetSpec:
+        """Return one smoothed transport dataset."""
+        median_bins = int(median_bins)
+        sigma_bins = float(sigma_bins)
+        mode = str(mode).strip().lower()
+        if mode == "":
+            raise ValueError("mode must not be empty.")
+        if median_bins < 0:
+            raise ValueError("median_bins must be >= 0.")
+        if median_bins > 1 and median_bins % 2 == 0:
+            raise ValueError("median_bins must be odd when > 1.")
+        if not np.isfinite(sigma_bins) or sigma_bins < 0.0:
+            raise ValueError("sigma_bins must be finite and >= 0.")
+
+        if median_bins <= 1 and sigma_bins <= 0.0:
+            return TransportDatasetSpec(
+                data=tuple(self.data),
+                axes=tuple(self.axes),
+                params=tuple(self.params),
+            )
+
+        gaussian_filter1d, median_filter = _import_scipy_ndimage()
+        data_entries = []
+        for entry in self.data:
+            if not isinstance(entry, DataSpec):
+                raise TypeError("TransportDatasetSpec smoothing supports DataSpec only.")
+            values = np.asarray(entry.values, dtype=np.float64)
+            if values.ndim == 1:
+                smoothed = _smooth_supported_segment(
+                    values,
+                    median_bins=median_bins,
+                    sigma_bins=sigma_bins,
+                    mode=mode,
+                    gaussian_filter1d=gaussian_filter1d,
+                    median_filter=median_filter,
+                )
+            elif values.ndim == 2:
+                smoothed = np.vstack(
+                    [
+                        _smooth_supported_segment(
+                            row,
+                            median_bins=median_bins,
+                            sigma_bins=sigma_bins,
+                            mode=mode,
+                            gaussian_filter1d=gaussian_filter1d,
+                            median_filter=median_filter,
+                        )
+                        for row in values
+                    ]
+                )
+            else:
+                raise ValueError("TransportDatasetSpec smoothing supports only 1D/2D data.")
+            data_entries.append(_clone_data_spec_with_values(entry, smoothed))
+
+        return TransportDatasetSpec(
+            data=tuple(data_entries),
+            axes=tuple(self.axes),
+            params=tuple(self.params),
         )
 
     def __getitem__(self, key: str):
