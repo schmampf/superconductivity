@@ -101,6 +101,30 @@ def require_all_finite(
         raise ValueError(f"{name} must contain only finite values.")
 
 
+def require_positive_float(
+    value: float,
+    name: str = "value",
+) -> float:
+    """Require one scalar float to be finite and strictly positive.
+
+    Parameters
+    ----------
+    value : float
+        Input scalar value.
+    name : str, default="value"
+        Name used in the error message.
+
+    Returns
+    -------
+    float
+        Validated scalar value.
+    """
+    value = float(value)
+    if not np.isfinite(value) or value <= 0.0:
+        raise ValueError(f"{name} must be finite and > 0.")
+    return value
+
+
 def is_int_like(value: object) -> bool:
     """Return whether one object should be treated as an integer index."""
     return isinstance(value, (int, np.integer)) and not isinstance(value, bool)
