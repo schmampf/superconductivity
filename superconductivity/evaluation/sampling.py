@@ -271,4 +271,8 @@ def sample(
     return samples
 
 
-__all__ = ["SamplingSpec", "binning", "sample"]
+__all__ = [
+    "SamplingSpec",
+    "binning",
+    "sample",
+]
