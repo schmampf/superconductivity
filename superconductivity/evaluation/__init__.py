@@ -1,11 +1,7 @@
 from .analysis import (
     OffsetSpec,
     OffsetDataset,
-    PSDSpec,
-    PSDTrace,
-    PSDTraces,
     offset_analysis,
-    psd_analysis,
 )
 from .calibration import CalibrationSpec, calibrate
 from .sampling import (
@@ -55,10 +51,6 @@ __all__ = [
     "OffsetSpec",
     "OffsetDataset",
     "offset_analysis",
-    "PSDSpec",
-    "PSDTrace",
-    "PSDTraces",
-    "psd_analysis",
     "AxisSpec",
     "CalibrationSpec",
     "calibrate",

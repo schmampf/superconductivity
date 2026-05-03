@@ -43,6 +43,11 @@ class TraceSpec:
 class Trace(Dataset):
     """One trace stored as a dataset."""
 
+    _dt_s: float | None = field(init=False, default=None, repr=False, compare=False)
+    _psd_cache: tuple[NDArray64, NDArray64, NDArray64] | None = field(
+        init=False, default=None, repr=False, compare=False
+    )
+
     def __init__(
         self,
         *,
@@ -61,6 +66,8 @@ class Trace(Dataset):
         object.__setattr__(self, "axes", trace_ds.axes)
         object.__setattr__(self, "params", trace_ds.params)
         object.__setattr__(self, "_lookup", trace_ds._lookup)
+        object.__setattr__(self, "_dt_s", None)
+        object.__setattr__(self, "_psd_cache", None)
 
     def __getitem__(self, key: str):
         return Dataset.__getitem__(self, key)
@@ -76,6 +83,120 @@ class Trace(Dataset):
     @property
     def V_mV(self) -> DataSpec:
         return Dataset.__getitem__(self, "V_mV")
+
+    @property
+    def dt_s(self) -> float:
+        """Return the median time spacing."""
+        if self._dt_s is None:
+            t_values = np.asarray(self.t_s.values, dtype=np.float64).reshape(-1)
+            if t_values.size < 2:
+                raise ValueError("t_s must contain at least two points.")
+            diffs = np.diff(t_values)
+            if np.any(diffs <= 0.0):
+                raise ValueError("t_s must be strictly increasing.")
+            object.__setattr__(self, "_dt_s", float(np.median(diffs)))
+        return float(self._dt_s)
+
+    @property
+    def nu_Hz(self) -> float:
+        """Return the sampling rate."""
+        return 1.0 / self.dt_s
+
+    def _compute_psd(self) -> tuple[NDArray64, NDArray64, NDArray64]:
+        """Compute current and voltage PSD arrays."""
+        t_arr = np.asarray(self.t_s.values, dtype=np.float64).reshape(-1)
+        i_arr = np.asarray(self.I_nA.values, dtype=np.float64).reshape(-1)
+        v_arr = np.asarray(self.V_mV.values, dtype=np.float64).reshape(-1)
+
+        n = int(t_arr.size)
+        if n < 2:
+            raise ValueError("t_s must contain at least two points.")
+
+        Iwork = i_arr - np.mean(i_arr)
+        Vwork = v_arr - np.mean(v_arr)
+        w = np.hanning(n).astype(np.float64)
+        fs_Hz = self.nu_Hz
+        w2_sum = float(np.sum(w * w))
+        if not np.isfinite(w2_sum) or w2_sum <= 0.0:
+            raise ValueError("Invalid window normalization.")
+
+        Ifft_nA = np.fft.rfft(Iwork * w)
+        Vfft_mV = np.fft.rfft(Vwork * w)
+
+        Ipsd_nA2s = (np.abs(Ifft_nA) ** 2) / (fs_Hz * w2_sum)
+        Vpsd_mV2s = (np.abs(Vfft_mV) ** 2) / (fs_Hz * w2_sum)
+        if n % 2 == 0:
+            if Ipsd_nA2s.size > 2:
+                Ipsd_nA2s[1:-1] *= 2.0
+                Vpsd_mV2s[1:-1] *= 2.0
+        else:
+            if Ipsd_nA2s.size > 1:
+                Ipsd_nA2s[1:] *= 2.0
+                Vpsd_mV2s[1:] *= 2.0
+        f_Hz = np.fft.rfftfreq(n, d=self.dt_s)
+        return (
+            np.asarray(Ipsd_nA2s, dtype=np.float64),
+            np.asarray(Vpsd_mV2s, dtype=np.float64),
+            np.asarray(f_Hz, dtype=np.float64),
+        )
+
+    def _psd(self) -> tuple[NDArray64, NDArray64, NDArray64]:
+        """Return cached PSD arrays."""
+        if self._psd_cache is None:
+            object.__setattr__(self, "_psd_cache", self._compute_psd())
+        return self._psd_cache
+
+    @property
+    def f_Hz(self) -> NDArray64:
+        """Return the PSD frequency axis."""
+        return np.asarray(self._psd()[2], dtype=np.float64)
+
+    @property
+    def Ipsd_nA2s(self) -> NDArray64:
+        """Return the current PSD."""
+        return np.asarray(self._psd()[0], dtype=np.float64)
+
+    @property
+    def Vpsd_mV2s(self) -> NDArray64:
+        """Return the voltage PSD."""
+        return np.asarray(self._psd()[1], dtype=np.float64)
+
+    def resample(self, *, nu_Hz: float) -> Trace:
+        """Return one trace resampled onto one target rate."""
+        nu_Hz = float(nu_Hz)
+        if not np.isfinite(nu_Hz) or nu_Hz <= 0.0:
+            raise ValueError("nu_Hz must be finite and > 0.")
+
+        t_raw = np.asarray(self.t_s.values, dtype=np.float64)
+        v_raw_mV = np.asarray(self.V_mV.values, dtype=np.float64)
+        i_raw_nA = np.asarray(self.I_nA.values, dtype=np.float64)
+        if t_raw.size < 2:
+            raise ValueError("t_s must contain at least two points.")
+        if not (
+            t_raw.shape == v_raw_mV.shape == i_raw_nA.shape
+        ):
+            raise ValueError("t_s, V_mV, and I_nA must have the same shape.")
+        if np.any(~np.isfinite(t_raw)) or np.any(~np.isfinite(v_raw_mV)) or np.any(
+            ~np.isfinite(i_raw_nA)
+        ):
+            raise ValueError("Trace arrays must be finite.")
+        if np.any(np.diff(t_raw) <= 0.0):
+            raise ValueError("t_s must be strictly increasing.")
+
+        t_min = float(np.min(t_raw))
+        t_max = float(np.max(t_raw))
+        dt_s = 1.0 / nu_Hz
+        t_new = np.arange(t_min, t_max + 0.5 * dt_s, dt_s, dtype=np.float64)
+        if t_new.size < 2:
+            t_new = np.linspace(t_min, t_max, 2, dtype=np.float64)
+
+        v_new = np.interp(t_new, t_raw, v_raw_mV)
+        i_new = np.interp(t_new, t_raw, i_raw_nA)
+        return Trace(
+            I_nA=np.asarray(i_new, dtype=np.float64),
+            V_mV=np.asarray(v_new, dtype=np.float64),
+            t_s=np.asarray(t_new, dtype=np.float64),
+        )
 
 
 @dataclass(slots=True, kw_only=True)
@@ -148,6 +269,40 @@ class Traces(Keys):
         if self.yaxis is not None and name == self.yaxis.code_label:
             return self.yaxis
         raise AttributeError(name)
+
+    @property
+    def dt_s(self) -> list[float]:
+        """Return the per-trace median time spacing."""
+        return [trace.dt_s for trace in self.traces]
+
+    @property
+    def nu_Hz(self) -> list[float]:
+        """Return the per-trace sampling rates."""
+        return [trace.nu_Hz for trace in self.traces]
+
+    @property
+    def f_Hz(self) -> list[NDArray64]:
+        """Return the per-trace PSD frequency axes."""
+        return [trace.f_Hz for trace in self.traces]
+
+    @property
+    def Ipsd_nA2s(self) -> list[NDArray64]:
+        """Return the per-trace current PSDs."""
+        return [trace.Ipsd_nA2s for trace in self.traces]
+
+    @property
+    def Vpsd_mV2s(self) -> list[NDArray64]:
+        """Return the per-trace voltage PSDs."""
+        return [trace.Vpsd_mV2s for trace in self.traces]
+
+    def resample(self, *, nu_Hz: float) -> Traces:
+        """Return one resampled trace collection."""
+        return Traces(
+            traces=[trace.resample(nu_Hz=nu_Hz) for trace in self.traces],
+            skeys=self.skeys,
+            indices=self.indices,
+            yaxis=self.yaxis,
+        )
 
 
 def _normalize_skip_edges(

@@ -200,8 +200,7 @@ def downsample_trace(
     nu_Hz: float,
 ) -> Trace:
     """Return one IV trace resampled to one target sampling rate."""
-    t_s, V_mV, I_nA = _downsample_trace_arrays(trace=trace, nu_Hz=nu_Hz)
-    return _copy_trace_with_arrays(trace, V_mV=V_mV, I_nA=I_nA, t_s=t_s)
+    return trace.resample(nu_Hz=nu_Hz)
 
 
 def downsample_traces(
@@ -221,7 +220,7 @@ def downsample_traces(
             unit="trace",
         )
     return Traces(
-        traces=[downsample_trace(trace, nu_Hz=nu_Hz) for trace in iterable],
+        traces=[trace.resample(nu_Hz=nu_Hz) for trace in iterable],
         skeys=traces.specific_keys,
         indices=np.asarray(traces.indices, dtype=np.float64),
         yaxis=traces.yaxis,
