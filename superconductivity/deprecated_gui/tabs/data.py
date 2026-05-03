@@ -7,8 +7,8 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.colors import qualitative
 
-from ...evaluation.traces import FileSpec
-from ...evaluation.traces import data as trace_data_module
+from .._compat import FileSpec
+from .._compat import data as trace_data_module
 
 _DATA_Y_TITLES = {
     "quantity": "Y quantities",

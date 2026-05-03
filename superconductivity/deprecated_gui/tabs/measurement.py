@@ -13,15 +13,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from ...evaluation.traces import (
-    FileSpec,
-    Keys,
-    KeysSpec,
-    TraceSpec,
-    get_keys,
-    get_traces,
-)
-from ...utilities.meta.label import LabelSpec
+from .._compat import FileSpec, Keys, KeysSpec, TraceSpec, get_keys, get_traces
+from .._compat import LabelSpec
 from ..state import _trace_label
 
 _TRACES_TABLE_TITLES = {

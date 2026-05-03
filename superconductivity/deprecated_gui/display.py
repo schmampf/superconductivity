@@ -7,10 +7,8 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from ..evaluation.traces import numeric_yvalue
-from ..utilities.constants import G0_muS
-from ..utilities.types import NDArray64
 from .style import gui_trace_label, gui_trace_style
+from ._compat import G0_muS, NDArray64, numeric_yvalue
 
 _LEFT_STAGE_BUTTON_ORDER = (
     "raw",

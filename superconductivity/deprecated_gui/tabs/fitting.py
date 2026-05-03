@@ -7,7 +7,7 @@ from dataclasses import replace
 import numpy as np
 import pandas as pd
 
-from ...optimizers.bcs import BCSModelConfig, get_model_spec
+from .._compat import BCSModelConfig, get_model_spec
 from ..common import _mapping_frame
 from ..state import _fit_sampling_trace
 

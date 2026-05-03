@@ -7,7 +7,7 @@ from threading import Event
 import numpy as np
 import pandas as pd
 
-from ...evaluation.sampling import Sample, SamplingSpec, sample
+from .._compat import Sample, SamplingSpec, sample
 from ..state import _linspace_from_values
 
 _SAMPLING_GRID_PARAMETER_LABELS = {

@@ -4,18 +4,29 @@ from typing import Optional, TypedDict
 
 import numpy as np
 
-from ..evaluation.traces import Trace, numeric_yvalue
-from ..evaluation.analysis import OffsetDataset, OffsetSpec
-from ..evaluation.analysis import PSDTrace
-from ..evaluation.sampling import Sample, SamplingSpec
-from ..optimizers.bcs import (
+from ._compat import (
+    OffsetDataset,
+    OffsetSpec,
+    Trace,
+    PSDTrace,
+    Sample,
+    SamplingSpec,
+    numeric_yvalue,
+)
+from ._compat import (
     BCSModelConfig,
     ParameterSpec,
     SolutionDict,
-    fit_model,
     get_model_spec,
 )
-from ..utilities.types import NDArray64
+
+NDArray64 = object
+
+
+def fit_model(*args, **kwargs):
+    from ..optimizers.bcs import fit_model as _fit_model
+
+    return _fit_model(*args, **kwargs)
 
 _DEFAULT_MODEL = "bcs_conv_jax"
 _DEFAULT_SHARED_NU_HZ = 13.7

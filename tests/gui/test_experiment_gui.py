@@ -13,10 +13,10 @@ import pytest
 pytest.importorskip("panel")
 pytest.importorskip("jax")
 
-from superconductivity.evaluation.analysis.offset import OffsetSpec, offset_analysis
-from superconductivity.evaluation.analysis.psd import PSDSpec, PSDTraces, psd_analysis
-from superconductivity.evaluation.sampling import Samples, SamplingSpec, sample
-from superconductivity.evaluation.traces import (
+from superconductivity.deprecated_gui._compat import OffsetSpec, offset_analysis
+from superconductivity.deprecated_gui._compat import PSDSpec, PSDTraces, psd_analysis
+from superconductivity.deprecated_gui._compat import Samples, SamplingSpec, sample
+from superconductivity.deprecated_gui._compat import (
     FileSpec,
     Keys,
     KeysSpec,
@@ -25,18 +25,15 @@ from superconductivity.evaluation.traces import (
     Traces,
     TraceSpec,
 )
-from superconductivity.utilities.meta.axis import AxisSpec
-from superconductivity.utilities.meta.param import ParamSpec
-from superconductivity.utilities.meta.label import LabelSpec
-from superconductivity.utilities.meta.param import param
-from superconductivity.gui import GUIPanel, gui, gui_app
+from superconductivity.deprecated_gui._compat import LabelSpec
+from superconductivity.deprecated_gui._compat import param
+from superconductivity.deprecated_gui import GUIPanel, gui, gui_app
 
-gui_mod = importlib.import_module("superconductivity.gui.app")
-gui_data_mod = importlib.import_module("superconductivity.gui.tabs.data")
+gui_mod = importlib.import_module("superconductivity.deprecated_gui.app")
+gui_data_mod = importlib.import_module("superconductivity.deprecated_gui.tabs.data")
 gui_measurement_mod = importlib.import_module(
-    "superconductivity.gui.tabs.measurement",
+    "superconductivity.deprecated_gui.tabs.measurement",
 )
-gui_file_mod = importlib.import_module("superconductivity.evaluation.traces.file")
 
 
 def _trace_by_name(figure, name: str):
@@ -255,9 +252,9 @@ def test_gui_app_builds_without_server() -> None:
     assert panel._sampling_batch_stop_button.disabled is True
     assert panel._sampling_batch_progress.value == 0
     assert panel._sampling_stage_group.value == [
-        "apply_offset_correction",
-        "apply_downsampling",
-        "apply_upsampling",
+        "apply_offset",
+        "apply_lowpass",
+        "apply_resampling",
         "apply_smoothing",
     ]
     assert "Downsampled" in panel._experimental_legend.object
@@ -278,14 +275,14 @@ def test_gui_app_builds_without_server() -> None:
     assert panel._offset_info_table.titles["parameter"] == "Parameter"
     assert panel._offset_info_table.titles["value"] == "Value"
     assert offset_info_rows.at["nu_Hz", "parameter"] == "<i>&nu;</i> (Hz)"
-    assert offset_info_rows.at["N_up", "parameter"] == ("<i>N</i><sub>up</sub>")
+    assert offset_info_rows.at["sampling_Hz", "parameter"] == ("<i>&nu;</i> (Hz)")
     assert offset_info_rows.at["Voff_mV", "parameter"] == (
         "<i>V</i><sub>off</sub> (mV)"
     )
     assert offset_info_rows.at["Ioff_nA", "parameter"] == (
         "<i>I</i><sub>off</sub> (nA)"
     )
-    assert isinstance(offset_info_rows.at["N_up", "value"], int)
+    assert isinstance(offset_info_rows.at["sampling_Hz", "value"], (int, float))
     assert panel._offset_grid_table.value.iloc[0]["parameter"] == (
         "<i>V</i><sub>bins</sub> (mV)"
     )
@@ -310,12 +307,12 @@ def test_gui_app_builds_without_server() -> None:
     assert panel._sampling_info_table.titles["parameter"] == "Parameter"
     assert panel._sampling_info_table.titles["value"] == "Value"
     assert sampling_info_rows.at["nu_Hz", "parameter"] == "<i>&nu;</i> (Hz)"
-    assert sampling_info_rows.at["N_up", "parameter"] == ("<i>N</i><sub>up</sub>")
+    assert sampling_info_rows.at["sampling_Hz", "parameter"] == ("<i>&nu;</i> (Hz)")
     assert sampling_info_rows.at["nu_Hz", "value"] == pytest.approx(
         panel._sampling_spec.nu_Hz
     )
     assert sampling_info_rows.at["N_up", "value"] == pytest.approx(
-        panel._sampling_spec.N_up
+        panel._sampling_spec.sampling_Hz
     )
     assert isinstance(sampling_info_rows.at["N_up", "value"], int)
     assert sampling_smoothing_rows.at["median_bins", "parameter"] == (
@@ -424,11 +421,11 @@ def test_gui_app_accepts_spec_presets() -> None:
         Ibins_nA=np.linspace(-4.0, 4.0, 81, dtype=np.float64),
         Voff_mV=np.linspace(-0.4, 0.4, 41, dtype=np.float64),
         Ioff_nA=np.linspace(-0.3, 0.3, 31, dtype=np.float64),
-        nu_Hz=11.0,
-        N_up=7,
+        cutoff_Hz=11.0,
+        sampling_Hz=11.0,
     )
     sampling_spec = SamplingSpec(
-        N_up=6,
+        sampling_Hz=6,
         Vbins_mV=np.linspace(-0.25, 0.25, 41, dtype=np.float64),
         Ibins_nA=np.linspace(-3.0, 3.0, 61, dtype=np.float64),
         apply_smoothing=True,
@@ -473,11 +470,11 @@ def test_gui_app_accepts_spec_presets() -> None:
     assert panel._experimental_detrend is psd_spec.detrend
     assert experimental_setting_rows.at["detrend", "value"] is False
     assert offset_rows.at["nu_Hz", "value"] == pytest.approx(11.0)
-    assert offset_rows.at["N_up", "value"] == 7
+    assert offset_rows.at["sampling_Hz", "value"] == pytest.approx(11.0)
     assert np.isfinite(float(offset_rows.at["Voff_mV", "value"]))
     assert np.isfinite(float(offset_rows.at["Ioff_nA", "value"]))
     assert sampling_rows.at["nu_Hz", "value"] == pytest.approx(sampling_spec.nu_Hz)
-    assert sampling_rows.at["N_up", "value"] == 6
+    assert sampling_rows.at["sampling_Hz", "value"] == 6
     assert panel._sampling_spec.apply_smoothing is True
     assert smoothing_rows.at["median_bins", "value"] == 5
     assert smoothing_rows.at["sigma_bins", "value"] == pytest.approx(1.25)
@@ -1455,7 +1452,7 @@ def test_gui_app_accepts_samples_preset() -> None:
         backend="numpy",
     )
     sampling_spec = SamplingSpec(
-        N_up=6,
+        sampling_Hz=6,
         Vbins_mV=np.linspace(-0.25, 0.25, 41, dtype=np.float64),
         Ibins_nA=np.linspace(-3.0, 3.0, 61, dtype=np.float64),
         nu_Hz=13.7,
@@ -1503,7 +1500,7 @@ def test_gui_app_accepts_combined_stage_presets() -> None:
         N_up=param("N_up", 7, fixed=True),
     )
     sampling_spec = SamplingSpec(
-        N_up=6,
+        sampling_Hz=6,
         Vbins_mV=np.linspace(-0.25, 0.25, 41, dtype=np.float64),
         Ibins_nA=np.linspace(-3.0, 3.0, 61, dtype=np.float64),
         nu_Hz=13.7,
@@ -1754,7 +1751,7 @@ def test_apply_buttons_update_expected_pipeline_stages(
         sampling_info_table["key"] == "N_up",
         "value",
     ] = (
-        panel._sampling_spec.N_up + 1
+        panel._sampling_spec.sampling_Hz + 1
     )
     panel._sampling_info_table.value = sampling_info_table
     panel._on_sampling_apply(SimpleNamespace())
@@ -2415,7 +2412,7 @@ def test_sampling_apply_replaces_staged_preset_and_clears_stale_entries() -> Non
         backend="numpy",
     )
     sampling_spec = SamplingSpec(
-        N_up=6,
+        sampling_Hz=6,
         Vbins_mV=np.linspace(-0.25, 0.25, 41, dtype=np.float64),
         Ibins_nA=np.linspace(-3.0, 3.0, 61, dtype=np.float64),
         nu_Hz=13.7,
@@ -2481,7 +2478,7 @@ def test_gui_panel_matches_backend_outputs() -> None:
     assert bool(experimental_setting_rows.at["detrend", "value"]) is True
     offset_rows = _offset_info_rows(panel)
     assert offset_rows.at["nu_Hz", "value"] == pytest.approx(panel._offset_spec.nu_Hz)
-    assert offset_rows.at["N_up", "value"] == panel._offset_spec.N_up
+    assert offset_rows.at["sampling_Hz", "value"] == pytest.approx(panel._offset_spec.sampling_Hz)
     assert offset_rows.at["Voff_mV", "value"] == pytest.approx(
         offset_expected["Voff_mV"]
     )
@@ -2724,9 +2721,9 @@ def test_sampling_stage_group_updates_pipeline_flags() -> None:
     ]
     panel._on_sampling_apply(SimpleNamespace())
 
-    assert panel._sampling_spec.apply_offset_correction is True
-    assert panel._sampling_spec.apply_downsampling is True
-    assert panel._sampling_spec.apply_upsampling is False
+    assert panel._sampling_spec.apply_offset is True
+    assert panel._sampling_spec.apply_lowpass is True
+    assert panel._sampling_spec.apply_resampling is False
     assert panel._sampling_spec.apply_smoothing is False
 
 

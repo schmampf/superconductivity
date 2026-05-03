@@ -7,37 +7,32 @@ from typing import Callable, Optional
 
 import numpy as np
 
-from ..evaluation.traces import FileSpec, Keys, KeysSpec, Trace, TraceSpec, Traces
-from ..evaluation.analysis import (
+from ._compat import (
+    FileSpec,
+    Keys,
+    KeysSpec,
     OffsetDataset,
     OffsetSpec,
+    PSDTrace,
     PSDTraces,
-    offset_analysis,
-)
-from ..evaluation.analysis import PSDSpec, PSDTrace, psd_analysis
-from ..evaluation.sampling import (
+    PSDSpec,
     Sample,
     Samples,
     SamplingSpec,
+    Trace,
+    TraceSpec,
+    Traces,
     binning,
     downsample_trace,
     downsampling,
+    numeric_yvalue,
+    offset_analysis,
     offset_correction,
+    psd_analysis,
+    sample,
+    smooth,
     upsampling,
 )
-from ..evaluation.sampling import smooth
-from ..optimizers.bcs import (
-    BCSModelConfig,
-    ParameterSpec,
-    SolutionDict,
-    get_model_config,
-    get_model_key,
-    get_model_spec,
-    make_bcs_parameters,
-    make_noise_parameters,
-    make_pat_addon_parameters,
-)
-from ..utilities.types import NDArray64
 from .common import _import_panel
 from .display import GUILeftMixin
 from .state import (
@@ -48,6 +43,41 @@ from .state import (
     _default_sampling_spec,
 )
 from .tabs import GUITabsMixin
+from ._compat import NDArray64
+
+BCSModelConfig = object
+ParameterSpec = object
+SolutionDict = dict[str, object]
+
+
+def _import_bcs_module():
+    from ..optimizers import bcs as _bcs
+
+    return _bcs
+
+
+def get_model_config(*args, **kwargs):
+    return _import_bcs_module().get_model_config(*args, **kwargs)
+
+
+def get_model_key(*args, **kwargs):
+    return _import_bcs_module().get_model_key(*args, **kwargs)
+
+
+def get_model_spec(*args, **kwargs):
+    return _import_bcs_module().get_model_spec(*args, **kwargs)
+
+
+def make_bcs_parameters(*args, **kwargs):
+    return _import_bcs_module().make_bcs_parameters(*args, **kwargs)
+
+
+def make_noise_parameters(*args, **kwargs):
+    return _import_bcs_module().make_noise_parameters(*args, **kwargs)
+
+
+def make_pat_addon_parameters(*args, **kwargs):
+    return _import_bcs_module().make_pat_addon_parameters(*args, **kwargs)
 
 _ACTIVE_GUI_SERVER = None
 _ACTIVE_GUI_PANEL: "GUIPanel | None" = None

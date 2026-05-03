@@ -6,13 +6,8 @@ import numpy as np
 import pandas as pd
 from panel.io.model import JSCode
 
-from ...evaluation.analysis import (
-    OffsetDataset,
-    OffsetSpec,
-    offset_analysis,
-)
-from ...evaluation.traces import numeric_yvalue
-from ...utilities.meta import param
+from .._compat import OffsetDataset, OffsetSpec, offset_analysis, numeric_yvalue
+from .._compat import param
 from ..state import _linspace_from_values, _trace_label
 
 _OFFSET_GRID_PARAMETER_LABELS = {

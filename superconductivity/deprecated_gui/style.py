@@ -3,30 +3,18 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Sequence
 
-from ..style.cpd5 import (
-    peach100,
-    rot,
-    schwarz,
-    seeblau35,
-    seeblau65,
-    seeblau100,
-    seegrau65,
-    seegrau100,
-)
-from ..style.plotly import mpl_color_to_plotly
-
 GUI_LINE_WIDTH = 2.0
 GUI_MARKER_SIZE = 4
 
 _GUI_COLORS = {
-    "raw": mpl_color_to_plotly(seegrau65),
-    "downsampled": mpl_color_to_plotly(seegrau100),
-    "offset": mpl_color_to_plotly(peach100),
-    "binned": mpl_color_to_plotly(schwarz),
-    "smoothed": mpl_color_to_plotly(seeblau35),
-    "initial": mpl_color_to_plotly(seeblau65),
-    "fit": mpl_color_to_plotly(seeblau100),
-    "cutoff": mpl_color_to_plotly(rot),
+    "raw": "#a0a6ad",
+    "downsampled": "#73787e",
+    "offset": "#ff8e7b",
+    "binned": "#000000",
+    "smoothed": "#a6e1f4",
+    "initial": "#59c7eb",
+    "fit": "#00a9e0",
+    "cutoff": "#d01556",
 }
 
 _GUI_TRACE_LABELS = {
