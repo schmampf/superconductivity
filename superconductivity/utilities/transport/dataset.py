@@ -104,6 +104,14 @@ class TransportDatasetSpec(Dataset):
     def values(self) -> tuple[object, ...]:
         return tuple(value for _, value in self.items())
 
+    def collection_axes(self) -> tuple[AxisSpec, ...]:
+        """Return axes that are not the transport payload axes."""
+        return tuple(
+            axis_entry
+            for axis_entry in self.axes
+            if axis_entry.code_label not in {"V_mV", "I_nA"}
+        )
+
     @property
     def dG_uS(self) -> DataSpec:
         if self._transport_axis.code_label == "V_mV":
