@@ -125,6 +125,17 @@ def require_positive_float(
     return value
 
 
+def require_positive_int(
+    value: int,
+    name: str = "value",
+) -> int:
+    """Require one scalar int to be strictly positive."""
+    value = int(value)
+    if value <= 0:
+        raise ValueError(f"{name} must be > 0.")
+    return value
+
+
 def is_int_like(value: object) -> bool:
     """Return whether one object should be treated as an integer index."""
     return isinstance(value, (int, np.integer)) and not isinstance(value, bool)
