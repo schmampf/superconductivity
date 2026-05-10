@@ -23,8 +23,6 @@ from .transport import (
 )
 from .cache import (
     ProjectCache,
-    cache_summary,
-    entry_kind,
     list_caches,
     load_cache,
     make_cache,
@@ -45,9 +43,7 @@ __all__ = [
     "ProjectCache",
     "TransportDatasetSpec",
     "axis",
-    "cache_summary",
     "data",
-    "entry_kind",
     "label",
     "list_caches",
     "load_cache",

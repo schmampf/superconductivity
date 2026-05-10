@@ -22,8 +22,6 @@ from .evaluation.offset import (
 )
 from .utilities.cache import (
     ProjectCache,
-    cache_summary,
-    entry_kind,
     list_caches,
     load_cache,
     make_cache,

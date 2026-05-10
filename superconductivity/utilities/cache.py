@@ -8,8 +8,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
 _DEFAULT_PROJECTS_PATH = Path(__file__).resolve().parents[2] / "projects"
 
 _INTERNAL_NAMES = {
@@ -182,35 +180,6 @@ def load_cache(
     return cache
 
 
-def entry_kind(value: object) -> str:
-    """Return a coarse UI grouping for one cache entry."""
-    type_name = type(value).__name__
-    if type_name == "TransportDatasetSpec":
-        return "transport"
-    if type_name in {"Trace", "Traces"}:
-        return "traces"
-    if type_name.endswith("Spec"):
-        return "spec"
-    if type_name.endswith("Dataset"):
-        return "dataset"
-    return "misc"
-
-
-def cache_summary(cache: ProjectCache) -> tuple[dict[str, object], ...]:
-    """Return table-friendly summary rows for cache entries."""
-    if not isinstance(cache, ProjectCache):
-        raise TypeError("cache must be a ProjectCache.")
-    return tuple(
-        {
-            "key": key,
-            "kind": entry_kind(value),
-            "type": type(value).__name__,
-            "summary": _entry_summary(value),
-        }
-        for key, value in cache.items.items()
-    )
-
-
 def _resolve_cache_file(
     *,
     name_or_path: str | Path,
@@ -230,75 +199,8 @@ def _resolve_cache_file(
     return direct
 
 
-def _entry_summary(value: object) -> str:
-    shape = _shape_summary(value)
-    if shape:
-        return shape
-    if isinstance(value, Mapping):
-        return f"{len(value)} keys"
-    if isinstance(value, (list, tuple, set, frozenset)):
-        return f"{len(value)} items"
-    if np.isscalar(value):
-        return repr(value)
-    keys = getattr(value, "keys", None)
-    if callable(keys):
-        try:
-            return f"{len(tuple(keys()))} keys"
-        except Exception:
-            return ""
-    return ""
-
-
-def _shape_summary(value: object) -> str:
-    data = getattr(value, "data", None)
-    axes = getattr(value, "axes", None)
-    if data is not None and axes is not None:
-        shapes = [
-            _array_shape(getattr(entry, "values", None))
-            for entry in data
-            if getattr(entry, "values", None) is not None
-        ]
-        axis_labels = [
-            str(getattr(entry, "code_label", ""))
-            for entry in axes
-            if getattr(entry, "code_label", None) is not None
-        ]
-        shape_text = ", ".join(shape for shape in shapes if shape)
-        axis_text = ", ".join(label for label in axis_labels if label)
-        if shape_text and axis_text:
-            return f"shape {shape_text}; axes {axis_text}"
-        if shape_text:
-            return f"shape {shape_text}"
-
-    traces = getattr(value, "traces", None)
-    if traces is not None:
-        try:
-            return f"{len(traces)} traces"
-        except TypeError:
-            return ""
-
-    values = getattr(value, "values", None)
-    if values is not None:
-        shape = _array_shape(values)
-        if shape:
-            return f"shape {shape}"
-    return ""
-
-
-def _array_shape(value: Any) -> str:
-    try:
-        shape = tuple(np.asarray(value).shape)
-    except Exception:
-        return ""
-    if shape == ():
-        return "scalar"
-    return "x".join(str(size) for size in shape)
-
-
 __all__ = [
     "ProjectCache",
-    "cache_summary",
-    "entry_kind",
     "list_caches",
     "load_cache",
     "make_cache",

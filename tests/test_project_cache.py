@@ -6,8 +6,6 @@ import numpy as np
 
 from superconductivity.utilities.cache import (
     ProjectCache,
-    cache_summary,
-    entry_kind,
     list_caches,
     load_cache,
     make_cache,
@@ -141,59 +139,3 @@ def test_list_caches_discovers_project_cache_files(tmp_path: Path) -> None:
 
 def test_list_caches_returns_empty_for_missing_directory(tmp_path: Path) -> None:
     assert list_caches(tmp_path) == ()
-
-
-def test_entry_kind_groups_common_transportlab_objects(tmp_path: Path) -> None:
-    cache = make_cache("demo", path=tmp_path)
-    cache.exp_v = _make_transport_dataset()
-    cache.offsetspec = _make_sampling_spec()
-    cache.answer = 42
-
-    assert entry_kind(cache.exp_v) == "transport"
-    assert entry_kind(cache.offsetspec) == "spec"
-    assert entry_kind(cache.answer) == "misc"
-
-
-def test_cache_summary_returns_table_friendly_rows(tmp_path: Path) -> None:
-    cache = make_cache("demo", path=tmp_path)
-    cache.exp_v = _make_transport_dataset()
-    cache.offsetspec = _make_sampling_spec()
-    cache.answer = 42
-
-    rows = cache_summary(cache)
-
-    assert rows[0] == {
-        "key": "exp_v",
-        "kind": "transport",
-        "type": "TransportDatasetSpec",
-        "summary": "shape 3; axes V_mV",
-    }
-    assert rows[1] == {
-        "key": "offsetspec",
-        "kind": "spec",
-        "type": "SamplingSpec",
-        "summary": "13 keys",
-    }
-    assert rows[2] == {
-        "key": "answer",
-        "kind": "misc",
-        "type": "int",
-        "summary": "42",
-    }
-
-
-def test_remove_updates_cache_summary(tmp_path: Path) -> None:
-    cache = make_cache("demo", path=tmp_path)
-    cache.exp_v = _make_transport_dataset()
-    cache.offsetspec = _make_sampling_spec()
-
-    cache.remove("offsetspec")
-
-    assert cache_summary(cache) == (
-        {
-            "key": "exp_v",
-            "kind": "transport",
-            "type": "TransportDatasetSpec",
-            "summary": "shape 3; axes V_mV",
-        },
-    )
