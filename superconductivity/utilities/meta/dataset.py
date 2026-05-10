@@ -48,7 +48,11 @@ class Dataset:
 
     def __getattr__(self, name: str) -> LabelSpec:
         try:
-            return self._lookup[name]
+            lookup = object.__getattribute__(self, "_lookup")
+        except AttributeError as exc:
+            raise AttributeError(name) from exc
+        try:
+            return lookup[name]
         except KeyError as exc:
             raise AttributeError(name) from exc
 

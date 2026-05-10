@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Sequence
+from typing import Sequence
 
 import numpy as np
 
@@ -18,9 +18,7 @@ class CalibrationSpec:
     """Normalized collection-axis calibration specification."""
 
     label: str | LabelSpec
-    transform: Callable[..., NDArray64] | None = None
-    params: float | Sequence[float] = 1.0
-    lookup: Sequence[float] | NDArray64 | None = None
+    lookup: Sequence[float] | NDArray64
 
     def __post_init__(self) -> None:
         if isinstance(self.label, str):
@@ -28,16 +26,11 @@ class CalibrationSpec:
         elif not isinstance(self.label, LabelSpec):
             raise ValueError("label must be a string or LabelSpec.")
 
-        has_transform = self.transform is not None
-        has_lookup = self.lookup is not None
-        if has_transform == has_lookup:
-            raise ValueError(
-                "exactly one of transform or lookup must be provided.",
-            )
+        object.__setattr__(self, "lookup", _normalize_lookup(self.lookup))
 
-        object.__setattr__(self, "params", _normalize_params(self.params))
-        if has_lookup:
-            object.__setattr__(self, "lookup", _normalize_lookup(self.lookup))
+    def keys(self) -> tuple[str, ...]:
+        """Return public mapping-style keys."""
+        return ("label", "lookup")
 
 
 def calibrate(
@@ -97,15 +90,7 @@ def _apply_calibration(
     source_axis: NDArray64,
     spec: CalibrationSpec,
 ) -> NDArray64:
-    if spec.transform is not None:
-        mapped = np.asarray(
-            spec.transform(source_axis, *spec.params),
-            dtype=np.float64,
-        )
-    else:
-        assert spec.lookup is not None
-        mapped = np.asarray(spec.lookup, dtype=np.float64)
-
+    mapped = np.asarray(spec.lookup, dtype=np.float64)
     if mapped.shape != source_axis.shape:
         raise ValueError(
             "calibrated axis must have the same shape as the source axis.",
@@ -131,23 +116,12 @@ def _replace_collection_axis(
     )
 
 
-def _normalize_params(params: float | Sequence[float]) -> tuple[float, ...]:
-    if np.isscalar(params):
-        values = (float(params),)
-    else:
-        values = tuple(float(value) for value in params)
-        if len(values) == 0:
-            raise ValueError("params must not be empty.")
-    if not all(np.isfinite(value) for value in values):
-        raise ValueError("params must be finite.")
-    return values
-
-
-def _normalize_lookup(values: Sequence[float] | NDArray64 | None) -> NDArray64:
-    assert values is not None
+def _normalize_lookup(values: Sequence[float] | NDArray64) -> NDArray64:
     lookup = np.asarray(values, dtype=np.float64).reshape(-1)
     if lookup.size == 0:
         raise ValueError("lookup must not be empty.")
+    if np.any(~np.isfinite(lookup)):
+        raise ValueError("lookup must be finite.")
     return lookup
 
 

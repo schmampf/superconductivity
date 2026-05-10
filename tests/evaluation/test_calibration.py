@@ -52,7 +52,7 @@ def _make_samples() -> tuple[TransportDatasetSpec, TransportDatasetSpec]:
     return exp_v, exp_i
 
 
-def test_function_calibration_relabels_collection_axis() -> None:
+def test_lookup_calibration_relabels_collection_axis() -> None:
     exp_v, exp_i = _make_samples()
 
     cal_v, cal_i = calibrate(
@@ -60,8 +60,7 @@ def test_function_calibration_relabels_collection_axis() -> None:
         exp_i,
         calibrationspec=CalibrationSpec(
             label="A_mV",
-            transform=lambda y, a: y * a,
-            params=2.0,
+            lookup=np.asarray([0.0, 2.0, 4.0], dtype=np.float64),
         ),
     )
 
@@ -71,32 +70,6 @@ def test_function_calibration_relabels_collection_axis() -> None:
     assert np.allclose(cal_i.V_mV.values, exp_i.V_mV.values, equal_nan=True)
     assert not hasattr(cal_v, "Aout_mV")
     assert not hasattr(cal_i, "Aout_mV")
-
-
-def test_function_calibration_accepts_scalar_and_tuple_params() -> None:
-    exp_v, exp_i = _make_samples()
-
-    scalar_v, scalar_i = calibrate(
-        exp_v,
-        exp_i,
-        calibrationspec=CalibrationSpec(
-            label="A_mV",
-            transform=lambda y, a: y + a,
-            params=1.0,
-        ),
-    )
-    tuple_v, tuple_i = calibrate(
-        exp_v,
-        exp_i,
-        calibrationspec=CalibrationSpec(
-            label="A_mV",
-            transform=lambda y, a: y + a,
-            params=(1.0,),
-        ),
-    )
-
-    assert np.allclose(scalar_v.A_mV.values, tuple_v.A_mV.values)
-    assert np.allclose(scalar_i.A_mV.values, tuple_i.A_mV.values)
 
 
 def test_lookup_calibration_replaces_collection_axis_by_index() -> None:
@@ -115,6 +88,15 @@ def test_lookup_calibration_replaces_collection_axis_by_index() -> None:
     assert np.allclose(cal_i.A_mV.values, [0.0, 5.0, 10.0])
 
 
+def test_calibration_spec_keys() -> None:
+    spec = CalibrationSpec(
+        label="A_mV",
+        lookup=np.asarray([0.0, 5.0, 10.0], dtype=np.float64),
+    )
+
+    assert spec.keys() == ("label", "lookup")
+
+
 def test_calibration_rejects_missing_collection_axis() -> None:
     exp_v = TransportDatasetSpec(
         data=(data("I_nA", np.asarray([1.0, 2.0], dtype=np.float64)),),
@@ -131,8 +113,7 @@ def test_calibration_rejects_missing_collection_axis() -> None:
             exp_i,
             calibrationspec=CalibrationSpec(
                 label="A_mV",
-                transform=lambda y, a: y * a,
-                params=2.0,
+                lookup=np.asarray([0.0, 2.0], dtype=np.float64),
             ),
         )
 
@@ -153,43 +134,12 @@ def test_calibration_rejects_mismatched_collection_axes() -> None:
             exp_i_bad,
             calibrationspec=CalibrationSpec(
                 label="A_mV",
-                transform=lambda y, a: y * a,
-                params=2.0,
+                lookup=np.asarray([0.0, 2.0, 4.0], dtype=np.float64),
             ),
         )
 
 
-def test_calibration_rejects_wrong_transform_shape() -> None:
-    exp_v, exp_i = _make_samples()
-
-    with pytest.raises(ValueError, match="same shape"):
-        calibrate(
-            exp_v,
-            exp_i,
-            calibrationspec=CalibrationSpec(
-                label="A_mV",
-                transform=lambda y, a: y[:-1] * a,
-                params=2.0,
-            ),
-        )
-
-
-def test_calibration_rejects_non_finite_transform_output() -> None:
-    exp_v, exp_i = _make_samples()
-
-    with pytest.raises(ValueError, match="must be finite"):
-        calibrate(
-            exp_v,
-            exp_i,
-            calibrationspec=CalibrationSpec(
-                label="A_mV",
-                transform=lambda y, a: np.asarray([0.0, np.nan, 2.0]),
-                params=2.0,
-            ),
-        )
-
-
-def test_calibration_rejects_lookup_length_mismatch() -> None:
+def test_calibration_rejects_wrong_lookup_shape() -> None:
     exp_v, exp_i = _make_samples()
 
     with pytest.raises(ValueError, match="same shape"):
@@ -203,15 +153,20 @@ def test_calibration_rejects_lookup_length_mismatch() -> None:
         )
 
 
-def test_calibration_spec_rejects_invalid_transform_lookup_configuration() -> None:
-    with pytest.raises(ValueError, match="exactly one of transform or lookup"):
-        CalibrationSpec(label="A_mV")
+def test_calibration_spec_rejects_invalid_lookup() -> None:
+    with pytest.raises(TypeError):
+        CalibrationSpec(label="A_mV")  # type: ignore[call-arg]
 
-    with pytest.raises(ValueError, match="exactly one of transform or lookup"):
+    with pytest.raises(ValueError, match="lookup must not be empty"):
         CalibrationSpec(
             label="A_mV",
-            transform=lambda y, a: y * a,
-            lookup=np.asarray([0.0, 1.0], dtype=np.float64),
+            lookup=np.asarray([], dtype=np.float64),
+        )
+
+    with pytest.raises(ValueError, match="lookup must be finite"):
+        CalibrationSpec(
+            label="A_mV",
+            lookup=np.asarray([0.0, np.nan], dtype=np.float64),
         )
 
 
@@ -244,8 +199,7 @@ def test_sample_then_calibrate_only_changes_collection_axis() -> None:
         exp_i,
         calibrationspec=CalibrationSpec(
             label="A_mV",
-            transform=lambda y, a: y * a,
-            params=2.0,
+            lookup=np.asarray([2.0, 10.0], dtype=np.float64),
         ),
     )
 

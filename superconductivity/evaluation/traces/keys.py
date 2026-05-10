@@ -130,8 +130,12 @@ class Keys:
         return self.yaxis
 
     def __getattr__(self, name: str):
-        if name == self.yaxis.code_label:
-            return self.yaxis
+        try:
+            yaxis = object.__getattribute__(self, "yaxis")
+        except AttributeError as exc:
+            raise AttributeError(name) from exc
+        if name == yaxis.code_label:
+            return yaxis
         raise AttributeError(name)
 
     def __getitem__(self, key: str) -> object:

@@ -336,8 +336,12 @@ class Traces(Keys):
         return [trace.t_s for trace in self.traces]
 
     def __getattr__(self, name: str):
-        if self.yaxis is not None and name == self.yaxis.code_label:
-            return self.yaxis
+        try:
+            yaxis = object.__getattribute__(self, "yaxis")
+        except AttributeError as exc:
+            raise AttributeError(name) from exc
+        if yaxis is not None and name == yaxis.code_label:
+            return yaxis
         raise AttributeError(name)
 
     @property
