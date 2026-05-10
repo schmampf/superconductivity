@@ -7,10 +7,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..utilities.cache import ProjectCache
-from .cache_tab import cache_tab
-from .evaluation_tab import evaluation_tab
-from .fitting_tab import fitting_tab
-from .simulation_tab import simulation_tab
+from .cache import cache_tab
+from .evaluation import evaluation_tab
+from .fitting import fitting_tab
+from .simulation import simulation_tab
 from .visualization import visualization_app as _visualization_app
 
 _ACTIVE_TRANSPORT_LAB_SERVER = None
