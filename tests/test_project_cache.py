@@ -6,6 +6,9 @@ import numpy as np
 
 from superconductivity.utilities.cache import (
     ProjectCache,
+    cache_summary,
+    entry_kind,
+    list_caches,
     load_cache,
     make_cache,
     project_cache_path,
@@ -36,10 +39,18 @@ def _make_sampling_spec() -> SamplingSpec:
     )
 
 
+def test_project_cache_default_path_uses_repo_projects() -> None:
+    cache = make_cache("demo")
+
+    assert cache.path.name == "projects"
+    assert cache.path.parent.name == "superconductivity"
+    assert cache.file_path == cache.path / "demo.pkl"
+
+
 def test_project_cache_default_path_is_single_pickle(tmp_path: Path) -> None:
     path = project_cache_path(tmp_path, "demo")
 
-    assert path == tmp_path / ".cache" / "demo.pkl"
+    assert path == tmp_path / "demo.pkl"
 
 
 def test_project_cache_round_trips_arbitrary_items(tmp_path: Path) -> None:
@@ -51,7 +62,7 @@ def test_project_cache_round_trips_arbitrary_items(tmp_path: Path) -> None:
     path = cache.save_cache()
     loaded = load_cache("demo", path=tmp_path)
 
-    assert path == tmp_path / ".cache" / "demo.pkl"
+    assert path == tmp_path / "demo.pkl"
     assert loaded.name == "demo"
     assert loaded.path == tmp_path
     assert loaded.file_path == path
@@ -81,6 +92,22 @@ def test_project_cache_supports_dict_style_access(tmp_path: Path) -> None:
     assert cache.keys() == ("exp_v", "offsetspec")
 
 
+def test_project_cache_remove_entries(tmp_path: Path) -> None:
+    cache = ProjectCache(name="demo", path=tmp_path)
+    cache.exp_v = _make_transport_dataset()
+    cache.offsetspec = _make_sampling_spec()
+    cache.offsetanalysis = {"Voff_mV": np.asarray([0.1, 0.2])}
+
+    cache.remove("offsetspec")
+
+    assert cache.keys() == ("exp_v", "offsetanalysis")
+    assert "offsetspec" not in cache
+
+    cache.remove("exp_v", "offsetanalysis")
+
+    assert cache.keys() == ()
+
+
 def test_project_cache_save_and_load_by_explicit_path(tmp_path: Path) -> None:
     cache = make_cache("demo", path=tmp_path)
     cache.answer = 42
@@ -102,3 +129,71 @@ def test_project_cache_imports_from_utilities(tmp_path: Path) -> None:
 
     assert loaded.name == "demo"
     assert np.allclose(loaded.exp_v.I_nA.values, [0.0, 1.0, 2.0])
+
+
+def test_list_caches_discovers_project_cache_files(tmp_path: Path) -> None:
+    make_cache("beta", path=tmp_path).save_cache()
+    make_cache("alpha", path=tmp_path).save_cache()
+    (tmp_path / "root.pkl").write_text("ignore", encoding="utf-8")
+
+    assert list_caches(tmp_path) == ("alpha", "beta", "root")
+
+
+def test_list_caches_returns_empty_for_missing_directory(tmp_path: Path) -> None:
+    assert list_caches(tmp_path) == ()
+
+
+def test_entry_kind_groups_common_transportlab_objects(tmp_path: Path) -> None:
+    cache = make_cache("demo", path=tmp_path)
+    cache.exp_v = _make_transport_dataset()
+    cache.offsetspec = _make_sampling_spec()
+    cache.answer = 42
+
+    assert entry_kind(cache.exp_v) == "transport"
+    assert entry_kind(cache.offsetspec) == "spec"
+    assert entry_kind(cache.answer) == "misc"
+
+
+def test_cache_summary_returns_table_friendly_rows(tmp_path: Path) -> None:
+    cache = make_cache("demo", path=tmp_path)
+    cache.exp_v = _make_transport_dataset()
+    cache.offsetspec = _make_sampling_spec()
+    cache.answer = 42
+
+    rows = cache_summary(cache)
+
+    assert rows[0] == {
+        "key": "exp_v",
+        "kind": "transport",
+        "type": "TransportDatasetSpec",
+        "summary": "shape 3; axes V_mV",
+    }
+    assert rows[1] == {
+        "key": "offsetspec",
+        "kind": "spec",
+        "type": "SamplingSpec",
+        "summary": "13 keys",
+    }
+    assert rows[2] == {
+        "key": "answer",
+        "kind": "misc",
+        "type": "int",
+        "summary": "42",
+    }
+
+
+def test_remove_updates_cache_summary(tmp_path: Path) -> None:
+    cache = make_cache("demo", path=tmp_path)
+    cache.exp_v = _make_transport_dataset()
+    cache.offsetspec = _make_sampling_spec()
+
+    cache.remove("offsetspec")
+
+    assert cache_summary(cache) == (
+        {
+            "key": "exp_v",
+            "kind": "transport",
+            "type": "TransportDatasetSpec",
+            "summary": "shape 3; axes V_mV",
+        },
+    )

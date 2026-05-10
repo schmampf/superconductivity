@@ -45,6 +45,25 @@ flow are stable.
 
 ## Core Pipelines
 
+## Barebone Launch
+
+The current first implementation provides two browser routes:
+
+- `/visualization`
+- `/workspace`
+
+Launch it from Python with:
+
+```python
+from superconductivity.TransportLab import serve_transport_lab
+
+server = serve_transport_lab()
+```
+
+By default this starts a local Panel server on port `5010` and opens both
+browser tabs. Pass `open_browser=False` to start the server without opening
+tabs, or pass a different `port` if `5010` is already occupied.
+
 ### Cache
 
 The cache is the authoritative project state for a TransportLab session. A
