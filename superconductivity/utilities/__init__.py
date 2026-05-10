@@ -21,6 +21,13 @@ from .transport import (
     switch_bias,
     validate_reduced_dataset,
 )
+from .cache import (
+    ProjectCache,
+    load_cache,
+    make_cache,
+    project_cache_path,
+    save_cache,
+)
 
 __all__ = [
     "AxisSpec",
@@ -32,13 +39,18 @@ __all__ = [
     "LabelSpec",
     "LABELS",
     "ParamSpec",
+    "ProjectCache",
     "TransportDatasetSpec",
     "axis",
     "data",
     "label",
+    "load_cache",
+    "make_cache",
     "param",
+    "project_cache_path",
     "reduced_units",
     "reduced_dataset",
+    "save_cache",
     "switch_bias",
     "validate_reduced_dataset",
     "mapping",

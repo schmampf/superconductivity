@@ -232,8 +232,8 @@ def test_sample_then_calibrate_only_changes_collection_axis() -> None:
         Vbins_mV=np.linspace(-2.0, 2.0, 81),
         Ibins_nA=np.linspace(-4.0, 4.0, 81),
         apply_smoothing=False,
-        nu_Hz=40.0,
-        N_up=4,
+        sampling_Hz=40.0,
+        cutoff_Hz=4.0,
         Voff_mV=data("Voff_mV", np.asarray([0.4, 0.2], dtype=np.float64)),
         Ioff_nA=data("Ioff_nA", np.asarray([0.3, 0.1], dtype=np.float64)),
     )

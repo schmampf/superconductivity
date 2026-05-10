@@ -20,6 +20,13 @@ from .evaluation.offset import (
     OffsetDataset,
     offset_analysis,
 )
+from .utilities.cache import (
+    ProjectCache,
+    load_cache,
+    make_cache,
+    project_cache_path,
+    save_cache,
+)
 from .evaluation.calibration import CalibrationSpec, calibrate
 from .evaluation.sampling import (
     SamplingSpec,
