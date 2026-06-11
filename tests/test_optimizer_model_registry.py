@@ -26,6 +26,7 @@ BASE_CONFIGS = [
     BCSModelConfig("int", "jax"),
     BCSModelConfig("conv", "np"),
     BCSModelConfig("conv", "jax"),
+    BCSModelConfig("adaptive", "np"),
 ]
 
 
@@ -126,9 +127,34 @@ def test_registry_stacks_noise_after_pat() -> None:
     assert np.allclose(composed, pat_noise)
 
 
+@pytest.mark.skipif(not _SCIPY_AVAILABLE, reason="scipy is unavailable")
+def test_registry_composes_adaptive_pat_and_noise() -> None:
+    V_mV = np.linspace(-0.6, 0.6, 9)
+    config = BCSModelConfig(
+        "adaptive",
+        "np",
+        pat_enabled=True,
+        noise_enabled=True,
+    )
+    spec = get_model_spec(config)
+    parameters = [0.2, 0.1, 0.19, 1e-7, 0.03, 8.5, 0.01]
+
+    current = spec.function(V_mV, *parameters)
+
+    assert current.shape == V_mV.shape
+    assert np.all(np.isfinite(current))
+
+
 def test_legacy_aliases_still_resolve() -> None:
+    assert "bcs_adaptive" in MODEL_OPTIONS.values()
     assert "bcs_conv_noise" in MODEL_OPTIONS.values()
     assert "pat_int_jax" in MODEL_OPTIONS.values()
     assert get_model_spec("bcs_int").key == "bcs_int_np"
+    assert get_model_spec("bcs_adaptive").key == "bcs_adaptive_np"
     assert get_model_spec("bcs_conv_noise").key == "bcs_conv_jax_noise"
     assert get_model_spec("pat_int_jax").key == "bcs_int_jax_pat"
+
+
+def test_registry_rejects_adaptive_jax() -> None:
+    with pytest.raises(ValueError, match="requires backend='np'"):
+        BCSModelConfig("adaptive", "jax")

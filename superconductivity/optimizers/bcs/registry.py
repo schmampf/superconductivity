@@ -60,6 +60,12 @@ class BCSModelConfig:
     noise_oversample: int = 64
 
     def __post_init__(self) -> None:
+        if self.kernel not in {"int", "conv", "adaptive"}:
+            raise ValueError(f"Unknown BCS kernel '{self.kernel}'.")
+        if self.backend not in {"np", "jax"}:
+            raise ValueError(f"Unknown BCS backend '{self.backend}'.")
+        if self.kernel == "adaptive" and self.backend != "np":
+            raise ValueError("The adaptive BCS kernel requires backend='np'.")
         noise_oversample = int(self.noise_oversample)
         if noise_oversample < 2:
             raise ValueError("noise_oversample must be >= 2.")
@@ -99,6 +105,10 @@ _BASE_MODEL_SPECS: dict[tuple[Kernel, Backend], _BaseModelSpec] = {
         label="BCS convolution (JAX)",
         html=BCS_CONV_HTML,
     ),
+    ("adaptive", "np"): _BaseModelSpec(
+        label="BCS adaptive integral (SciPy)",
+        html=BCS_INT_HTML,
+    ),
 }
 
 _MODEL_CONFIGS = OrderedDict(
@@ -106,6 +116,7 @@ _MODEL_CONFIGS = OrderedDict(
         ("bcs_int", BCSModelConfig("int", "np")),
         ("bcs_int_jax", BCSModelConfig("int", "jax")),
         ("bcs_conv_jax", BCSModelConfig("conv", "jax")),
+        ("bcs_adaptive", BCSModelConfig("adaptive", "np")),
         ("bcs_conv_noise", BCSModelConfig("conv", "jax", noise_enabled=True)),
         ("pat_int_jax", BCSModelConfig("int", "jax", pat_enabled=True)),
         ("pat_conv_jax", BCSModelConfig("conv", "jax", pat_enabled=True)),
@@ -128,7 +139,7 @@ def _parse_canonical_model(model: str) -> BCSModelConfig:
         raise KeyError(model)
     kernel = parts[1]
     backend = parts[2]
-    if kernel not in {"int", "conv"}:
+    if kernel not in {"int", "conv", "adaptive"}:
         raise KeyError(model)
     if backend not in {"np", "jax"}:
         raise KeyError(model)
@@ -202,7 +213,12 @@ def _energy_grid_summary(E_mV: NDArray64) -> str:
 
 def _compose_info(config: BCSModelConfig) -> OrderedDict[str, str]:
     info = OrderedDict()
-    info["kernel"] = "integral" if config.kernel == "int" else "convolution"
+    kernel_labels = {
+        "int": "integral",
+        "conv": "convolution",
+        "adaptive": "adaptive integral",
+    }
+    info["kernel"] = kernel_labels[config.kernel]
     info["backend"] = "NumPy" if config.backend == "np" else "JAX"
     info["PAT"] = "yes" if config.pat_enabled else "no"
     info["noise"] = "yes" if config.noise_enabled else "no"
@@ -308,14 +324,26 @@ def _resolve_base_function(
     backend: Backend,
 ) -> BaseModelFunction:
     if backend == "np":
-        from ...models.bcs.backend.np import convolution_np, integral_np
+        from ...models.bcs.backend.np import adaptive_np, convolution_np, integral_np
 
-        return integral_np if kernel == "int" else convolution_np
+        if kernel == "int":
+            return integral_np
+        if kernel == "conv":
+            return convolution_np
+        if kernel == "adaptive":
+            return adaptive_np
+        raise ValueError(f"Unknown BCS kernel '{kernel}'.")
     if backend == "jax":
+        if kernel == "adaptive":
+            raise ValueError("The adaptive BCS kernel requires backend='np'.")
         from ...models.bcs.backend.jnp import convolution_jnp, integral_jnp
 
-        return integral_jnp if kernel == "int" else convolution_jnp
-    raise ValueError("Unknown backend/kernel combination.")
+        if kernel == "int":
+            return integral_jnp
+        if kernel == "conv":
+            return convolution_jnp
+        raise ValueError(f"Unknown BCS kernel '{kernel}'.")
+    raise ValueError(f"Unknown BCS backend '{backend}'.")
 
 
 @lru_cache(maxsize=None)
@@ -338,6 +366,7 @@ _MODEL_OPTIONS_ENTRIES = (
     ("BCS integral", "bcs_int"),
     ("BCS integral (JAX)", "bcs_int_jax"),
     ("BCS convolution (JAX)", "bcs_conv_jax"),
+    ("BCS adaptive integral (SciPy)", "bcs_adaptive"),
     ("BCS convolution + noise", "bcs_conv_noise"),
     ("PAT integral (JAX)", "pat_int_jax"),
     ("PAT convolution (JAX)", "pat_conv_jax"),

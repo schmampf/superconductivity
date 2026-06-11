@@ -33,7 +33,7 @@ def get_Ibcs_nA(
     GN_G0: NDArray64 | float,
     T_K: NDArray64 | float,
     Delta_meV: NDArray64 | float,
-    gamma_meV: NDArray64 | float,
+    gamma_meV: NDArray64 | float = 0.0,
     nu_GHz: NDArray64 | float = 0.0,
     A_mV: NDArray64 | float = 0.0,
     sigmaV_mV: NDArray64 | float = 0.0,
@@ -69,7 +69,8 @@ def get_Ibcs_nA(
     backend
         Core BCS backend, ``"np"`` or ``"jax"``.
     kernel
-        Core BCS kernel, ``"int"`` or ``"conv"``.
+        Core BCS kernel, ``"int"``, ``"conv"``, or ``"adaptive"``. The
+        adaptive kernel requires the NumPy backend and SciPy.
 
     Returns
     -------
@@ -288,16 +289,26 @@ def _evaluate_non_gn_current(
 
 def _resolve_base_function(*, kernel: Kernel, backend: Backend) -> _ModelFunction:
     if backend == "np":
-        from .backend.np import convolution_np, integral_np
+        from .backend.np import adaptive_np, convolution_np, integral_np
 
-        return integral_np if kernel == "int" else convolution_np
+        if kernel == "int":
+            return integral_np
+        if kernel == "conv":
+            return convolution_np
+        if kernel == "adaptive":
+            return adaptive_np
+        raise ValueError(f"Unknown BCS kernel '{kernel}'.")
     if backend == "jax":
+        if kernel == "adaptive":
+            raise ValueError("The adaptive BCS kernel requires backend='np'.")
         from .backend.jnp import convolution_jnp, integral_jnp
 
-        return integral_jnp if kernel == "int" else convolution_jnp
-    raise ValueError(
-        "backend must be 'np' or 'jax' and kernel must be 'int' or 'conv'."
-    )
+        if kernel == "int":
+            return integral_jnp
+        if kernel == "conv":
+            return convolution_jnp
+        raise ValueError(f"Unknown BCS kernel '{kernel}'.")
+    raise ValueError("backend must be 'np' or 'jax'.")
 
 
 def _normalize_sweep_values(

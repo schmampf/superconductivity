@@ -42,7 +42,7 @@ def make_bcs_parameters() -> tuple[ParameterSpec, ...]:
         ParameterSpec(
             name="gamma_meV",
             label="<i>&gamma;</i> (meV)",
-            lower=1e-6,
+            lower=1e-9,
             upper=25e-3,
             guess=4e-3,
         ),
