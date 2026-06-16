@@ -28,18 +28,18 @@ def save_figure(
     fig: Figure,
     title: Optional[str],
     path_pgf: Optional[str] = None,
-    path_pdf: Optional[str] = None,
+    path_png: Optional[str] = None,
 ):
     if path_pgf is None:
         path_pgf = Remote
 
-    if path_pdf is None:
-        path_pdf = Local
+    if path_png is None:
+        path_png = Local
 
     # save figure
     if title is not None:
         pgf_dir = Path(path_pgf).expanduser().resolve()
-        png_dir = Path(path_pdf).expanduser().resolve()
+        png_dir = Path(path_png).expanduser().resolve()
 
         # Allow `title` to include subfolders (e.g. "figs/foo")
         # and/or a suffix.
@@ -47,6 +47,7 @@ def save_figure(
         t = t.with_suffix("") if t.suffix else t
 
         out_pgf = (pgf_dir / t).with_suffix(".pgf")
+        out_pdf = (pgf_dir / t).with_suffix(".pdf")
         out_png = (png_dir / t).with_suffix(".png")
 
         out_pgf.parent.mkdir(parents=True, exist_ok=True)
@@ -54,6 +55,7 @@ def save_figure(
 
         # PGF for LaTeX (keep normal)
         fig.savefig(out_pgf)
+        fig.savefig(out_pdf)
 
         # PNG for slides/web: transparent background (no white fill)
         fig.savefig(
