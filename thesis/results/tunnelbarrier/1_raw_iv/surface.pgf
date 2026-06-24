@@ -370,8 +370,8 @@
 \pgftext[x=2.034432in,y=0.950000in,,,rotate=88.223288]{\color{textcolor}{\sffamily\fontsize{7.000000}{8.400000}\selectfont\catcode`\^=\active\def^{\ifmmode\sp\else\^{}\fi}\catcode`\%=\active\def%{\%}$eI\,/\,\Delta_0 G_\mathrm{N}$}}%
 \end{pgfscope}%
 \begin{pgfscope}%
-\pgfsys@transformshift{0.111111in}{0.212500in}%
-\pgftext[left,bottom]{\includegraphics[interpolate=true,width=1.695000in,height=1.350278in]{surface-img0.png}}%
+\pgfsys@transformshift{0.112222in}{0.213056in}%
+\pgftext[left,bottom]{\includegraphics[interpolate=true,width=1.691389in,height=1.356111in]{surface-img0.png}}%
 \end{pgfscope}%
 \begin{pgfscope}%
 \pgfsetrectcap%

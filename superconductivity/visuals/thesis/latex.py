@@ -28,6 +28,7 @@ except ImportError:  # pragma: no cover - optional notebook integration.
         """Return ``None`` when IPython is not available."""
         return None
 
+
 from superconductivity.style.cpd4 import cmap as default_cmap
 from superconductivity.utilities.types import LIM, NDArray64
 
@@ -257,9 +258,7 @@ def _iter_pgf_sidecar_images(pgf_path: Path) -> tuple[Path, ...]:
     """Return raster sidecars referenced by one exported PGF file."""
     pattern = f"{pgf_path.stem}-img*"
     return tuple(
-        sorted(
-            path for path in pgf_path.parent.glob(pattern) if path.is_file()
-        )
+        sorted(path for path in pgf_path.parent.glob(pattern) if path.is_file())
     )
 
 
@@ -322,9 +321,7 @@ def _render_preview_png(
         raise RuntimeError("Ghostscript command 'gs' was not found.") from exc
     except subprocess.CalledProcessError as exc:
         output = exc.stdout or exc.stderr or ""
-        raise RuntimeError(
-            "PNG preview rendering failed.\n" + output.strip()
-        ) from exc
+        raise RuntimeError("PNG preview rendering failed.\n" + output.strip()) from exc
 
     return output_png
 
@@ -335,12 +332,7 @@ def _display_png_preview(
     height: int = 720,
 ) -> None:
     """Display a PNG preview inline when running in IPython."""
-    if (
-        get_ipython() is None
-        or FileLink is None
-        or display is None
-        or Image is None
-    ):
+    if get_ipython() is None or FileLink is None or display is None or Image is None:
         return
 
     preview_path = Path(png_path).expanduser().resolve()
@@ -727,9 +719,7 @@ def build_stack_pgf(
 
     lines = [r"\begingroup"]
     if resolved_figsize is not None:
-        lines.append(
-            rf"\begin{{minipage}}[t][{stack_height}][t]{{{stack_width}}}"
-        )
+        lines.append(rf"\begin{{minipage}}[t][{stack_height}][t]{{{stack_width}}}")
     lines.extend(
         [
             rf"\def\thesispanelwidth{{{panel_width}}}",
@@ -891,6 +881,7 @@ def compile_thesis_preview(
     RuntimeError
         If the LaTeX compiler is missing or returns a non-zero exit code.
     """
+
     def _cleanup_preview_auxiliary_files(tex_file: Path) -> None:
         """Remove standalone build byproducts after a successful compile."""
         aux_suffixes = (
@@ -1406,10 +1397,319 @@ def export_stacked_waterfall_thesis(
     return export
 
 
+def _prepare_amplitude_map_data(
+    Vbias: NDArray64,
+    Abias: NDArray64,
+    Ibias: NDArray64,
+    Iexp: NDArray64,
+    dGexp: NDArray64,
+    dRexp: NDArray64,
+) -> tuple[
+    NDArray64,
+    NDArray64,
+    NDArray64,
+    NDArray64,
+    NDArray64,
+    NDArray64,
+]:
+    """Validate and normalize amplitude-map array containers."""
+    Vbias_array = np.asarray(Vbias, dtype=np.float64)
+    Abias_array = np.asarray(Abias, dtype=np.float64)
+    Ibias_array = np.asarray(Ibias, dtype=np.float64)
+    Iexp_array = np.asarray(Iexp, dtype=np.float64)
+    dGexp_array = np.asarray(dGexp, dtype=np.float64)
+    dRexp_array = np.asarray(dRexp, dtype=np.float64)
+
+    axes = {
+        "Vbias": Vbias_array,
+        "Abias": Abias_array,
+        "Ibias": Ibias_array,
+    }
+    for axis_name, axis_values in axes.items():
+        if axis_values.ndim != 1:
+            raise ValueError(f"{axis_name} must be a one-dimensional array.")
+
+    voltage_shape = (Abias_array.size, Vbias_array.size)
+    current_shape = (Abias_array.size, Ibias_array.size)
+    for data_name, data_values in {
+        "Iexp": Iexp_array,
+        "dGexp": dGexp_array,
+    }.items():
+        if data_values.shape != voltage_shape:
+            raise ValueError(
+                f"{data_name} must have shape {voltage_shape}, "
+                f"got {data_values.shape}."
+            )
+    if dRexp_array.shape != current_shape:
+        raise ValueError(
+            f"dRexp must have shape {current_shape}, got {dRexp_array.shape}."
+        )
+
+    return (
+        Vbias_array,
+        Abias_array,
+        Ibias_array,
+        Iexp_array,
+        dGexp_array,
+        dRexp_array,
+    )
+
+
+def _resolve_amplitude_map_plots(plots: Sequence[str]) -> tuple[str, ...]:
+    """Validate and preserve the requested amplitude-map plot order."""
+    if isinstance(plots, str):
+        raise ValueError("plots must be a sequence of plot names, not a string.")
+
+    resolved = tuple(plots)
+    if not resolved:
+        raise ValueError("plots must contain at least one plot name.")
+
+    allowed = {"iv", "didv", "dvdi"}
+    unknown = [plot for plot in resolved if plot not in allowed]
+    if unknown:
+        raise ValueError(
+            "Unknown amplitude-map plot name(s): "
+            + ", ".join(repr(plot) for plot in unknown)
+            + ". Expected 'iv', 'didv', or 'dvdi'."
+        )
+
+    duplicates = [
+        plot for index, plot in enumerate(resolved) if plot in resolved[:index]
+    ]
+    if duplicates:
+        raise ValueError(
+            "Duplicate amplitude-map plot name(s): "
+            + ", ".join(repr(plot) for plot in duplicates)
+            + "."
+        )
+    return resolved
+
+
+def _clip_amplitude_map(z: NDArray64, zlim: LIM, *, clip: bool) -> NDArray64:
+    """Clip one amplitude map to finite limits without modifying its input."""
+    if not clip or zlim is None:
+        return z
+    lower, upper = zlim
+    return np.clip(z, lower, upper)
+
+
+def export_amplitude_maps_thesis(
+    Vbias: NDArray64,
+    Abias: NDArray64,
+    Ibias: NDArray64,
+    Iexp: NDArray64,
+    dGexp: NDArray64,
+    dRexp: NDArray64,
+    *,
+    name: str | Path,
+    waterfall_traces: int | Sequence[float],
+    plots: Sequence[str] = ("iv", "didv", "dvdi"),
+    sub_dir: str | Path = "",
+    local_dir: str | Path = _DEFAULT_LOCAL_DIR,
+    remote_dir: str | Path | None = _DEFAULT_REMOTE_DIR,
+    clip: bool = True,
+    Vbiaslim: LIM = (-0.5, 4.5),
+    Abiaslim: LIM = (0.0, 5.0),
+    Ibiaslim: LIM = (-0.5, 4.5),
+    Ilim: LIM = (-0.05, 4.5),
+    dGlim: LIM = (-0.05, 4.5),
+    dRlim: LIM = (-0.05, 4.5),
+    Vlabel: str = r"$eV\,/\,\Delta_0$",
+    Alabel: str = r"$eA\,/\,h\nu$",
+    Ilabel: str = r"$eI\,/\,\Delta_0 G_\mathrm{N}$",
+    dGlabel: str = r"$\mathrm{d}I/\mathrm{d}V\,/\,G_\mathrm{N}$",
+    dRlabel: str = r"$\mathrm{d}V/\mathrm{d}I\,\cdot\,G_\mathrm{N}$",
+    Vbiasticks: Sequence[float] | None = (0.0, 2.0, 4.0),
+    Abiasticks: Sequence[float] | None = (0.0, 2.0, 4.0),
+    Ibiasticks: Sequence[float] | None = (0.0, 2.0, 4.0),
+    Iticks: Sequence[float] | None = (0.0, 2.0, 4.0),
+    dGticks: Sequence[float] | None = (0.0, 2.0, 4.0),
+    dRticks: Sequence[float] | None = (0.0, 2.0, 4.0),
+    Vbiasticklabels: Sequence[str] | None = None,
+    Abiasticklabels: Sequence[str] | None = None,
+    Ibiasticklabels: Sequence[str] | None = None,
+    Iticklabels: Sequence[str] | None = None,
+    dGticklabels: Sequence[str] | None = None,
+    dRticklabels: Sequence[str] | None = None,
+    figsize: Sequence[str | float | int] | None = (2.1, 3.15),
+    subfigsize: tuple[float, float] = (2.1, 2.1),
+    posx: Sequence[float | int | None] | None = (0.0, 0.0, 0.0),
+    posy: Sequence[float | int | None] | None = (1.6, 0.4, -0.1),
+    box_aspect: Sequence[float] | None = (
+        1.0,
+        1.0,
+        0.7071067811865476,
+    ),
+    azim: float = 225.0,
+    axes_rect: Sequence[float] | None = (0.0, 0.0, 1.85, 1.85),
+    x_axis: Sequence[bool] = (False, False, True),
+    y_axis: Sequence[bool] = (False, False, True),
+    labelspacing: float | Sequence[float] | None = (0.5, 0.5, 0.45),
+    ticklabelspacing: float | Sequence[float] | None = (0.35, 0.35, 0.5),
+    heatmap_cell_overlap: float = 0.7,
+    z_axis_side: str = "right",
+    surface_x_oversample: int = 10,
+) -> dict[str, StackedThesisExport]:
+    """Export thesis composite plots for one prepared amplitude-map dataset.
+
+    Parameters
+    ----------
+    Vbias, Abias, Ibias
+        Prepared voltage-bias, amplitude-bias, and current-bias axes.
+    Iexp, dGexp, dRexp
+        Prepared current, differential-conductance, and
+        differential-resistance maps. No normalization is applied.
+    name
+        Base bundle name. Plot suffixes are appended automatically.
+    waterfall_traces
+        Number of traces or explicit amplitude-bias values used by the
+        waterfall and surface panels.
+    plots
+        Ordered selection containing ``"iv"``, ``"didv"``, and/or
+        ``"dvdi"`` without duplicates.
+    sub_dir, local_dir, remote_dir
+        Output locations forwarded to :func:`export_stacked_waterfall_thesis`.
+    clip
+        Whether to saturate each map at its corresponding z limits before
+        plotting. Input arrays are never modified.
+    Vbiaslim, Abiaslim, Ibiaslim, Ilim, dGlim, dRlim
+        Axis limits for the three composite plots.
+    Vlabel, Alabel, Ilabel, dGlabel, dRlabel
+        Axis labels for the prepared data.
+    Vbiasticks, Abiasticks, Ibiasticks, Iticks, dGticks, dRticks
+        Tick locations for each physical axis.
+    Vbiasticklabels, Abiasticklabels, Ibiasticklabels, Iticklabels
+        Optional tick labels for voltage, amplitude, current-bias, and
+        current axes.
+    dGticklabels, dRticklabels
+        Optional differential-conductance and differential-resistance tick
+        labels.
+    figsize, subfigsize, posx, posy, box_aspect, azim, axes_rect
+        Shared thesis stack geometry.
+    x_axis, y_axis
+        Panel-wise x- and y-axis visibility.
+    labelspacing, ticklabelspacing
+        Shared axis-label and tick-label spacing.
+    heatmap_cell_overlap
+        Relative heatmap-cell overlap used to suppress seam artifacts.
+    z_axis_side
+        Side used for z-axis labels and ticks.
+    surface_x_oversample
+        Surface-mesh oversampling factor along the x-axis.
+
+    Returns
+    -------
+    dict[str, StackedThesisExport]
+        Exports keyed by plot name in the requested order.
+    """
+    (
+        Vbias_array,
+        Abias_array,
+        Ibias_array,
+        Iexp_array,
+        dGexp_array,
+        dRexp_array,
+    ) = _prepare_amplitude_map_data(
+        Vbias,
+        Abias,
+        Ibias,
+        Iexp,
+        dGexp,
+        dRexp,
+    )
+    selected_plots = _resolve_amplitude_map_plots(plots)
+    plot_specs = {
+        "iv": {
+            "x": Vbias_array,
+            "z": _clip_amplitude_map(Iexp_array, Ilim, clip=clip),
+            "xlabel": Vlabel,
+            "zlabel": Ilabel,
+            "xlim": Vbiaslim,
+            "zlim": Ilim,
+            "ticks": (Vbiasticks, Abiasticks, Iticks),
+            "ticklabels": (
+                Vbiasticklabels,
+                Abiasticklabels,
+                Iticklabels,
+            ),
+            "invert_xaxis": False,
+        },
+        "didv": {
+            "x": Vbias_array,
+            "z": _clip_amplitude_map(dGexp_array, dGlim, clip=clip),
+            "xlabel": Vlabel,
+            "zlabel": dGlabel,
+            "xlim": Vbiaslim,
+            "zlim": dGlim,
+            "ticks": (Vbiasticks, Abiasticks, dGticks),
+            "ticklabels": (
+                Vbiasticklabels,
+                Abiasticklabels,
+                dGticklabels,
+            ),
+            "invert_xaxis": False,
+        },
+        "dvdi": {
+            "x": Ibias_array,
+            "z": _clip_amplitude_map(dRexp_array, dRlim, clip=clip),
+            "xlabel": Ilabel,
+            "zlabel": dRlabel,
+            "xlim": Ibiaslim,
+            "zlim": dRlim,
+            "ticks": (Ibiasticks, Abiasticks, dRticks),
+            "ticklabels": (
+                Ibiasticklabels,
+                Abiasticklabels,
+                dRticklabels,
+            ),
+            "invert_xaxis": True,
+        },
+    }
+
+    exports: dict[str, StackedThesisExport] = {}
+    for plot in selected_plots:
+        spec = plot_specs[plot]
+        exports[plot] = export_stacked_waterfall_thesis(
+            x=spec["x"],
+            y=Abias_array,
+            z=spec["z"],
+            name=f"{name}_{plot}",
+            sub_dir=sub_dir,
+            local_dir=local_dir,
+            remote_dir=remote_dir,
+            xlabel=spec["xlabel"],
+            ylabel=Alabel,
+            zlabel=spec["zlabel"],
+            figsize=figsize,
+            subfigsize=subfigsize,
+            waterfall_traces=waterfall_traces,
+            box_aspect=box_aspect,
+            azim=azim,
+            xlim=spec["xlim"],
+            ylim=Abiaslim,
+            zlim=spec["zlim"],
+            z_axis_side=z_axis_side,
+            invert_xaxis=spec["invert_xaxis"],
+            axes_rect=axes_rect,
+            x_axis=x_axis,
+            y_axis=y_axis,
+            posx=posx,
+            posy=posy,
+            ticks=spec["ticks"],
+            ticklabels=spec["ticklabels"],
+            labelspacing=labelspacing,
+            ticklabelspacing=ticklabelspacing,
+            heatmap_cell_overlap=heatmap_cell_overlap,
+            surface_x_oversample=surface_x_oversample,
+        )
+    return exports
+
+
 __all__ = [
     "StackedThesisExport",
     "build_stack_pgf",
     "build_preview_tex",
     "compile_thesis_preview",
+    "export_amplitude_maps_thesis",
     "export_stacked_waterfall_thesis",
 ]

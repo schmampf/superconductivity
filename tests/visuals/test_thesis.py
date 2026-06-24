@@ -23,6 +23,7 @@ from superconductivity.visuals.thesis.heatmap import (
 from superconductivity.visuals.thesis.latex import (
     build_stack_pgf,
     compile_thesis_preview,
+    export_amplitude_maps_thesis,
     export_stacked_waterfall_thesis,
 )
 from superconductivity.visuals.thesis.surface import (
@@ -76,6 +77,7 @@ def _tick_base_pads(
     ax: matplotlib.axes.Axes,
 ) -> tuple[float, float, float]:
     """Return the configured base tick-label padding for x/y/z."""
+
     def _axis_pad(axis: matplotlib.axis.Axis) -> float:
         ticks = axis.get_major_ticks()
         if not ticks:
@@ -95,8 +97,7 @@ def _tick_texts(
 ) -> tuple[str, ...]:
     """Return the current tick-label texts for one axis."""
     return tuple(
-        tick.get_text()
-        for tick in getattr(ax, f"get_{axis_name}ticklabels")()
+        tick.get_text() for tick in getattr(ax, f"get_{axis_name}ticklabels")()
     )
 
 
@@ -163,6 +164,30 @@ def _fake_stack_preview_png(
     png_path.parent.mkdir(parents=True, exist_ok=True)
     png_path.write_bytes(b"png")
     return png_path
+
+
+def _amplitude_map_data() -> tuple[
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+]:
+    """Create compact prepared arrays for amplitude-map wrapper tests."""
+    Vbias = np.array([-1.0, 0.0, 1.0], dtype=np.float64)
+    Abias = np.array([0.0, 1.0], dtype=np.float64)
+    Ibias = np.array([-2.0, 0.0, 2.0, 4.0], dtype=np.float64)
+    Iexp = np.array(
+        [[-1.0, 1.0, 6.0], [0.0, 2.0, 3.0]],
+        dtype=np.float64,
+    )
+    dGexp = Iexp + 1.0
+    dRexp = np.array(
+        [[-2.0, 0.0, 2.0, 7.0], [1.0, 2.0, 3.0, 4.0]],
+        dtype=np.float64,
+    )
+    return Vbias, Abias, Ibias, Iexp, dGexp, dRexp
 
 
 def _pane_alpha(
@@ -713,6 +738,162 @@ def test_thesis_panel_builders_accept_custom_box_zoom() -> None:
     )
 
 
+def test_export_amplitude_maps_thesis_builds_three_plot_calls(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The amplitude wrapper should configure all three thesis composites."""
+    Vbias, Abias, Ibias, Iexp, dGexp, dRexp = _amplitude_map_data()
+    original_maps = tuple(values.copy() for values in (Iexp, dGexp, dRexp))
+    calls: list[dict[str, object]] = []
+
+    def fake_export(**kwargs: object) -> str:
+        calls.append(kwargs)
+        return str(kwargs["name"])
+
+    monkeypatch.setattr(
+        "superconductivity.visuals.thesis.latex." "export_stacked_waterfall_thesis",
+        fake_export,
+    )
+
+    exports = export_amplitude_maps_thesis(
+        Vbias,
+        Abias,
+        Ibias,
+        Iexp,
+        dGexp,
+        dRexp,
+        name="raw",
+        waterfall_traces=(0.0, 1.0),
+        sub_dir="results/tunnelbarrier",
+    )
+
+    assert list(exports) == ["iv", "didv", "dvdi"]
+    assert list(exports.values()) == ["raw_iv", "raw_didv", "raw_dvdi"]
+    assert [call["name"] for call in calls] == [
+        "raw_iv",
+        "raw_didv",
+        "raw_dvdi",
+    ]
+    assert calls[0]["x"] is Vbias
+    assert calls[1]["x"] is Vbias
+    assert calls[2]["x"] is Ibias
+    assert all(call["y"] is Abias for call in calls)
+    assert np.array_equal(calls[0]["z"], np.clip(Iexp, -0.05, 4.5))
+    assert np.array_equal(calls[1]["z"], np.clip(dGexp, -0.05, 4.5))
+    assert np.array_equal(calls[2]["z"], np.clip(dRexp, -0.05, 4.5))
+    assert calls[0]["xlabel"] == r"$eV\,/\,\Delta_0$"
+    assert calls[0]["ylabel"] == r"$eA\,/\,h\nu$"
+    assert calls[0]["zlabel"] == r"$eI\,/\,\Delta_0 G_\mathrm{N}$"
+    assert calls[1]["zlabel"] == (r"$\mathrm{d}I/\mathrm{d}V\,/\,G_\mathrm{N}$")
+    assert calls[2]["xlabel"] == r"$eI\,/\,\Delta_0 G_\mathrm{N}$"
+    assert calls[2]["zlabel"] == (r"$\mathrm{d}V/\mathrm{d}I\,/\,R_\mathrm{N}$")
+    assert calls[0]["xlim"] == (-0.5, 4.5)
+    assert calls[0]["ylim"] == (0.0, 5.0)
+    assert calls[0]["zlim"] == (-0.05, 4.5)
+    assert calls[2]["invert_xaxis"] is True
+    assert calls[0]["invert_xaxis"] is False
+    assert calls[0]["ticks"] == (
+        (0.0, 2.0, 4.0),
+        (0.0, 2.0, 4.0),
+        (0.0, 2.0, 4.0),
+    )
+    assert calls[0]["heatmap_cell_overlap"] == 0.7
+    for original, current in zip(
+        original_maps,
+        (Iexp, dGexp, dRexp),
+        strict=True,
+    ):
+        assert np.array_equal(current, original)
+
+
+def test_export_amplitude_maps_thesis_selects_order_and_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Plot selection should preserve order and forward preset overrides."""
+    data = _amplitude_map_data()
+    calls: list[dict[str, object]] = []
+
+    def fake_export(**kwargs: object) -> str:
+        calls.append(kwargs)
+        return str(kwargs["name"])
+
+    monkeypatch.setattr(
+        "superconductivity.visuals.thesis.latex." "export_stacked_waterfall_thesis",
+        fake_export,
+    )
+
+    exports = export_amplitude_maps_thesis(
+        *data,
+        name="selected",
+        waterfall_traces=3,
+        plots=("dvdi", "iv"),
+        clip=False,
+        Ibiaslim=(-1.0, 3.0),
+        Ilim=(0.0, 2.0),
+        Ilabel="current",
+        dRlabel="resistance",
+        Ibiasticks=(-1.0, 1.0, 3.0),
+        dRticks=(0.0, 1.0),
+        figsize=(3.0, 4.0),
+        heatmap_cell_overlap=0.25,
+    )
+
+    assert list(exports) == ["dvdi", "iv"]
+    assert [call["name"] for call in calls] == ["selected_dvdi", "selected_iv"]
+    assert calls[0]["z"] is data[5]
+    assert calls[1]["z"] is data[3]
+    assert calls[0]["xlim"] == (-1.0, 3.0)
+    assert calls[1]["zlim"] == (0.0, 2.0)
+    assert calls[0]["xlabel"] == "current"
+    assert calls[0]["zlabel"] == "resistance"
+    assert calls[0]["ticks"] == (
+        (-1.0, 1.0, 3.0),
+        (0.0, 2.0, 4.0),
+        (0.0, 1.0),
+    )
+    assert calls[0]["figsize"] == (3.0, 4.0)
+    assert calls[0]["heatmap_cell_overlap"] == 0.25
+
+
+@pytest.mark.parametrize(
+    ("plots", "message"),
+    [
+        (("iv", "unknown"), "Unknown amplitude-map plot"),
+        (("iv", "iv"), "Duplicate amplitude-map plot"),
+        ((), "at least one"),
+    ],
+)
+def test_export_amplitude_maps_thesis_rejects_invalid_plot_selection(
+    plots: tuple[str, ...],
+    message: str,
+) -> None:
+    """Invalid or ambiguous plot selections should fail before exporting."""
+    with pytest.raises(ValueError, match=message):
+        export_amplitude_maps_thesis(
+            *_amplitude_map_data(),
+            name="invalid",
+            waterfall_traces=2,
+            plots=plots,
+        )
+
+
+def test_export_amplitude_maps_thesis_validates_map_shapes() -> None:
+    """Each map should match its corresponding prepared x and y axes."""
+    Vbias, Abias, Ibias, Iexp, dGexp, dRexp = _amplitude_map_data()
+
+    with pytest.raises(ValueError, match="dRexp must have shape"):
+        export_amplitude_maps_thesis(
+            Vbias,
+            Abias,
+            Ibias,
+            Iexp,
+            dGexp,
+            dRexp[:, :-1],
+            name="invalid",
+            waterfall_traces=2,
+        )
+
+
 def test_export_stacked_waterfall_thesis_writes_assets(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -791,9 +972,7 @@ def test_export_stacked_waterfall_thesis_writes_assets(
             saved_rcparams[path.name] = {
                 "axes.unicode_minus": matplotlib.rcParams["axes.unicode_minus"],
                 "font.family": tuple(matplotlib.rcParams["font.family"]),
-                "font.sans-serif": tuple(
-                    matplotlib.rcParams["font.sans-serif"][:3]
-                ),
+                "font.sans-serif": tuple(matplotlib.rcParams["font.sans-serif"][:3]),
                 "font.size": float(matplotlib.rcParams["font.size"]),
                 "axes.labelsize": float(matplotlib.rcParams["axes.labelsize"]),
                 "xtick.labelsize": float(matplotlib.rcParams["xtick.labelsize"]),
@@ -920,25 +1099,21 @@ def test_export_stacked_waterfall_thesis_writes_assets(
     assert export.stack_dir == tmp_path / "local" / "figures" / "demo_stack"
     assert export.main_pgf.exists()
     assert export.main_png.exists()
-    assert export.remote_stack_dir == (
-        tmp_path / "remote" / "figures" / "demo_stack"
-    )
+    assert export.remote_stack_dir == (tmp_path / "remote" / "figures" / "demo_stack")
     assert export.remote_stack_dir.exists()
     assert not stale_local_file.exists()
     assert not stale_remote_file.exists()
     assert not (tmp_path / "remote" / "figures" / "demo_stack.pdf").exists()
     stack_pgf = export.main_pgf.read_text(encoding="utf-8")
-    assert {
-        path.name for path in export.remote_stack_dir.iterdir()
-    } == {
+    assert {path.name for path in export.remote_stack_dir.iterdir()} == {
         "main.pgf",
         "waterfall.pgf",
         "surface.pgf",
         "heatmap.pgf",
     }
-    assert (
-        export.remote_stack_dir / "main.pgf"
-    ).read_text(encoding="utf-8") == stack_pgf
+    assert (export.remote_stack_dir / "main.pgf").read_text(
+        encoding="utf-8"
+    ) == stack_pgf
 
     assert r"\begin{pgfpicture}" in stack_pgf
     assert r"\begin{minipage}[t][4.2in][t]{2.1in}" in stack_pgf
@@ -1035,12 +1210,8 @@ def test_export_stacked_waterfall_thesis_writes_assets(
         saved_axes_bounds[export.waterfall_pgf.name],
         (0.6 / 6.2, 0.35 / 3.9, 4.8 / 6.2, 2.8 / 3.9),
     )
-    assert (
-        saved_rcparams[export.waterfall_pgf.name]["axes.unicode_minus"] is False
-    )
-    assert saved_rcparams[export.waterfall_pgf.name]["font.family"] == (
-        "sans-serif",
-    )
+    assert saved_rcparams[export.waterfall_pgf.name]["axes.unicode_minus"] is False
+    assert saved_rcparams[export.waterfall_pgf.name]["font.family"] == ("sans-serif",)
     assert saved_rcparams[export.waterfall_pgf.name]["font.sans-serif"] == (
         "Arial",
         "Helvetica",
@@ -1060,10 +1231,7 @@ def test_export_stacked_waterfall_thesis_writes_assets(
         r"\usepackage{cmbright}"
         in saved_rcparams[export.waterfall_pgf.name]["pgf.preamble"]
     )
-    assert (
-        saved_rcparams[export.waterfall_pgf.name]["mathtext.fontset"]
-        == "dejavusans"
-    )
+    assert saved_rcparams[export.waterfall_pgf.name]["mathtext.fontset"] == "dejavusans"
     assert matplotlib.rcParams["axes.unicode_minus"] is True
     assert matplotlib.rcParams["mathtext.fontset"] == "dejavusans"
     assert tuple(matplotlib.rcParams["font.family"]) == ("serif",)
@@ -1198,9 +1366,7 @@ def test_export_stacked_waterfall_thesis_can_skip_inline_preview(
     )
     monkeypatch.setattr(
         "superconductivity.visuals.thesis.latex._display_png_preview",
-        lambda png_path, *, height=720: preview_calls.append(
-            Path(png_path)
-        ),
+        lambda png_path, *, height=720: preview_calls.append(Path(png_path)),
     )
 
     export_stacked_waterfall_thesis(
@@ -1361,7 +1527,8 @@ def test_export_stacked_waterfall_thesis_waterfall_traces_accepts_yvalues(
         path.write_text("saved", encoding="utf-8")
         if self.axes and path.name.startswith("waterfall."):
             saved_yvalues[path.name] = tuple(
-                float(np.unique(line.get_data_3d()[1])[0]) for line in self.axes[0].lines
+                float(np.unique(line.get_data_3d()[1])[0])
+                for line in self.axes[0].lines
             )
 
     monkeypatch.setattr(Figure, "savefig", fake_savefig)
