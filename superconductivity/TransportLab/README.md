@@ -18,6 +18,9 @@ The old `superconductivity/deprecated_gui/` and `superconductivity/visuals/`
 trees remain useful as reference material for workflow ideas, plot composition,
 and export patterns, but they are not the target architecture for TransportLab.
 
+The current implementation status, restart instructions, and ordered roadmap
+are recorded in [`state-of-the-art.md`](state-of-the-art.md).
+
 ## Purpose
 
 TransportLab is meant to help with real experimental transport data:

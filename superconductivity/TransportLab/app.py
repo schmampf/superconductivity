@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import webbrowser
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..utilities.cache import ProjectCache
@@ -27,7 +28,7 @@ def _import_panel():
         raise ImportError("Panel must be installed to run TransportLab.") from exc
 
     try:
-        pn.extension("tabulator")
+        pn.extension("tabulator", "plotly")
     except Exception as exc:  # pragma: no cover
         raise RuntimeError("Failed to initialize Panel extensions.") from exc
     return pn
@@ -39,6 +40,19 @@ class TransportLabSession:
 
     project_path: Path
     cache: ProjectCache | None = None
+    cache_callbacks: list[Callable[[], None]] = field(
+        default_factory=list,
+        repr=False,
+    )
+
+    def watch_cache(self, callback: Callable[[], None]) -> None:
+        """Call ``callback`` whenever the active cache changes."""
+        self.cache_callbacks.append(callback)
+
+    def notify_cache_changed(self) -> None:
+        """Notify browser pages that the active cache changed."""
+        for callback in tuple(self.cache_callbacks):
+            callback()
 
 
 def make_session(

@@ -50,7 +50,7 @@ class OffsetSpec(SamplingSpec):
         require_all_finite(self.Ioffscan_nA, name="Ioffscan_nA")
 
     def keys(self) -> tuple[str, ...]:
-        return (*super().keys(), "Voffscan_mV", "Ioffscan_nA")
+        return (*SamplingSpec.keys(self), "Voffscan_mV", "Ioffscan_nA")
 
 
 class OffsetDataset(Dataset):

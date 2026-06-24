@@ -7,7 +7,7 @@ from typing import Literal
 import numpy as np
 
 Backend = Literal["np", "jax"]
-Kernel = Literal["int", "conv"]
+Kernel = Literal["int", "conv", "adaptive"]
 
 E0_meV = np.linspace(-4.0, 4.0, 4001, dtype=np.float64)
 Nmax_ = 50

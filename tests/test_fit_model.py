@@ -1,5 +1,5 @@
-from dataclasses import replace
 import importlib.util
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -11,7 +11,6 @@ pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("scipy") is None,
     reason="scipy is unavailable",
 )
-
 
 
 def test_fit_model_returns_compact_solution() -> None:
@@ -49,7 +48,6 @@ def test_fit_model_returns_compact_solution() -> None:
     assert solution["params"][1].value == guess[1]
 
 
-
 def test_fit_model_supports_composed_bcs_config() -> None:
     V_mV = np.linspace(-1.0, 1.0, 41)
     model = BCSModelConfig(
@@ -71,3 +69,32 @@ def test_fit_model_supports_composed_bcs_config() -> None:
 
     assert len(solution["params"]) == 7
     assert np.max(np.abs(solution["I_fit_nA"] - I_nA)) < 1e-6
+
+
+def test_fit_model_supports_adaptive_kernel() -> None:
+    V_mV = np.linspace(-0.5, 0.5, 9)
+    model = BCSModelConfig("adaptive", "np")
+    spec = get_model_spec(model)
+    guess = [parameter.guess for parameter in spec.parameters]
+    guess[3] = 1e-7
+    assert spec.parameters[3].lower == 1e-9
+    I_nA = spec.function(V_mV, *guess)
+    parameters = [
+        replace(
+            parameter,
+            guess=guess[index],
+            fixed=(index > 0),
+        )
+        for index, parameter in enumerate(spec.parameters)
+    ]
+
+    solution = fit_model(
+        V_mV,
+        I_nA,
+        model=model,
+        parameters=parameters,
+        maxfev=10,
+    )
+
+    assert solution["params"][3].guess == 1e-7
+    assert np.allclose(solution["I_fit_nA"], I_nA)
