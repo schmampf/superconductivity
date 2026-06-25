@@ -11,7 +11,7 @@ from superconductivity.models.basics.noise import (
 )
 from superconductivity.models.bcs import bcs as bcs_module
 from superconductivity.models.bcs import pat_kernel, sim_bcs
-from superconductivity.models.bcs.backend import Nmax_
+from superconductivity.models.bcs.backend import E0_meV, Nmax_
 from superconductivity.models.bcs.bcs import get_Ibcs_nA
 from superconductivity.utilities.meta import (
     AxisSpec,
@@ -70,6 +70,32 @@ def test_get_Ibcs_nA_resolves_backend_kernel_matrix() -> None:
             )
             assert current.shape == V_mV.shape
             assert np.all(np.isfinite(current))
+
+
+@pytest.mark.skipif(not _JAX_AVAILABLE, reason="jax is unavailable")
+@pytest.mark.parametrize("T_K", [0.1, 0.9, 1.0, 1.2, 1.3])
+def test_jax_convolution_matches_numpy_across_temperature(T_K: float) -> None:
+    from superconductivity.models.bcs.backend.jnp import convolution_jnp
+    from superconductivity.models.bcs.backend.np import convolution_np
+
+    V_mV = np.linspace(-0.6, 0.6, 301, dtype=np.float64)
+    parameters = (
+        V_mV,
+        E0_meV,
+        T_K,
+        T_K,
+        0.19345,
+        0.19345,
+        0.005,
+        0.005,
+    )
+
+    current_np = convolution_np(*parameters)
+    current_jax = convolution_jnp(*parameters)
+
+    np.testing.assert_allclose(current_jax, current_np, rtol=1e-12, atol=1e-12)
+    if T_K in {1.0, 1.2}:
+        assert not np.allclose(current_jax, V_mV, rtol=1e-12, atol=1e-12)
 
 
 @pytest.mark.skipif(not _SCIPY_AVAILABLE, reason="scipy is unavailable")
