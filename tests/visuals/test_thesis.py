@@ -154,6 +154,7 @@ def _heatmap_artist(
 def _fake_stack_preview_png(
     *,
     main_pgf: Path,
+    pdf_path: Path,
     png_path: Path,
     figsize: tuple[float, float] | None = None,
     dpi: float,
@@ -161,6 +162,8 @@ def _fake_stack_preview_png(
 ) -> Path:
     """Write a tiny fake stacked preview PNG for export tests."""
     del main_pgf, figsize, dpi, latex_command
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+    pdf_path.write_bytes(b"pdf")
     png_path.parent.mkdir(parents=True, exist_ok=True)
     png_path.write_bytes(b"png")
     return png_path
@@ -786,7 +789,7 @@ def test_export_amplitude_maps_thesis_builds_three_plot_calls(
     assert calls[0]["zlabel"] == r"$eI\,/\,\Delta_0 G_\mathrm{N}$"
     assert calls[1]["zlabel"] == (r"$\mathrm{d}I/\mathrm{d}V\,/\,G_\mathrm{N}$")
     assert calls[2]["xlabel"] == r"$eI\,/\,\Delta_0 G_\mathrm{N}$"
-    assert calls[2]["zlabel"] == (r"$\mathrm{d}V/\mathrm{d}I\,/\,R_\mathrm{N}$")
+    assert calls[2]["zlabel"] == (r"$\mathrm{d}V/\mathrm{d}I\,\cdot\,G_\mathrm{N}$")
     assert calls[0]["xlim"] == (-0.5, 4.5)
     assert calls[0]["ylim"] == (0.0, 5.0)
     assert calls[0]["zlim"] == (-0.05, 4.5)
@@ -1098,6 +1101,7 @@ def test_export_stacked_waterfall_thesis_writes_assets(
     assert saved_geometry[export.heatmap_pgf.name] == z.size
     assert export.stack_dir == tmp_path / "local" / "figures" / "demo_stack"
     assert export.main_pgf.exists()
+    assert export.main_pdf.exists()
     assert export.main_png.exists()
     assert export.remote_stack_dir == (tmp_path / "remote" / "figures" / "demo_stack")
     assert export.remote_stack_dir.exists()
@@ -1107,6 +1111,7 @@ def test_export_stacked_waterfall_thesis_writes_assets(
     stack_pgf = export.main_pgf.read_text(encoding="utf-8")
     assert {path.name for path in export.remote_stack_dir.iterdir()} == {
         "main.pgf",
+        "main.pdf",
         "waterfall.pgf",
         "surface.pgf",
         "heatmap.pgf",
@@ -1136,10 +1141,14 @@ def test_export_stacked_waterfall_thesis_writes_assets(
 
     assert not (export.remote_stack_dir / "main.tex").exists()
     assert not (export.stack_dir / "main.tex").exists()
-    assert not (export.stack_dir / "main.pdf").exists()
+    assert export.main_pdf.read_text(encoding="utf-8") == "compiled"
+    assert (export.remote_stack_dir / "main.pdf").read_text(
+        encoding="utf-8"
+    ) == "compiled"
     assert compiled["latex_command"] == "xelatex"
     assert Path(compiled["preview_tex"]).name == "main.tex"
     assert Path(compiled["preview_tex"]).parent != export.stack_dir
+    assert rendered["pdf_path"] == export.main_pdf
     assert rendered["png_path"] == export.main_png
     assert rendered["dpi"] == 200.0
     assert displayed["png_path"] == export.main_png

@@ -51,6 +51,7 @@ _STACK_PGF_PREAMBLE_LINES = (
     r"\setmainfont{Arial}",
     r"\setsansfont{Arial}",
     r"\usepackage{cmbright}",
+    r"\usepackage{lmodern}",
 )
 _STACK_BASE_FONT_RCPARAMS = {
     "font.family": "sans-serif",
@@ -95,6 +96,8 @@ class StackedThesisExport:
         PGF export of the heatmap panel.
     main_pgf
         Thesis-importable PGF wrapper stacking the three panel PGFs.
+    main_pdf
+        Precompiled stacked PDF for fast thesis imports.
     main_png
         Notebook-friendly stacked PNG preview.
     remote_stack_dir
@@ -107,6 +110,7 @@ class StackedThesisExport:
     surface_pgf: Path
     heatmap_pgf: Path
     main_pgf: Path
+    main_pdf: Path
     main_png: Path
     remote_stack_dir: Path | None
 
@@ -192,6 +196,7 @@ def _build_export_paths(
         surface_pgf=_bundle_file_path(stack_dir, "surface.pgf"),
         heatmap_pgf=_bundle_file_path(stack_dir, "heatmap.pgf"),
         main_pgf=_bundle_file_path(stack_dir, "main.pgf"),
+        main_pdf=_bundle_file_path(stack_dir, "main.pdf"),
         main_png=_bundle_file_path(stack_dir, "main.png"),
         remote_stack_dir=remote_stack_dir,
     )
@@ -263,7 +268,7 @@ def _iter_pgf_sidecar_images(pgf_path: Path) -> tuple[Path, ...]:
 
 
 def _ship_remote_pgf_bundle(export: StackedThesisExport) -> None:
-    """Copy the remote PGF bundle required for thesis-side imports."""
+    """Copy the remote PGF and precompiled PDF thesis assets."""
     remote_stack_dir = export.remote_stack_dir
     if remote_stack_dir is None:
         return
@@ -274,6 +279,7 @@ def _ship_remote_pgf_bundle(export: StackedThesisExport) -> None:
 
     files_to_copy = (
         export.main_pgf,
+        export.main_pdf,
         export.waterfall_pgf,
         export.surface_pgf,
         export.heatmap_pgf,
@@ -622,13 +628,16 @@ def _resolve_panel_positions(
 def _save_stack_preview_png(
     *,
     main_pgf: Path,
+    pdf_path: Path,
     png_path: Path,
     figsize: Sequence[str | float | int] | None,
     dpi: float,
     latex_command: str | None = None,
 ) -> Path:
-    """Compile a temporary stacked preview and rasterize it to PNG."""
+    """Compile a stack PDF, retain it, and rasterize its PNG preview."""
     resolved_main_pgf = Path(main_pgf).expanduser().resolve()
+    resolved_pdf_path = Path(pdf_path).expanduser().resolve()
+    _ensure_parent(resolved_pdf_path)
     _ensure_parent(png_path)
     with tempfile.TemporaryDirectory(
         prefix=".thesis-stack-preview-",
@@ -655,8 +664,9 @@ def _save_stack_preview_png(
             temp_tex,
             latex_command=latex_command,
         )
+        shutil.copy2(temp_pdf, resolved_pdf_path)
         return _render_preview_png(
-            temp_pdf,
+            resolved_pdf_path,
             png_path=png_path,
             dpi=float(dpi),
         )
@@ -1153,9 +1163,9 @@ def export_stacked_waterfall_thesis(
     preview_png_dpi
         DPI used to render ``main.png`` from the three panel figures.
     latex_command
-        LaTeX command used for the temporary preview compile that produces
-        ``main.png``. No `main.tex` or `main.pdf` are kept in the output
-        bundle.
+        LaTeX command used for the temporary compile that produces the
+        retained ``main.pdf`` and the ``main.png`` preview. No ``main.tex``
+        is kept in the output bundle.
     pgf_texsystem
         LaTeX engine used as the default preview compiler and PGF export
         system. Defaults to ``"xelatex"``.
@@ -1382,6 +1392,7 @@ def export_stacked_waterfall_thesis(
     )
     _save_stack_preview_png(
         main_pgf=export.main_pgf,
+        pdf_path=export.main_pdf,
         png_path=export.main_png,
         figsize=figsize,
         dpi=float(preview_png_dpi),
