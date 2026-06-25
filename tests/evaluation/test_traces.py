@@ -54,6 +54,7 @@ class _FakeH5py:
 
 
 def _make_fake_h5py() -> _FakeH5py:
+    bluefors_dtype = np.dtype([("time", np.float64), ("Tsample", np.float64)])
     groups = {
         "measurement/test": _FakeGroup(
             {
@@ -69,6 +70,10 @@ def _make_fake_h5py() -> _FakeH5py:
                 "V2": np.asarray([1e-9, 2e-9, 9e-9, 4e-9]),
                 "trigger": np.asarray([1, 1, 2, 1]),
             },
+        ),
+        "measurement/test/nu=1dBm/sweep/bluefors": np.asarray(
+            [(10.0, 0.10), (11.0, 0.12), (12.0, np.nan)],
+            dtype=bluefors_dtype,
         ),
         "measurement/test/nu=1dBm/offset/adwin": _FakeGroup(
             {
@@ -126,6 +131,8 @@ def test_get_traces_selects_one_trace_by_specific_key(
     assert np.allclose(trace["I_nA"], np.asarray([0.0, 1.0, 3.0]))
     assert np.allclose(trace["V_mV"], np.asarray([0.0, 1.0, 3.0]))
     assert np.allclose(trace["t_s"], np.asarray([0.0, 1.0, 3.0]))
+    assert trace.Tsample_K is not None
+    assert float(trace.Tsample_K) == pytest.approx(0.11)
 
 
 def test_get_traces_accepts_filespec_with_measurement(
@@ -230,11 +237,34 @@ def test_get_traces_returns_collection_with_lookup_methods(
         "t_s",
         "I_nA",
         "V_mV",
+        "Tsample_K",
     )
     assert np.allclose(traces[1]["I_nA"], np.asarray([0.0, 2.0, 4.0]))
     assert len(traces.I_nA) == 2
     assert len(traces.V_mV) == 2
     assert len(traces.t_s) == 2
+    assert traces.Tsample_K[0] is not None
+    assert float(traces.Tsample_K[0]) == pytest.approx(0.11)
+    assert traces.Tsample_K[1] is None
+
+
+def test_trace_transformations_preserve_sample_temperature() -> None:
+    """Trace transformations should preserve scalar temperature metadata."""
+    trace = traces_module.Trace(
+        I_nA=np.asarray([0.0, 1.0, 2.0, 3.0]),
+        V_mV=np.asarray([0.0, 1.0, 2.0, 3.0]),
+        t_s=np.asarray([0.0, 1.0, 2.0, 3.0]),
+        Tsample_K=0.125,
+    )
+
+    transformed = (
+        trace.offset(Voff_mV=0.1, Ioff_nA=0.1)
+        .resample(nu_Hz=2.0)
+        .low_pass(cutoff_Hz=0.5)
+    )
+
+    assert transformed.Tsample_K is not None
+    assert float(transformed.Tsample_K) == pytest.approx(0.125)
 
 
 def test_get_traces_accepts_filespec_keys_and_ivspec(

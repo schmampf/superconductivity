@@ -7,7 +7,15 @@ from typing import Iterator, Sequence
 
 import numpy as np
 
-from ...utilities.meta import AxisSpec, Dataset, DataSpec, axis, data
+from ...utilities.meta import (
+    AxisSpec,
+    Dataset,
+    DataSpec,
+    ParamSpec,
+    axis,
+    data,
+    param,
+)
 from ...utilities.safety import require_all_finite
 from ...utilities.types import NDArray64
 from .file import FileSpec, _import_h5py, _require_measurement, _to_measurement_path
@@ -66,13 +74,20 @@ class Trace(Dataset):
         I_nA: NDArray64,
         V_mV: NDArray64,
         t_s: NDArray64,
+        Tsample_K: float | None = None,
     ) -> None:
+        params = (
+            ()
+            if Tsample_K is None
+            else (param("Tsample_K", float(Tsample_K)),)
+        )
         trace_ds = Dataset(
             data=(
                 data("I_nA", I_nA),
                 data("V_mV", V_mV),
             ),
             axes=(axis("t_s", values=t_s, order=0),),
+            params=params,
         )
         object.__setattr__(self, "data", trace_ds.data)
         object.__setattr__(self, "axes", trace_ds.axes)
@@ -95,6 +110,15 @@ class Trace(Dataset):
     @property
     def V_mV(self) -> DataSpec:
         return Dataset.__getitem__(self, "V_mV")
+
+    @property
+    def Tsample_K(self) -> ParamSpec | None:
+        """Return the mean sample temperature when available."""
+        if "Tsample_K" not in self:
+            return None
+        value = Dataset.__getitem__(self, "Tsample_K")
+        assert isinstance(value, ParamSpec)
+        return value
 
     @property
     def dt_s(self) -> float:
@@ -208,6 +232,7 @@ class Trace(Dataset):
             I_nA=np.asarray(i_new, dtype=np.float64),
             V_mV=np.asarray(v_new, dtype=np.float64),
             t_s=np.asarray(t_new, dtype=np.float64),
+            Tsample_K=_temperature_value(self),
         )
 
     def low_pass(self, *, cutoff_Hz: float, order: int = 4) -> Trace:
@@ -256,6 +281,7 @@ class Trace(Dataset):
             I_nA=np.asarray(i_filt_nA, dtype=np.float64),
             V_mV=np.asarray(v_filt_mV, dtype=np.float64),
             t_s=np.asarray(t_raw, dtype=np.float64),
+            Tsample_K=_temperature_value(self),
         )
 
     def offset(self, *, Voff_mV: float = 0.0, Ioff_nA: float = 0.0) -> Trace:
@@ -266,6 +292,7 @@ class Trace(Dataset):
             I_nA=np.asarray(self.I_nA.values, dtype=np.float64) - Ioff_nA,
             V_mV=np.asarray(self.V_mV.values, dtype=np.float64) - Voff_mV,
             t_s=np.asarray(self.t_s.values, dtype=np.float64),
+            Tsample_K=_temperature_value(self),
         )
 
 
@@ -318,7 +345,7 @@ class Traces(Keys):
 
     def keys(self) -> tuple[str, ...]:
         """Return public mapping-style keys."""
-        return Keys.keys(self) + ("t_s", "I_nA", "V_mV")
+        return Keys.keys(self) + ("t_s", "I_nA", "V_mV", "Tsample_K")
 
     @property
     def I_nA(self) -> list[DataSpec]:
@@ -334,6 +361,11 @@ class Traces(Keys):
     def t_s(self) -> list[AxisSpec]:
         """Return per-trace time axes."""
         return [trace.t_s for trace in self.traces]
+
+    @property
+    def Tsample_K(self) -> list[ParamSpec | None]:
+        """Return per-trace mean sample temperatures."""
+        return [trace.Tsample_K for trace in self.traces]
 
     def __getattr__(self, name: str):
         try:
@@ -441,6 +473,36 @@ def _normalize_skip_edges(
         return skip_start, skip_end
 
     raise ValueError("skip_edges must be int or tuple[int, int].")
+
+
+def _temperature_value(trace: Trace) -> float | None:
+    """Return one trace's scalar sample temperature."""
+    temperature = trace.Tsample_K
+    return None if temperature is None else float(temperature)
+
+
+def _load_sample_temperature(file: object, full_path: str) -> float | None:
+    """Return the finite mean sample temperature for one trace."""
+    bluefors_path = f"{full_path}/sweep/bluefors"
+    if bluefors_path not in file:
+        return None
+
+    bluefors = file[bluefors_path]
+    keys = getattr(bluefors, "keys", None)
+    if callable(keys) and "Tsample" in keys():
+        values = np.asarray(bluefors["Tsample"], dtype=np.float64)
+    else:
+        values = np.asarray(bluefors)
+        names = values.dtype.names
+        if names is None or "Tsample" not in names:
+            return None
+        values = np.asarray(values["Tsample"], dtype=np.float64)
+
+    finite_values = values.reshape(-1)
+    finite_values = finite_values[np.isfinite(finite_values)]
+    if finite_values.size == 0:
+        return None
+    return float(np.mean(finite_values))
 
 
 def _normalize_keys_and_yvalues(
@@ -565,6 +627,7 @@ def _load_trace_from_file(
         I_nA=np.asarray(I_nA, dtype=np.float64),
         V_mV=np.asarray(V_mV, dtype=np.float64),
         t_s=np.asarray(t_s, dtype=np.float64),
+        Tsample_K=_load_sample_temperature(file, full_path),
     )
 
 
