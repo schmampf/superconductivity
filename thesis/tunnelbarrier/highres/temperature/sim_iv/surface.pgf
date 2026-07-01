@@ -429,7 +429,7 @@
 \end{pgfscope}%
 \begin{pgfscope}%
 \pgfsys@transformshift{0.106389in}{0.209444in}%
-\pgftext[left,bottom]{\includegraphics[interpolate=true,width=1.708611in,height=1.300833in]{surface-img0.png}}%
+\pgftext[left,bottom]{\includegraphics[interpolate=true,width=1.708611in,height=1.301667in]{surface-img0.png}}%
 \end{pgfscope}%
 \begin{pgfscope}%
 \pgfsetrectcap%
