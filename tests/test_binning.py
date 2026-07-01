@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from superconductivity.utilities.functions.binning import bin
+from superconductivity.utilities.functions.binning import bin, nanbin
 from superconductivity.utilities.legacy.functions import bin_y_over_x
 
 
@@ -171,6 +171,51 @@ def test_bin_empty_bins_are_nan() -> None:
 
     assert np.isnan(out[1])
     np.testing.assert_allclose(out[[0, 2]], np.array([1.0, 2.0]))
+
+
+def test_nanbin_ignores_contained_nans_per_row() -> None:
+    z = np.array(
+        [
+            [1.0, np.nan, 3.0, 4.0],
+            [10.0, 20.0, np.nan, 40.0],
+        ],
+        dtype=np.float64,
+    )
+    x = np.array([-0.75, -0.25, 0.25, 0.75], dtype=np.float64)
+    xbins = np.array([-0.5, 0.5], dtype=np.float64)
+
+    out = nanbin(z=z, x=x, xbins=xbins, axis=1)
+
+    expected = np.array([[1.0, 3.5], [15.0, 40.0]], dtype=np.float64)
+    np.testing.assert_allclose(out, expected, equal_nan=True)
+
+
+def test_nanbin_ignores_nonfinite_x_values() -> None:
+    z = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float64)
+    x = np.array([-0.75, np.nan, 0.25, 0.75], dtype=np.float64)
+    xbins = np.array([-0.5, 0.5], dtype=np.float64)
+
+    out = nanbin(z=z, x=x, xbins=xbins)
+
+    expected = np.array([1.0, 3.5], dtype=np.float64)
+    np.testing.assert_allclose(out, expected)
+
+
+def test_nanbin_all_nan_line_returns_nan_bins() -> None:
+    z = np.array(
+        [
+            [np.nan, np.nan, np.nan, np.nan],
+            [10.0, 20.0, 30.0, 40.0],
+        ],
+        dtype=np.float64,
+    )
+    x = np.array([-0.75, -0.25, 0.25, 0.75], dtype=np.float64)
+    xbins = np.array([-0.5, 0.5], dtype=np.float64)
+
+    out = nanbin(z=z, x=x, xbins=xbins, axis=1)
+
+    assert np.isnan(out[0]).all()
+    np.testing.assert_allclose(out[1], np.array([15.0, 35.0]))
 
 
 def test_bin_rejects_invalid_axis() -> None:
