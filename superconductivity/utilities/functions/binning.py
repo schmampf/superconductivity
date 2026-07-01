@@ -41,11 +41,55 @@ def bin(
     return result
 
 
+def nanbin(
+    z: np.ndarray | Sequence[np.ndarray],
+    x: np.ndarray | Sequence[np.ndarray],
+    xbins: np.ndarray,
+    axis: int | None = None,
+) -> np.ndarray | list[np.ndarray]:
+    """Bin ``z`` over ``x`` while ignoring non-finite samples.
+
+    Non-finite ``x`` or ``z`` values are dropped independently for each binned
+    row. Rows without any finite samples return all-NaN bins.
+    """
+    z_arr = z
+    x_arr = x
+    xbins_arr = _validate_xbins(xbins)
+    axis_inferred = -1 if axis is None else int(axis)
+
+    if is_ragged_sequence(z_arr):
+        result = _bin_ragged(
+            z_arr,
+            x_arr,
+            xbins_arr,
+            axis_inferred,
+            allow_nan=True,
+        )
+    else:
+        if is_ragged_sequence(x_arr):
+            raise ValueError(
+                "x may only be a sequence when z is also a sequence.",
+            )
+        result = _bin_dense(
+            np.asarray(z_arr),
+            np.asarray(x_arr),
+            xbins_arr,
+            axis_inferred,
+            allow_nan=True,
+        )
+    return result
+
+
+nanbin_y_over_x = nanbin
+
+
 def _bin_ragged(
     z_seq: Sequence[np.ndarray],
     x: np.ndarray | Sequence[np.ndarray],
     xbins: np.ndarray,
     axis: int,
+    *,
+    allow_nan: bool = False,
 ) -> list[np.ndarray]:
     if len(z_seq) == 0:
         raise ValueError("z must not be empty.")
@@ -55,7 +99,13 @@ def _bin_ragged(
         if len(x_seq) != len(z_seq):
             raise ValueError("x and z must contain the same number of items.")
         return [
-            _bin_dense(np.asarray(z_i), np.asarray(x_i), xbins, axis)
+            _bin_dense(
+                np.asarray(z_i),
+                np.asarray(x_i),
+                xbins,
+                axis,
+                allow_nan=allow_nan,
+            )
             for z_i, x_i in zip(z_seq, x_seq)
         ]
 
@@ -64,7 +114,15 @@ def _bin_ragged(
     for z_i in z_seq:
         z_arr = np.asarray(z_i)
         try:
-            out.append(_bin_dense(z_arr, x_arr, xbins, axis))
+            out.append(
+                _bin_dense(
+                    z_arr,
+                    x_arr,
+                    xbins,
+                    axis,
+                    allow_nan=allow_nan,
+                )
+            )
         except ValueError as exc:
             raise ValueError(
                 (
@@ -80,20 +138,28 @@ def _bin_dense(
     x: np.ndarray,
     xbins: np.ndarray,
     axis: int,
+    *,
+    allow_nan: bool = False,
 ) -> np.ndarray:
     if z.ndim == 0:
         raise ValueError("z must have at least one dimension.")
 
     z_arr = np.asarray(z, dtype=np.float64)
     require_min_size(z_arr, 1, "z")
-    require_all_finite(z_arr, "z")
+    if not allow_nan:
+        require_all_finite(z_arr, "z")
 
     x_arr = np.asarray(x)
     if x_arr.ndim == 0:
         raise ValueError("x must have at least one dimension.")
 
     axis_norm = normalize_axis(axis, max(z_arr.ndim, x_arr.ndim))
-    x_work, z_work = _prepare_dense_pair(z_arr, x_arr, axis_norm)
+    x_work, z_work = _prepare_dense_pair(
+        z_arr,
+        x_arr,
+        axis_norm,
+        allow_nan=allow_nan,
+    )
     z_work = np.moveaxis(z_work, axis_norm, -1)
     x_work = np.moveaxis(x_work, axis_norm, -1)
 
@@ -104,7 +170,7 @@ def _bin_dense(
 
     out = np.empty((z_flat.shape[0], n_bins), dtype=np.float64)
     for i, (x_row, z_row) in enumerate(zip(x_flat, z_flat)):
-        out[i] = _bin_1d(z_row, x_row, xbins)
+        out[i] = _bin_1d(z_row, x_row, xbins, allow_nan=allow_nan)
 
     out = out.reshape(*leading_shape, n_bins)
     return np.moveaxis(out, -1, axis_norm)
@@ -114,14 +180,21 @@ def _prepare_dense_pair(
     z: np.ndarray,
     x: np.ndarray,
     axis: int,
+    *,
+    allow_nan: bool = False,
 ) -> tuple[np.ndarray, np.ndarray]:
     if x.ndim == z.ndim and x.shape == z.shape:
         x_arr = np.asarray(x, dtype=np.float64)
-        require_all_finite(x_arr, "x")
+        if not allow_nan:
+            require_all_finite(x_arr, "x")
         return x_arr, z
 
     if x.ndim == 1:
-        x_arr = to_1d_float64(x, "x")
+        x_arr = np.asarray(x, dtype=np.float64)
+        if x_arr.ndim != 1:
+            raise ValueError("x must be 1D.")
+        if not allow_nan:
+            require_all_finite(x_arr, "x")
         axis_z = normalize_axis(axis, z.ndim)
         if x_arr.size != z.shape[axis_z]:
             raise ValueError("1D x must match z along the selected axis.")
@@ -132,7 +205,8 @@ def _prepare_dense_pair(
 
     if z.ndim == 1:
         x_arr = np.asarray(x, dtype=np.float64)
-        require_all_finite(x_arr, "x")
+        if not allow_nan:
+            require_all_finite(x_arr, "x")
         axis_x = normalize_axis(axis, x_arr.ndim)
         if x_arr.shape[axis_x] != z.size:
             raise ValueError(
@@ -145,22 +219,41 @@ def _prepare_dense_pair(
 
     x_arr = np.asarray(x, dtype=np.float64)
     require_same_shape(x_arr, z, "x", "z")
-    require_all_finite(x_arr, "x")
+    if not allow_nan:
+        require_all_finite(x_arr, "x")
     return x_arr, z
 
 
-def _bin_1d(z: np.ndarray, x: np.ndarray, xbins: np.ndarray) -> np.ndarray:
-    x_arr = to_1d_float64(x, "x")
-    z_arr = to_1d_float64(z, "z")
+def _bin_1d(
+    z: np.ndarray,
+    x: np.ndarray,
+    xbins: np.ndarray,
+    *,
+    allow_nan: bool = False,
+) -> np.ndarray:
+    x_arr = np.asarray(x, dtype=np.float64)
+    z_arr = np.asarray(z, dtype=np.float64)
+    if x_arr.ndim != 1:
+        raise ValueError("x must be 1D.")
+    if z_arr.ndim != 1:
+        raise ValueError("z must be 1D.")
     require_same_shape(x_arr, z_arr, "x", "z")
-    require_all_finite(x_arr, "x")
-    require_all_finite(z_arr, "z")
+    if allow_nan:
+        finite = np.isfinite(x_arr) & np.isfinite(z_arr)
+        x_arr = x_arr[finite]
+        z_arr = z_arr[finite]
+    else:
+        require_all_finite(x_arr, "x")
+        require_all_finite(z_arr, "z")
+
+    out = np.full(xbins.shape, np.nan, dtype=np.float64)
+    if x_arr.size == 0:
+        return out
 
     edges = _bin_edges_from_centers(xbins)
     counts, _ = np.histogram(x_arr, bins=edges)
     sums, _ = np.histogram(x_arr, bins=edges, weights=z_arr)
 
-    out = np.full(xbins.shape, np.nan, dtype=np.float64)
     nonzero = counts > 0
     out[nonzero] = sums[nonzero] / counts[nonzero]
     return out
@@ -182,4 +275,4 @@ def _validate_xbins(xbins: np.ndarray) -> np.ndarray:
     return xbins_arr
 
 
-__all__ = ["bin"]
+__all__ = ["bin", "nanbin", "nanbin_y_over_x"]
