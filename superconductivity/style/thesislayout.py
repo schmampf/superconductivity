@@ -9,6 +9,7 @@ from ..utilities.types import NDArray64
 
 Textwidth: float = 4.25279  # in
 Textheight: float = 6.85173  # in
+PngDpi: int = 1800
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -29,6 +30,7 @@ def save_figure(
     title: Optional[str],
     path_pgf: Optional[str] = None,
     path_png: Optional[str] = None,
+    png_dpi: int = PngDpi,
 ):
     if path_pgf is None:
         path_pgf = Remote
@@ -60,7 +62,7 @@ def save_figure(
         # PNG for slides/web: transparent background (no white fill)
         fig.savefig(
             out_png,
-            dpi=600,
+            dpi=png_dpi,
             transparent=True,
             facecolor="none",
             edgecolor="none",
@@ -97,6 +99,139 @@ def get_figure(
     fig.padding: Optional[tuple[float, float]] = padding
 
     return fig, ax
+
+
+def get_figures(
+    nrows: int = 7,
+    ncols: int = 4,
+    figsize: Optional[tuple[float, float]] = None,
+    facecolor: Optional[str] = None,
+    subfigure: bool = True,
+    padding: Optional[tuple[float, float]] = None,
+):
+    if figsize is None:
+        figsize = (Textwidth, Textheight)
+
+    if padding is None:
+        padding = (0.38, 0.28)
+
+    fig, axes = plt.subplots(
+        nrows=nrows,
+        ncols=ncols,
+        figsize=figsize,
+        facecolor=facecolor,
+        squeeze=False,
+    )
+
+    fig.subfigure = subfigure
+    fig.padding = padding
+    fig.nrows = nrows
+    fig.ncols = ncols
+
+    return fig, list(axes.ravel())
+
+
+def daumenkino_layout(
+    fig: Figure,
+    axes: list[Axes] | np.ndarray,
+    title: Optional[str] = None,
+    xlabel: Optional[str] = None,
+    ylabel: Optional[str] = None,
+    xticks: Optional[NDArray64] = None,
+    yticks: Optional[NDArray64] = None,
+    xticklabels: Optional[list[str]] = None,
+    yticklabels: Optional[list[str]] = None,
+    nrows: Optional[int] = None,
+    ncols: Optional[int] = None,
+    padding: Optional[tuple[float, float]] = None,
+    base_padding: Optional[tuple[float, float]] = None,
+    show_inner_ticklabels: bool = False,
+    path_pgf: Optional[str] = None,
+    path_pdf: Optional[str] = None,
+):
+    axes_arr = np.asarray(axes, dtype=object)
+    axes_flat = list(axes_arr.ravel())
+
+    if nrows is None:
+        nrows = getattr(fig, "nrows", None)
+    if ncols is None:
+        ncols = getattr(fig, "ncols", None)
+    if nrows is None or ncols is None:
+        n_axes = len(axes_flat)
+        ncols = 4
+        nrows = int(np.ceil(n_axes / ncols))
+
+    if len(axes_flat) != nrows * ncols:
+        raise ValueError("nrows * ncols must match the number of axes.")
+
+    if padding is None:
+        padding = getattr(fig, "padding", (0.38, 0.28))
+
+    if base_padding is None:
+        base_padding = (0.04, 0.04)
+
+    is_subfigure = getattr(fig, "subfigure", True)
+    labelsize = 7 if is_subfigure else 8
+    fontsize = 7 if is_subfigure else 8
+
+    w0, h0 = fig.get_size_inches()
+    px, py = padding
+    bpx, bpy = base_padding
+    left = (px + bpx) / w0
+    right = 1.0 - bpx / w0
+    bottom = (py + bpy) / h0
+    top = 1.0 - bpy / h0
+
+    fig.subplots_adjust(
+        left=left,
+        right=right,
+        bottom=bottom,
+        top=top,
+        wspace=0.0,
+        hspace=0.0,
+    )
+
+    for index, ax in enumerate(axes_flat):
+        row = index // ncols
+        col = index % ncols
+        is_left = col == 0
+        is_bottom = row == nrows - 1
+
+        for spine in ["top", "right", "bottom", "left"]:
+            ax.spines[spine].set_visible(True)
+
+        ax.tick_params(
+            axis="both",
+            direction="in",
+            length=3,
+            labelsize=labelsize,
+            pad=1.5,
+            color="k",
+            labelcolor="k",
+            top=True,
+            right=True,
+        )
+
+        if xticks is not None:
+            ax.set_xticks(xticks)
+        if yticks is not None:
+            ax.set_yticks(yticks)
+        if xticklabels is not None:
+            ax.set_xticklabels(xticklabels)
+        if yticklabels is not None:
+            ax.set_yticklabels(yticklabels)
+
+        ax.set_xlabel(xlabel if is_bottom else "", fontsize=fontsize)
+        ax.set_ylabel(ylabel if is_left else "", fontsize=fontsize)
+
+        if not show_inner_ticklabels:
+            ax.tick_params(
+                labelbottom=is_bottom,
+                labelleft=is_left,
+            )
+
+    save_figure(fig, title, path_pgf, path_pdf)
+    return axes_flat
 
 
 def theory_layout(
