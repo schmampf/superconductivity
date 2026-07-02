@@ -25,6 +25,24 @@ Style: str = f"{_STYLE_DIR.resolve()}/"
 plt.style.use(str(_STYLE_DIR / "thesisstyle.mplstyle"))
 
 
+def _normalize_padding(
+    padding: Optional[tuple[float, ...]],
+    default: tuple[float, float],
+) -> tuple[float, float, float, float]:
+    if padding is None:
+        padding = default
+
+    if len(padding) == 2:
+        left, bottom = padding
+        return left, bottom, 0.0, 0.0
+
+    if len(padding) == 4:
+        left, bottom, right, top = padding
+        return left, bottom, right, top
+
+    raise ValueError("padding must be a 2-tuple or 4-tuple.")
+
+
 def save_figure(
     fig: Figure,
     title: Optional[str],
@@ -107,13 +125,12 @@ def get_figures(
     figsize: Optional[tuple[float, float]] = None,
     facecolor: Optional[str] = None,
     subfigure: bool = True,
-    padding: Optional[tuple[float, float]] = None,
+    padding: Optional[tuple[float, ...]] = None,
 ):
     if figsize is None:
         figsize = (Textwidth, Textheight)
 
-    if padding is None:
-        padding = (0.38, 0.28)
+    padding = _normalize_padding(padding, default=(0.38, 0.28))
 
     fig, axes = plt.subplots(
         nrows=nrows,
@@ -143,7 +160,7 @@ def daumenkino_layout(
     yticklabels: Optional[list[str]] = None,
     nrows: Optional[int] = None,
     ncols: Optional[int] = None,
-    padding: Optional[tuple[float, float]] = None,
+    padding: Optional[tuple[float, ...]] = None,
     base_padding: Optional[tuple[float, float]] = None,
     show_inner_ticklabels: bool = False,
     path_pgf: Optional[str] = None,
@@ -165,7 +182,11 @@ def daumenkino_layout(
         raise ValueError("nrows * ncols must match the number of axes.")
 
     if padding is None:
-        padding = getattr(fig, "padding", (0.38, 0.28))
+        padding = getattr(fig, "padding", None)
+    left_pad, bottom_pad, right_pad, top_pad = _normalize_padding(
+        padding,
+        default=(0.38, 0.28),
+    )
 
     if base_padding is None:
         base_padding = (0.04, 0.04)
@@ -175,12 +196,11 @@ def daumenkino_layout(
     fontsize = 7 if is_subfigure else 8
 
     w0, h0 = fig.get_size_inches()
-    px, py = padding
     bpx, bpy = base_padding
-    left = (px + bpx) / w0
-    right = 1.0 - bpx / w0
-    bottom = (py + bpy) / h0
-    top = 1.0 - bpy / h0
+    left = (left_pad + bpx) / w0
+    right = 1.0 - (right_pad + bpx) / w0
+    bottom = (bottom_pad + bpy) / h0
+    top = 1.0 - (top_pad + bpy) / h0
 
     fig.subplots_adjust(
         left=left,

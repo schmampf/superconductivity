@@ -7,6 +7,7 @@ os.environ.setdefault("MPLCONFIGDIR", "/tmp/mpl")
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+import pytest
 
 matplotlib.use("Agg")
 
@@ -14,6 +15,16 @@ from superconductivity.style.thesislayout import (  # noqa: E402
     daumenkino_layout,
     get_figures,
 )
+
+
+def _right_margin(ax: matplotlib.axes.Axes) -> float:
+    bounds = ax.get_position().bounds
+    return 1.0 - (bounds[0] + bounds[2])
+
+
+def _top_margin(ax: matplotlib.axes.Axes) -> float:
+    bounds = ax.get_position().bounds
+    return 1.0 - (bounds[1] + bounds[3])
 
 
 def test_get_figures_returns_row_major_axes() -> None:
@@ -67,5 +78,66 @@ def test_daumenkino_layout_uses_outer_labels_and_touching_axes() -> None:
 
         assert np.isclose(first[0] + first[2], right_neighbor[0])
         assert np.isclose(lower_neighbor[1] + lower_neighbor[3], first[1])
+    finally:
+        plt.close(fig)
+
+
+def test_daumenkino_layout_keeps_legacy_two_value_padding() -> None:
+    fig, axes = get_figures(
+        nrows=7,
+        ncols=4,
+        figsize=(4.2, 6.0),
+        padding=(0.38, 0.28),
+    )
+
+    try:
+        daumenkino_layout(fig, axes)
+
+        top_right = axes[3].get_position().bounds
+        bottom_left = axes[-4].get_position().bounds
+
+        assert np.isclose(_right_margin(axes[3]), 0.04 / 4.2)
+        assert np.isclose(_top_margin(axes[0]), 0.04 / 6.0)
+        assert np.isclose(bottom_left[0], (0.38 + 0.04) / 4.2)
+        assert np.isclose(bottom_left[1], (0.28 + 0.04) / 6.0)
+        assert np.isclose(
+            top_right[0] + top_right[2],
+            1.0 - 0.04 / 4.2,
+        )
+    finally:
+        plt.close(fig)
+
+
+def test_daumenkino_layout_accepts_four_sided_padding() -> None:
+    fig, axes = get_figures(
+        nrows=7,
+        ncols=4,
+        figsize=(4.2, 6.0),
+        padding=(0.38, 0.28, 0.35, 0.05),
+    )
+
+    try:
+        daumenkino_layout(fig, axes)
+
+        first = axes[0].get_position().bounds
+        right_neighbor = axes[1].get_position().bounds
+        lower_neighbor = axes[4].get_position().bounds
+
+        assert np.isclose(_right_margin(axes[3]), (0.35 + 0.04) / 4.2)
+        assert np.isclose(_top_margin(axes[0]), (0.05 + 0.04) / 6.0)
+        assert np.isclose(first[0] + first[2], right_neighbor[0])
+        assert np.isclose(lower_neighbor[1] + lower_neighbor[3], first[1])
+    finally:
+        plt.close(fig)
+
+
+def test_daumenkino_layout_rejects_invalid_padding_length() -> None:
+    with pytest.raises(ValueError, match="2-tuple or 4-tuple"):
+        get_figures(padding=(0.1, 0.2, 0.3))
+
+    fig, axes = get_figures()
+    try:
+        with pytest.raises(ValueError, match="2-tuple or 4-tuple"):
+            daumenkino_layout(fig, axes, padding=(0.1,))
     finally:
         plt.close(fig)
