@@ -43,6 +43,22 @@ def _normalize_padding(
     raise ValueError("padding must be a 2-tuple or 4-tuple.")
 
 
+def _clear_daumenkino_labels(ax: Axes) -> None:
+    for text in list(ax.texts):
+        if getattr(text, "_daumenkino_label", False):
+            text.remove()
+
+
+def _add_daumenkino_label(
+    ax: Axes,
+    *args,
+    **kwargs,
+):
+    text = ax.text(*args, clip_on=False, **kwargs)
+    text._daumenkino_label = True
+    return text
+
+
 def save_figure(
     fig: Figure,
     title: Optional[str],
@@ -212,6 +228,8 @@ def daumenkino_layout(
     )
 
     for index, ax in enumerate(axes_flat):
+        _clear_daumenkino_labels(ax)
+
         row = index // ncols
         col = index % ncols
         is_left = col == 0
@@ -241,8 +259,39 @@ def daumenkino_layout(
         if yticklabels is not None:
             ax.set_yticklabels(yticklabels)
 
-        ax.set_xlabel(xlabel if is_bottom else "", fontsize=fontsize)
-        ax.set_ylabel(ylabel if is_left else "", fontsize=fontsize)
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+
+        if is_bottom and xlabel is not None:
+            x0, x1 = ax.get_xlim()
+            y0, y1 = ax.get_ylim()
+            _, ax_y0, _, ax_h = ax.get_position().bounds
+            label_y = y0 - ax_y0 / ax_h * (y1 - y0)
+            _add_daumenkino_label(
+                ax,
+                x0 + (x1 - x0) / 2,
+                label_y,
+                xlabel,
+                ha="center",
+                va="bottom",
+                fontsize=fontsize,
+            )
+
+        if is_left and ylabel is not None:
+            x0, x1 = ax.get_xlim()
+            y0, y1 = ax.get_ylim()
+            ax_x0, _, ax_w, _ = ax.get_position().bounds
+            label_x = x0 - ax_x0 / ax_w * (x1 - x0)
+            _add_daumenkino_label(
+                ax,
+                label_x,
+                y0 + (y1 - y0) / 2,
+                ylabel,
+                rotation=90,
+                ha="left",
+                va="center",
+                fontsize=fontsize,
+            )
 
         if not show_inner_ticklabels:
             ax.tick_params(

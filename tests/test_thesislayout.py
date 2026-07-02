@@ -27,6 +27,33 @@ def _top_margin(ax: matplotlib.axes.Axes) -> float:
     return 1.0 - (bounds[1] + bounds[3])
 
 
+def _daumenkino_labels(ax: matplotlib.axes.Axes) -> list[matplotlib.text.Text]:
+    return [
+        text for text in ax.texts
+        if getattr(text, "_daumenkino_label", False)
+    ]
+
+
+def _manual_label_figure_x(
+    ax: matplotlib.axes.Axes,
+    text: matplotlib.text.Text,
+) -> float:
+    ax_x0, _, ax_w, _ = ax.get_position().bounds
+    x0, x1 = ax.get_xlim()
+    text_x = text.get_position()[0]
+    return ax_x0 + (text_x - x0) / (x1 - x0) * ax_w
+
+
+def _manual_label_figure_y(
+    ax: matplotlib.axes.Axes,
+    text: matplotlib.text.Text,
+) -> float:
+    _, ax_y0, _, ax_h = ax.get_position().bounds
+    y0, y1 = ax.get_ylim()
+    text_y = text.get_position()[1]
+    return ax_y0 + (text_y - y0) / (y1 - y0) * ax_h
+
+
 def test_get_figures_returns_row_major_axes() -> None:
     fig, axes = get_figures(nrows=7, ncols=4, figsize=(4.2, 6.0))
 
@@ -58,8 +85,9 @@ def test_daumenkino_layout_uses_outer_labels_and_touching_axes() -> None:
         for index, ax in enumerate(axes):
             row = index // 4
             col = index % 4
-            assert ax.get_xlabel() == ("$V$" if row == 6 else "")
-            assert ax.get_ylabel() == ("$I$" if col == 0 else "")
+            labels = _daumenkino_labels(ax)
+            assert any(text.get_text() == "$V$" for text in labels) == (row == 6)
+            assert any(text.get_text() == "$I$" for text in labels) == (col == 0)
             assert all(
                 label.get_visible() == (row == 6)
                 for label in ax.get_xticklabels()
@@ -139,5 +167,73 @@ def test_daumenkino_layout_rejects_invalid_padding_length() -> None:
     try:
         with pytest.raises(ValueError, match="2-tuple or 4-tuple"):
             daumenkino_layout(fig, axes, padding=(0.1,))
+    finally:
+        plt.close(fig)
+
+
+def test_daumenkino_labels_match_theory_layout_anchors() -> None:
+    fig_narrow, axes_narrow = get_figures(nrows=4, ncols=7, figsize=(6.8, 3.15))
+    fig_wide, axes_wide = get_figures(nrows=4, ncols=7, figsize=(6.8, 3.15))
+
+    try:
+        daumenkino_layout(
+            fig_narrow,
+            axes_narrow,
+            xlabel="$x$",
+            ylabel="$y$",
+            yticks=[0, 1, 2],
+        )
+        daumenkino_layout(
+            fig_wide,
+            axes_wide,
+            xlabel="$x$",
+            ylabel="$y$",
+            yticks=[0, 5, 10],
+        )
+
+        narrow_ylabel = [
+            text for text in _daumenkino_labels(axes_narrow[0])
+            if text.get_text() == "$y$"
+        ][0]
+        wide_ylabel = [
+            text for text in _daumenkino_labels(axes_wide[0])
+            if text.get_text() == "$y$"
+        ][0]
+        narrow_xlabel = [
+            text for text in _daumenkino_labels(axes_narrow[-1])
+            if text.get_text() == "$x$"
+        ][0]
+        wide_xlabel = [
+            text for text in _daumenkino_labels(axes_wide[-1])
+            if text.get_text() == "$x$"
+        ][0]
+
+        assert np.isclose(_manual_label_figure_x(axes_narrow[0], narrow_ylabel), 0.0)
+        assert np.isclose(_manual_label_figure_x(axes_wide[0], wide_ylabel), 0.0)
+        assert np.isclose(_manual_label_figure_y(axes_narrow[-1], narrow_xlabel), 0.0)
+        assert np.isclose(_manual_label_figure_y(axes_wide[-1], wide_xlabel), 0.0)
+        assert narrow_ylabel.get_horizontalalignment() == "left"
+        assert narrow_ylabel.get_verticalalignment() == "center"
+        assert narrow_ylabel.get_rotation() == 90
+        assert narrow_xlabel.get_horizontalalignment() == "center"
+        assert narrow_xlabel.get_verticalalignment() == "bottom"
+    finally:
+        plt.close(fig_narrow)
+        plt.close(fig_wide)
+
+
+def test_daumenkino_layout_replaces_manual_labels() -> None:
+    fig, axes = get_figures(nrows=2, ncols=2)
+
+    try:
+        daumenkino_layout(fig, axes, xlabel="$x$", ylabel="$y$")
+        daumenkino_layout(fig, axes, xlabel="$x$", ylabel="$y$")
+
+        for index, ax in enumerate(axes):
+            row = index // 2
+            col = index % 2
+            labels = _daumenkino_labels(ax)
+            assert sum(text.get_text() == "$x$" for text in labels) == (row == 1)
+            assert sum(text.get_text() == "$y$" for text in labels) == (col == 0)
     finally:
         plt.close(fig)
