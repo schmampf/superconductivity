@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from operator import index
 from typing import Optional
 
 import matplotlib.cm as cm
@@ -469,6 +470,86 @@ def _oversample_surface_x(
     return x_dense, z_dense
 
 
+def _resolve_surface_bins(
+    surface_bins: tuple[int, int] | None,
+) -> tuple[int, int] | None:
+    """Validate the optional ``(Ny, Nx)`` surface bin target."""
+    if surface_bins is None:
+        return None
+    if isinstance(surface_bins, (str, bytes)):
+        raise ValueError("surface_bins must be a tuple of two integers.")
+    try:
+        values = tuple(surface_bins)
+    except TypeError as exc:
+        raise ValueError(
+            "surface_bins must be a tuple of two integers."
+        ) from exc
+    if len(values) != 2:
+        raise ValueError("surface_bins must contain exactly two integers.")
+
+    resolved: list[int] = []
+    for value in values:
+        if isinstance(value, bool):
+            raise ValueError("surface_bins values must be integers >= 2.")
+        try:
+            resolved_value = index(value)
+        except TypeError as exc:
+            raise ValueError(
+                "surface_bins values must be integers >= 2."
+            ) from exc
+        if resolved_value < 2:
+            raise ValueError("surface_bins values must be integers >= 2.")
+        resolved.append(int(resolved_value))
+    return resolved[0], resolved[1]
+
+
+def _nanmean_block(values: np.ndarray) -> float:
+    """Return a quiet NaN-aware block mean."""
+    finite = values[np.isfinite(values)]
+    if finite.size == 0:
+        return float("nan")
+    return float(np.mean(finite))
+
+
+def _bin_surface_mesh(
+    x: NDArray64,
+    y: NDArray64,
+    z: NDArray64,
+    *,
+    surface_bins: tuple[int, int] | None,
+) -> tuple[NDArray64, NDArray64, NDArray64]:
+    """Average a surface mesh to at most the requested vertex dimensions."""
+    resolved = _resolve_surface_bins(surface_bins)
+    x_arr = np.asarray(x, dtype=np.float64)
+    y_arr = np.asarray(y, dtype=np.float64)
+    z_arr = np.asarray(z, dtype=np.float64)
+    if resolved is None:
+        return x_arr, y_arr, z_arr
+
+    y_bins = min(resolved[0], y_arr.size)
+    x_bins = min(resolved[1], x_arr.size)
+    if y_bins == y_arr.size and x_bins == x_arr.size:
+        return x_arr, y_arr, z_arr
+
+    y_groups = np.array_split(np.arange(y_arr.size), y_bins)
+    x_groups = np.array_split(np.arange(x_arr.size), x_bins)
+    y_binned = np.asarray(
+        [_nanmean_block(y_arr[group]) for group in y_groups],
+        dtype=np.float64,
+    )
+    x_binned = np.asarray(
+        [_nanmean_block(x_arr[group]) for group in x_groups],
+        dtype=np.float64,
+    )
+    z_binned = np.empty((y_bins, x_bins), dtype=np.float64)
+    for y_index, y_group in enumerate(y_groups):
+        for x_index, x_group in enumerate(x_groups):
+            z_binned[y_index, x_index] = _nanmean_block(
+                z_arr[np.ix_(y_group, x_group)]
+            )
+    return x_binned, y_binned, z_binned
+
+
 def _resolve_trace_strip_lift(
     z_values: NDArray64,
 ) -> float:
@@ -494,6 +575,7 @@ def get_thesis_surface_matplotlib(
     clim: LIM = None,
     trace_step: int = 1,
     surface_x_oversample: int = 10,
+    surface_bins: tuple[int, int] | None = None,
     xlabel: str = "x",
     ylabel: str = "y",
     zlabel: str = "z",
@@ -553,6 +635,10 @@ def get_thesis_surface_matplotlib(
         Densify the surface mesh along the x direction by subdividing each
         original x interval into ``surface_x_oversample`` pieces. The
         default is ``10``; use ``1`` to keep the native x grid.
+    surface_bins
+        Optional target surface vertex count ``(Ny, Nx)``. When provided,
+        the cropped surface mesh is block-averaged to at most this shape and
+        ``surface_x_oversample`` is ignored.
     xlabel, ylabel, zlabel
         Axis labels.
     show_xaxis, show_yaxis, show_zaxis
@@ -657,12 +743,20 @@ def get_thesis_surface_matplotlib(
             ylim=ylim,
             trace_step=1,
         )
-    x_plot, z_plot = _oversample_surface_x(
+    x_binned, y_plot, z_binned = _bin_surface_mesh(
         x_sel,
+        y_sel,
         z_sel,
-        factor=surface_x_oversample,
+        surface_bins=surface_bins,
     )
-    y_plot = y_sel
+    if surface_bins is None:
+        x_plot, z_plot = _oversample_surface_x(
+            x_binned,
+            z_binned,
+            factor=surface_x_oversample,
+        )
+    else:
+        x_plot, z_plot = x_binned, z_binned
     trace_cell_weights = np.zeros(
         max(y_plot.size - 1, 0),
         dtype=np.float64,
@@ -679,7 +773,7 @@ def get_thesis_surface_matplotlib(
         )
         if surface_rasterized:
             y_plot, z_plot, trace_cell_weights = _embed_surface_trace_bands(
-                y=y_sel,
+                y=y_plot,
                 z=z_plot,
                 trace_y=overlay_y,
                 trace_z=overlay_z_plot,
@@ -687,8 +781,8 @@ def get_thesis_surface_matplotlib(
             )
         else:
             trace_strips = _build_surface_trace_strips(
-                y_sel,
-                z_sel,
+                y_plot,
+                z_plot,
                 trace_y=overlay_y,
                 trace_width=trace_width,
             )
@@ -752,7 +846,7 @@ def get_thesis_surface_matplotlib(
         trace_z_lift = _resolve_trace_strip_lift(z_plot)
         for y_strip, z_strip in trace_strips:
             xg_strip, yg_strip = np.meshgrid(
-                x_sel,
+                x_plot,
                 y_strip,
                 indexing="xy",
             )
