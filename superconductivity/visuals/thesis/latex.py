@@ -100,6 +100,9 @@ class StackedThesisExport:
         Precompiled stacked PDF for fast thesis imports.
     main_png
         Notebook-friendly stacked PNG preview.
+    remote_root
+        Optional root directory used to make shipped sidecar image paths
+        import-safe for the remote thesis tree.
     remote_stack_dir
         Optional shipped PGF bundle directory under the remote directory.
     """
@@ -112,6 +115,7 @@ class StackedThesisExport:
     main_pgf: Path
     main_pdf: Path
     main_png: Path
+    remote_root: Path | None
     remote_stack_dir: Path | None
 
 
@@ -198,6 +202,7 @@ def _build_export_paths(
         main_pgf=_bundle_file_path(stack_dir, "main.pgf"),
         main_pdf=_bundle_file_path(stack_dir, "main.pdf"),
         main_png=_bundle_file_path(stack_dir, "main.png"),
+        remote_root=remote_root if remote_dir is not None else None,
         remote_stack_dir=remote_stack_dir,
     )
 
@@ -267,6 +272,26 @@ def _iter_pgf_sidecar_images(pgf_path: Path) -> tuple[Path, ...]:
     )
 
 
+def _rewrite_pgf_sidecar_image_paths(
+    pgf_path: Path,
+    *,
+    image_prefix: str,
+) -> None:
+    """Rewrite bare PGF sidecar image names to import-safe relative paths."""
+    sidecars = _iter_pgf_sidecar_images(pgf_path)
+    if not sidecars:
+        return
+
+    pgf_text = pgf_path.read_text(encoding="utf-8")
+    prefix = image_prefix.rstrip("/")
+    for sidecar in sidecars:
+        pgf_text = pgf_text.replace(
+            f"{{{sidecar.name}}}",
+            rf"{{\detokenize{{{prefix}/{sidecar.name}}}}}",
+        )
+    pgf_path.write_text(pgf_text, encoding="utf-8")
+
+
 def _ship_remote_pgf_bundle(export: StackedThesisExport) -> None:
     """Copy the remote PGF and precompiled PDF thesis assets."""
     remote_stack_dir = export.remote_stack_dir
@@ -288,7 +313,22 @@ def _ship_remote_pgf_bundle(export: StackedThesisExport) -> None:
         *_iter_pgf_sidecar_images(export.heatmap_pgf),
     )
     for source in files_to_copy:
-        shutil.copy2(source, remote_stack_dir / source.name)
+        destination = remote_stack_dir / source.name
+        shutil.copy2(source, destination)
+
+    if export.remote_root is None:
+        return
+
+    image_prefix = _relative_posix_path(remote_stack_dir, export.remote_root)
+    for pgf_path in (
+        remote_stack_dir / export.waterfall_pgf.name,
+        remote_stack_dir / export.surface_pgf.name,
+        remote_stack_dir / export.heatmap_pgf.name,
+    ):
+        _rewrite_pgf_sidecar_image_paths(
+            pgf_path,
+            image_prefix=image_prefix,
+        )
 
 
 def _render_preview_png(
@@ -955,6 +995,7 @@ def export_stacked_waterfall_thesis(
     surface_trace_step: int = 1,
     heatmap_trace_step: int = 1,
     surface_x_oversample: int = 10,
+    surface_bins: tuple[int, int] | None = None,
     waterfall_traces: int | Sequence[float] | None = None,
     xlabel: str = "x",
     ylabel: str = "y",
@@ -1044,6 +1085,11 @@ def export_stacked_waterfall_thesis(
         Densify the surface mesh along x by subdividing each original x
         interval into ``surface_x_oversample`` pieces. The default is
         ``10``; use ``1`` to keep the native x grid.
+    surface_bins
+        Optional target surface vertex count ``(Ny, Nx)``. When provided,
+        only the surface panel is block-averaged to at most this shape after
+        surface cropping and ``surface_trace_step`` selection. Waterfall and
+        heatmap panels keep their existing resolution.
     waterfall_traces
         Waterfall trace selection. Pass an integer to keep the old behavior of
         drawing that many traces after applying ``trace_step``. Pass a
@@ -1284,6 +1330,7 @@ def export_stacked_waterfall_thesis(
             clim=clim,
             trace_step=surface_trace_step,
             surface_x_oversample=surface_x_oversample,
+            surface_bins=surface_bins,
             xlabel=xlabel,
             ylabel=ylabel,
             zlabel=zlabel,
@@ -1560,6 +1607,7 @@ def export_amplitude_maps_thesis(
     heatmap_cell_overlap: float = 0.7,
     z_axis_side: str = "right",
     surface_x_oversample: int = 10,
+    surface_bins: tuple[int, int] | None = None,
 ) -> dict[str, StackedThesisExport]:
     """Export thesis composite plots for one prepared amplitude-map dataset.
 
@@ -1607,6 +1655,10 @@ def export_amplitude_maps_thesis(
         Side used for z-axis labels and ticks.
     surface_x_oversample
         Surface-mesh oversampling factor along the x-axis.
+    surface_bins
+        Optional target surface vertex count ``(Ny, Nx)`` forwarded to the
+        surface panel only. Waterfall curves and heatmaps remain at full
+        prepared resolution.
 
     Returns
     -------
@@ -1712,6 +1764,7 @@ def export_amplitude_maps_thesis(
             ticklabelspacing=ticklabelspacing,
             heatmap_cell_overlap=heatmap_cell_overlap,
             surface_x_oversample=surface_x_oversample,
+            surface_bins=surface_bins,
         )
     return exports
 
