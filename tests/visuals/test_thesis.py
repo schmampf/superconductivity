@@ -27,6 +27,7 @@ from superconductivity.visuals.thesis.latex import (
     export_stacked_waterfall_thesis,
 )
 from superconductivity.visuals.thesis.surface import (
+    _bin_surface_mesh,
     _build_surface_trace_bands,
     _build_surface_trace_strips,
     get_thesis_surface_matplotlib,
@@ -482,6 +483,74 @@ def test_thesis_surface_allows_x_oversampling() -> None:
     assert _surface_face_count(ax) == 3 * (len(x) - 1) * (len(y) - 1)
 
 
+def test_thesis_surface_bins_limit_exported_mesh() -> None:
+    """Surface bins should define the final surface vertex grid."""
+    x, y, z = _waterfall_data(nx=9, ny=5)
+
+    _, ax = get_thesis_surface_matplotlib(
+        x,
+        y,
+        z,
+        surface_bins=(3, 4),
+    )
+
+    assert _surface_face_count(ax) == (3 - 1) * (4 - 1)
+
+
+def test_thesis_surface_bins_average_blocks_without_mutation() -> None:
+    """Surface binning should use block-wise finite means."""
+    x = np.arange(6, dtype=np.float64)
+    y = np.arange(4, dtype=np.float64)
+    z = np.arange(24, dtype=np.float64).reshape(4, 6)
+    z[1, 1] = np.nan
+    original_z = z.copy()
+
+    x_binned, y_binned, z_binned = _bin_surface_mesh(
+        x,
+        y,
+        z,
+        surface_bins=(2, 3),
+    )
+
+    np.testing.assert_allclose(x_binned, [0.5, 2.5, 4.5])
+    np.testing.assert_allclose(y_binned, [0.5, 2.5])
+    np.testing.assert_allclose(
+        z_binned,
+        [
+            [7.0 / 3.0, 5.5, 7.5],
+            [15.5, 17.5, 19.5],
+        ],
+    )
+    np.testing.assert_array_equal(z, original_z)
+
+
+@pytest.mark.parametrize(
+    "surface_bins",
+    [
+        (1, 3),
+        (3, 1),
+        (3,),
+        (3, 4, 5),
+        "3,4",
+        (True, 4),
+        (3.5, 4),
+    ],
+)
+def test_thesis_surface_bins_validate_input(
+    surface_bins: object,
+) -> None:
+    """Invalid surface bin requests should fail before plotting."""
+    x, y, z = _waterfall_data(nx=9, ny=5)
+
+    with pytest.raises(ValueError, match="surface_bins"):
+        get_thesis_surface_matplotlib(
+            x,
+            y,
+            z,
+            surface_bins=surface_bins,  # type: ignore[arg-type]
+        )
+
+
 def test_thesis_surface_colors_follow_height() -> None:
     """Surface colors should come from the surface heights, not fixed faces."""
     x, y, z = _waterfall_data(nx=9, ny=5)
@@ -839,6 +908,7 @@ def test_export_amplitude_maps_thesis_selects_order_and_overrides(
         dRticks=(0.0, 1.0),
         figsize=(3.0, 4.0),
         heatmap_cell_overlap=0.25,
+        surface_bins=(2, 3),
     )
 
     assert list(exports) == ["dvdi", "iv"]
@@ -856,6 +926,8 @@ def test_export_amplitude_maps_thesis_selects_order_and_overrides(
     )
     assert calls[0]["figsize"] == (3.0, 4.0)
     assert calls[0]["heatmap_cell_overlap"] == 0.25
+    assert calls[0]["surface_bins"] == (2, 3)
+    assert calls[1]["surface_bins"] == (2, 3)
 
 
 @pytest.mark.parametrize(
@@ -1391,6 +1463,75 @@ def test_export_stacked_waterfall_thesis_can_skip_inline_preview(
     assert preview_calls == []
 
 
+def test_export_stacked_waterfall_thesis_rewrites_remote_sidecar_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Remote PGF sidecars should be addressed from the thesis root."""
+    x, y, z = _waterfall_data(nx=9, ny=5)
+
+    def fake_savefig(
+        self: Figure,
+        fname: str | Path,
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        del self, args, kwargs
+        path = Path(fname)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.name == "surface.pgf":
+            path.write_text(
+                r"\pgfimage[width=1in]{surface-img0.png}",
+                encoding="utf-8",
+            )
+            (path.parent / "surface-img0.png").write_bytes(b"surface")
+        elif path.name == "heatmap.pgf":
+            path.write_text(
+                r"\includegraphics{heatmap-img0.png}",
+                encoding="utf-8",
+            )
+            (path.parent / "heatmap-img0.png").write_bytes(b"heatmap")
+        else:
+            path.write_text("saved", encoding="utf-8")
+
+    monkeypatch.setattr(Figure, "savefig", fake_savefig)
+    monkeypatch.setattr(
+        "superconductivity.visuals.thesis.latex._save_stack_preview_png",
+        _fake_stack_preview_png,
+    )
+
+    export = export_stacked_waterfall_thesis(
+        x,
+        y,
+        z,
+        name="demo_stack",
+        sub_dir="figures",
+        local_dir=tmp_path / "local",
+        remote_dir=tmp_path / "remote",
+    )
+
+    assert r"{surface-img0.png}" in export.surface_pgf.read_text(
+        encoding="utf-8"
+    )
+    assert r"{heatmap-img0.png}" in export.heatmap_pgf.read_text(
+        encoding="utf-8"
+    )
+    assert (
+        r"{\detokenize{figures/demo_stack/surface-img0.png}}"
+        in (export.remote_stack_dir / "surface.pgf").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert (
+        r"{\detokenize{figures/demo_stack/heatmap-img0.png}}"
+        in (export.remote_stack_dir / "heatmap.pgf").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert (export.remote_stack_dir / "surface-img0.png").read_bytes() == b"surface"
+    assert (export.remote_stack_dir / "heatmap-img0.png").read_bytes() == b"heatmap"
+
+
 def test_export_stacked_waterfall_thesis_allows_surface_x_oversampling(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1429,6 +1570,52 @@ def test_export_stacked_waterfall_thesis_allows_surface_x_oversampling(
 
     expected_faces = 3 * (len(x) - 1) * (len(y) - 1)
     assert saved_surface_faces["surface.pgf"] == expected_faces
+
+
+def test_export_stacked_waterfall_thesis_allows_surface_bins(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The stack exporter should bin only the surface panel."""
+    x, y, z = _waterfall_data(nx=9, ny=5)
+    saved_geometry: dict[str, int] = {}
+
+    def fake_savefig(
+        self: Figure,
+        fname: str | Path,
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        path = Path(fname)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("saved", encoding="utf-8")
+        if not self.axes:
+            return
+        if path.name.startswith("waterfall."):
+            saved_geometry[path.name] = len(self.axes[0].lines)
+        else:
+            saved_geometry[path.name] = _surface_face_count(self.axes[0])
+
+    monkeypatch.setattr(Figure, "savefig", fake_savefig)
+    monkeypatch.setattr(
+        "superconductivity.visuals.thesis.latex._save_stack_preview_png",
+        _fake_stack_preview_png,
+    )
+
+    export_stacked_waterfall_thesis(
+        x,
+        y,
+        z,
+        name="demo_stack",
+        local_dir=tmp_path,
+        remote_dir=None,
+        surface_bins=(3, 4),
+        heatmap_mode="vector_cells",
+    )
+
+    assert saved_geometry["surface.pgf"] == (3 - 1) * (4 - 1)
+    assert saved_geometry["heatmap.pgf"] == z.size
+    assert saved_geometry["waterfall.pgf"] == z.shape[0]
 
 
 def test_export_stacked_waterfall_thesis_allows_surface_pdf_dpi_override(
