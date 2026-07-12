@@ -2,7 +2,7 @@
 
 A research-oriented Python toolbox for mesoscopic superconducting transport: BCS tunneling, Andreev bound states, MAR-style I–V models, photon-assisted tunneling (PAT), and Josephson/RSJ dynamics. The code is written to be used on real experimental data (units, interpolation, reproducible plotting helpers), and to keep a curated public API via `superconductivity.api`.
 
-This repository also contains a set of theory figures (from the thesis material in `thesis/theory/`) that are exported into `docs/assets/` and embedded below.
+The dissertation figure sources and generated theory figures live in the separate `dissertation-figures` repository and are embedded below.
 
 ---
 
@@ -111,32 +111,32 @@ Utilities/constants:
 
 ---
 
-## Theory figure gallery (from `thesis/theory/*`)
+## Theory figure gallery (from `schmampf/dissertation-figures`)
 
-These figures are exported to `thesis/theory/` (PNG) and embedded here to provide a quick visual index of the models implemented in the package.
+These figures are exported to `dissertation-figures/theory/` (PNG) and embedded here to provide a quick visual index of the models implemented in the package.
 
 ### Microscopic Superconductivity (BCS)
 
 #### Superconducting Gap
 <p align="center">
-  <img src="thesis/theory/micro/gap.png" width="30%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/micro/gap.png" width="30%" />
 </p>
 
 #### Tunnel Current (BCS)
 <p align="center">
-  <img src="thesis/theory/micro/tunnel-iv-T.png" width="32%" />
-  <img src="thesis/theory/micro/tunnel-didv-T.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/micro/tunnel-iv-T.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/micro/tunnel-didv-T.png" width="32%" />
 </p>
 
 <p align="center">
-  <img src="thesis/theory/micro/tunnel-iv-gamma.png" width="32%" />
-  <img src="thesis/theory/micro/tunnel-didv-gamma.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/micro/tunnel-iv-gamma.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/micro/tunnel-didv-gamma.png" width="32%" />
 </p>
 
 #### Photon-Assisted Tunneling (PAT)
 <p align="center">
-  <img src="thesis/theory/micro/pat-iv.png" width="32%" />
-  <img src="thesis/theory/micro/pat-didv.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/micro/pat-iv.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/micro/pat-didv.png" width="32%" />
 </p>
 
 
@@ -144,13 +144,13 @@ These figures are exported to `thesis/theory/` (PNG) and embedded here to provid
 
 #### RCSJ Tilted Washboard Potential
 <p align="center">
-  <img src="thesis/theory/macro/u-phi.png" width="60%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/macro/u-phi.png" width="60%" />
 </p>
 
 #### Shapiro Steps in RCSJ (under- / over damped)
 <p align="center">
-  <img src="thesis/theory/macro/shapiro-under.png" width="32%" />
-  <img src="thesis/theory/macro/shapiro-over.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/macro/shapiro-under.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/macro/shapiro-over.png" width="32%" />
 </p>
 
 ### Mesoscopic Superconductivity
@@ -158,20 +158,20 @@ These figures are exported to `thesis/theory/` (PNG) and embedded here to provid
 #### Andreev Reflections - Blonder-Tinkham-Klappwik
 
 <p align="center">
-  <img src="thesis/theory/meso/btk-iv.png" width="30%" />
-  <img src="thesis/theory/meso/btk-didv.png" width="30%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/meso/btk-iv.png" width="30%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/meso/btk-didv.png" width="30%" />
 </p>
 
 #### Andreev Bound States
 
 <p align="center">
-  <img src="thesis/theory/meso/abs-Ephi.png" width="32%" />
-  <img src="thesis/theory/meso/abs-Iphi.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/meso/abs-Ephi.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/meso/abs-Iphi.png" width="32%" />
 </p>
 
 <p align="center">
-  <img src="thesis/theory/meso/ko-cpr.png" width="32%" />
-  <img src="thesis/theory/meso/ko-ic.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/meso/ko-cpr.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/meso/ko-ic.png" width="32%" />
 </p>
 
 #### Multiple Andreev Reflection (MAR)
@@ -179,31 +179,31 @@ These figures are exported to `thesis/theory/` (PNG) and embedded here to provid
 ##### Hamiltonian Approach (HA)
 
 <p align="center">
-  <img src="thesis/theory/meso/ha-iv.png" width="32%" />
-  <img src="thesis/theory/meso/ha-didv.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/meso/ha-iv.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/meso/ha-didv.png" width="32%" />
 </p>
 <p align="center">
-  <img src="thesis/theory/meso/ha-iv-inv.png" width="32%" />
-  <img src="thesis/theory/meso/ha-didv-inv.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/meso/ha-iv-inv.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/meso/ha-didv-inv.png" width="32%" />
 </p>
 
 ##### Full Counting Statistics (FCS)
 
 <p align="center">
-  <img src="thesis/theory/meso/fcs-iv-m-inv.png" width="60%" />
-  <img src="thesis/theory/meso/fcs-didv-m-inv.png" width="60%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/meso/fcs-iv-m-inv.png" width="60%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/meso/fcs-didv-m-inv.png" width="60%" />
 </p>
 
 ### Microwave notation
 
 <p align="center">
-  <img src="thesis/theory/basics/mw-V.png" width="32%" />
-  <img src="thesis/theory/basics/mw-phi.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/basics/mw-V.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/basics/mw-phi.png" width="32%" />
 </p>
 
 <p align="center">
-  <img src="thesis/theory/basics/mw-ReU.png" width="32%" />
-  <img src="thesis/theory/basics/mw-Jn.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/basics/mw-ReU.png" width="32%" />
+  <img src="https://raw.githubusercontent.com/schmampf/dissertation-figures/main/theory/basics/mw-Jn.png" width="32%" />
 </p>
 
 ---
