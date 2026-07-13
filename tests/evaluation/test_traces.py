@@ -156,6 +156,35 @@ def test_get_traces_accepts_filespec_with_measurement(
     assert np.allclose(trace["V_mV"], np.asarray([0.0, 1.0, 3.0]))
 
 
+def test_get_traces_uses_status_temperature_as_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Status temperatures should cover files without sweep temperatures."""
+    fake_h5py = _make_fake_h5py()
+    status_dtype = np.dtype([("time", np.float64), ("T", np.float64)])
+    fake_h5py._file._groups["status/bluefors/temperature/MCBJ"] = np.asarray(
+        [(19.0, 0.20), (20.0, 0.21), (21.0, 0.23), (24.0, 0.30)],
+        dtype=status_dtype,
+    )
+    monkeypatch.setattr(traces_module, "_import_h5py", lambda: fake_h5py)
+    monkeypatch.setattr(file_module, "_import_h5py", lambda: fake_h5py)
+
+    trace = traces_module.get_traces(
+        filespec=FileSpec(h5path="dummy.h5", measurement="test"),
+        keysspec=KeysSpec(strip1="dBm"),
+        tracespec=traces_module.TraceSpec(
+            AmpV=1.0,
+            AmpI=1.0,
+            Rref_Ohm=1.0,
+            trigger_values=1,
+        ),
+        specific_key="nu=5dBm",
+    )
+
+    assert trace.Tsample_K is not None
+    assert float(trace.Tsample_K) == pytest.approx(0.22)
+
+
 def test_get_traces_resolves_one_trace_by_value(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

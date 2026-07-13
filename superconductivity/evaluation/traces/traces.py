@@ -492,28 +492,91 @@ def _temperature_value(trace: Trace) -> float | None:
     return None if temperature is None else float(temperature)
 
 
-def _load_sample_temperature(file: object, full_path: str) -> float | None:
-    """Return the finite mean sample temperature for one trace."""
-    bluefors_path = f"{full_path}/sweep/bluefors"
-    if bluefors_path not in file:
-        return None
+def _temperature_arrays(
+    dataset: object,
+    *,
+    temperature_key: str,
+) -> tuple[NDArray64 | None, NDArray64]:
+    """Extract optional times and temperatures from an HDF5 object."""
+    keys = getattr(dataset, "keys", None)
+    if callable(keys) and temperature_key in keys():
+        values = np.asarray(dataset[temperature_key], dtype=np.float64)
+        times = (
+            np.asarray(dataset["time"], dtype=np.float64) if "time" in keys() else None
+        )
+        return times, values
 
-    bluefors = file[bluefors_path]
-    keys = getattr(bluefors, "keys", None)
-    if callable(keys) and "Tsample" in keys():
-        values = np.asarray(bluefors["Tsample"], dtype=np.float64)
-    else:
-        values = np.asarray(bluefors)
-        names = values.dtype.names
-        if names is None or "Tsample" not in names:
-            return None
-        values = np.asarray(values["Tsample"], dtype=np.float64)
+    values = np.asarray(dataset)
+    names = values.dtype.names
+    if names is None or temperature_key not in names:
+        return None, np.asarray([], dtype=np.float64)
+    times = np.asarray(values["time"], dtype=np.float64) if "time" in names else None
+    return times, np.asarray(values[temperature_key], dtype=np.float64)
 
+
+def _finite_mean(values: NDArray64) -> float | None:
+    """Return the mean of finite values, or ``None`` when unavailable."""
     finite_values = values.reshape(-1)
     finite_values = finite_values[np.isfinite(finite_values)]
     if finite_values.size == 0:
         return None
     return float(np.mean(finite_values))
+
+
+def _load_status_temperatures(
+    file: object,
+) -> tuple[NDArray64 | None, NDArray64, bool] | None:
+    """Read the fallback Bluefors status series once per open file."""
+    status_path = "status/bluefors/temperature/MCBJ"
+    if status_path not in file:
+        return None
+    times, values = _temperature_arrays(
+        file[status_path],
+        temperature_key="T",
+    )
+    is_sorted = times is not None and (
+        times.size < 2 or bool(np.all(times[:-1] <= times[1:]))
+    )
+    return times, values, is_sorted
+
+
+def _load_sample_temperature(
+    file: object,
+    full_path: str,
+    trace_time_s: NDArray64,
+    status_temperature_cache: dict[
+        str,
+        tuple[NDArray64 | None, NDArray64, bool] | None,
+    ],
+) -> float | None:
+    """Return the sample temperature from sweep data or status fallback."""
+    bluefors_path = f"{full_path}/sweep/bluefors"
+    if bluefors_path in file:
+        _, values = _temperature_arrays(
+            file[bluefors_path],
+            temperature_key="Tsample",
+        )
+        temperature = _finite_mean(values)
+        if temperature is not None:
+            return temperature
+
+    if "data" not in status_temperature_cache:
+        status_temperature_cache["data"] = _load_status_temperatures(file)
+    status_temperatures = status_temperature_cache["data"]
+    if status_temperatures is None:
+        return None
+    times, values, is_sorted = status_temperatures
+    if times is not None and trace_time_s.size > 0:
+        start_s = float(np.min(trace_time_s))
+        stop_s = float(np.max(trace_time_s))
+        if is_sorted:
+            start_index = int(np.searchsorted(times, start_s, side="left"))
+            stop_index = int(np.searchsorted(times, stop_s, side="right"))
+            values = values[start_index:stop_index]
+        else:
+            in_trace = (times >= start_s) & (times <= stop_s)
+            values = values[in_trace]
+    return _finite_mean(values)
 
 
 def _normalize_keys_and_yvalues(
@@ -579,6 +642,10 @@ def _load_trace_from_file(
     skip_edges: tuple[int, int],
     subtract_offset: bool,
     time_relative: bool,
+    status_temperature_cache: dict[
+        str,
+        tuple[NDArray64 | None, NDArray64, bool] | None,
+    ],
 ) -> Trace:
     """Load one trace from one open HDF5 file."""
     if full_path not in file:
@@ -631,6 +698,7 @@ def _load_trace_from_file(
         V_mV = V_mV[finite]
         I_nA = I_nA[finite]
 
+    trace_time_s = np.asarray(t_s, dtype=np.float64)
     if time_relative and t_s.size > 0:
         t_s = t_s - t_s[0]
 
@@ -638,7 +706,12 @@ def _load_trace_from_file(
         I_nA=np.asarray(I_nA, dtype=np.float64),
         V_mV=np.asarray(V_mV, dtype=np.float64),
         t_s=np.asarray(t_s, dtype=np.float64),
-        Tsample_K=_load_sample_temperature(file, full_path),
+        Tsample_K=_load_sample_temperature(
+            file,
+            full_path,
+            trace_time_s,
+            status_temperature_cache,
+        ),
     )
 
 
@@ -678,6 +751,10 @@ def _load_traces_from_keys(
             unit="trace",
         )
     with h5py.File(path, "r") as file:
+        status_temperature_cache: dict[
+            str,
+            tuple[NDArray64 | None, NDArray64, bool] | None,
+        ] = {}
         for specific_key, value in key_value_pairs:
             full_path = _to_measurement_path(
                 measurement=resolved_measurement,
@@ -693,6 +770,7 @@ def _load_traces_from_keys(
                 skip_edges=skip_pair,
                 subtract_offset=tracespec.subtract_offset,
                 time_relative=tracespec.time_relative,
+                status_temperature_cache=status_temperature_cache,
             )
             traces.append(trace)
 
