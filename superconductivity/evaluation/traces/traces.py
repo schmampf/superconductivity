@@ -22,6 +22,17 @@ from .file import FileSpec, _import_h5py, _require_measurement, _to_measurement_
 from .keys import Keys, KeysSpec, get_keys
 
 
+def _import_tqdm():
+    try:
+        from tqdm.auto import tqdm
+    except ImportError as exc:  # pragma: no cover
+        raise ImportError(
+            "tqdm is required for progress display. Install it with "
+            "'pip install tqdm'.",
+        ) from exc
+    return tqdm
+
+
 def _import_scipy_signal():
     """Import SciPy signal filters lazily."""
     try:
@@ -636,6 +647,7 @@ def _load_traces_from_keys(
     filespec: FileSpec,
     keys: Keys,
     tracespec: TraceSpec,
+    show_progress: bool,
 ) -> list[Trace]:
     """Load traces for one measurement in the provided order."""
     if tracespec.AmpV <= 0.0 or not np.isfinite(tracespec.AmpV):
@@ -656,8 +668,17 @@ def _load_traces_from_keys(
 
     h5py = _import_h5py()
     traces: list[Trace] = []
+    key_value_pairs = zip(keys_list, yvalues_list)
+    if show_progress:
+        tqdm = _import_tqdm()
+        key_value_pairs = tqdm(
+            key_value_pairs,
+            total=len(keys_list),
+            desc="loading traces",
+            unit="trace",
+        )
     with h5py.File(path, "r") as file:
-        for specific_key, value in zip(keys_list, yvalues_list):
+        for specific_key, value in key_value_pairs:
             full_path = _to_measurement_path(
                 measurement=resolved_measurement,
                 specific_key=specific_key,
@@ -687,8 +708,15 @@ def get_traces(
     specific_key: str | None = None,
     yvalue: float | None = None,
     index: int | None = None,
+    show_progress: bool = True,
 ) -> Trace | Traces:
-    """Load traces from file, key, and trace specifications."""
+    """Load traces from file, key, and trace specifications.
+
+    Parameters
+    ----------
+    show_progress
+        Display a progress bar while loading traces.
+    """
     resolved_tracespec = TraceSpec() if tracespec is None else tracespec
     has_selector = specific_key is not None or yvalue is not None or index is not None
     if keys is not None and keysspec is not None:
@@ -776,6 +804,7 @@ def get_traces(
         filespec=filespec,
         keys=resolved_keys,
         tracespec=resolved_tracespec,
+        show_progress=show_progress,
     )
     traces = Traces(
         traces=trace_list,
