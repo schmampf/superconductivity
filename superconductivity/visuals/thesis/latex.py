@@ -42,7 +42,7 @@ _THESIS_MPLSTYLE = (
 )
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _CRYOLAB_ROOT = _REPO_ROOT.parent
-_DEFAULT_LOCAL_DIR = _REPO_ROOT / "thesis"
+_DEFAULT_LOCAL_DIR = _CRYOLAB_ROOT / "dissertation-figures"
 _DEFAULT_REMOTE_DIR = _CRYOLAB_ROOT / "dissertation"
 _STACK_PGF_PREAMBLE_LINES = (
     r"\usepackage{xunicode}",
